@@ -1,4 +1,4 @@
-import type { ElevatorType, PersonRole, PersonState } from "@types/types";
+import type { ElevatorType, PersonRole, PersonState } from "@types/types.ts";
 
 export class Person {
   public role: PersonRole;

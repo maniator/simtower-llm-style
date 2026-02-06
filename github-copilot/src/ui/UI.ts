@@ -6,7 +6,7 @@ import type {
   RoomCategory,
   IRoom,
   CellPosition,
-} from "@types/types";
+} from "@types/types.ts";
 import {
   saveGame,
   clearSave,

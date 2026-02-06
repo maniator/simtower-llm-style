@@ -1,4 +1,4 @@
-import type { ElevatorType } from "@types/types";
+import type { ElevatorType } from "@types/types.ts";
 import { Person } from "./Person.ts";
 
 export class ElevatorCar {
