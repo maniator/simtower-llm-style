@@ -161,7 +161,27 @@ export class Game {
         return { ok: false, reason: "Residences need support below." };
       }
     }
+    
+    // Prevent placing non-shaft rooms on empty floors (midair)
+    if (!type.shaft && floorIndex > 0) {
+      const belowFloor = this.floors.get(floorIndex - 1);
+      if (!belowFloor || belowFloor.rooms.length === 0) {
+        return { ok: false, reason: "Buildings need support below." };
+      }
+    }
+    
     const floor = this.floors.get(floorIndex);
+    if (type.shaft) {
+      if (floor) {
+        const shaftExists = floor.rooms.some(
+          (room) => room.type.shaft && room.startX === startX,
+        );
+        if (shaftExists) {
+          return { ok: false, reason: "Shaft already exists here." };
+        }
+      }
+      return { ok: true };
+    }
     if (floor) {
       for (let x = startX; x < startX + type.width; x += 1) {
         if (floor.cells[x]) {
@@ -201,8 +221,10 @@ export class Game {
     const floor = this.getFloor(floorIndex);
     const room = new Room(type, floorIndex, startX);
     floor.rooms.push(room);
-    for (let x = startX; x < startX + type.width; x += 1) {
-      floor.cells[x] = room;
+    if (!type.shaft) {
+      for (let x = startX; x < startX + type.width; x += 1) {
+        floor.cells[x] = room;
+      }
     }
     if (!skipCost) {
       this.money -= type.cost;
@@ -218,12 +240,17 @@ export class Game {
     cellX: number,
   ): { ok: boolean; reason?: string; refund?: number } {
     const floor = this.getFloor(floorIndex);
-    const room = floor.cells[cellX];
+    const shaftRoom = floor.rooms.find(
+      (room) => room.type.shaft && room.startX === cellX,
+    );
+    const room = shaftRoom || floor.cells[cellX];
     if (!room) return { ok: false, reason: "No room here." };
     if (room.active)
       return { ok: false, reason: "Cannot remove completed buildings." };
-    for (let x = room.startX; x <= room.endX; x += 1) {
-      floor.cells[x] = null;
+    if (!room.type.shaft) {
+      for (let x = room.startX; x <= room.endX; x += 1) {
+        floor.cells[x] = null;
+      }
     }
     floor.rooms = floor.rooms.filter((r) => r !== room);
     const refund = Math.round(

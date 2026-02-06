@@ -15,6 +15,16 @@ const CATEGORY_COLORS: Record<RoomCategory, string> = {
   Services: "#a5724a",
 };
 
+const PERSON_COLORS: Record<string, string> = {
+  worker: "#2d6e6a",
+  shopper: "#f2b34a",
+  guest: "#7c89a8",
+  hotel: "#7c89a8",
+  resident: "#c4684d",
+  staff: "#a5724a",
+  vip: "#b3261e",
+};
+
 export class Renderer {
   public canvas: HTMLCanvasElement;
   private ctx: CanvasRenderingContext2D;
@@ -157,6 +167,20 @@ export class Renderer {
         const roomWidth = room.type.width * this.cellSize;
         const roomHeight = this.floorHeight - 8;
 
+        if (room.type.shaft) {
+          const shaftX = roomX + this.cellSize * 0.2;
+          const shaftWidth = this.cellSize * 0.6;
+          ctx.save();
+          ctx.globalAlpha = room.active ? 0.45 : 0.3;
+          ctx.fillStyle = "rgba(28, 26, 23, 0.25)";
+          ctx.fillRect(shaftX, roomY, shaftWidth, roomHeight);
+          ctx.globalAlpha = 0.8;
+          ctx.strokeStyle = "rgba(28, 26, 23, 0.6)";
+          ctx.strokeRect(shaftX, roomY, shaftWidth, roomHeight);
+          ctx.restore();
+          continue;
+        }
+
         ctx.fillStyle = color;
         ctx.globalAlpha = room.active ? 0.95 : 0.55;
         ctx.fillRect(roomX, roomY, roomWidth, roomHeight);
@@ -206,6 +230,82 @@ export class Renderer {
       }
     }
 
+    const waitingPeople = this.game.people.filter(
+      (person) => person.state === "waiting",
+    );
+    if (waitingPeople.length > 0) {
+      ctx.save();
+      for (let i = 0; i < waitingPeople.length; i += 1) {
+        const person = waitingPeople[i];
+        const y = this.floorBaseY(person.origin);
+        if (y < -40 || y > height + 40) continue;
+        const floor = this.game.floors.get(person.origin);
+        const baseY = y - this.floorHeight + 12;
+        const color = PERSON_COLORS[person.role] || "#2d6e6a";
+        ctx.fillStyle = color;
+        ctx.beginPath();
+        
+        // Distribute people across the actual room widths on the floor
+        let baseX: number;
+        if (floor && floor.rooms.length > 0) {
+          // Get total width of all rooms on this floor
+          let totalWidth = 0;
+          const roomWidths: number[] = [];
+          for (const room of floor.rooms) {
+            if (!room.type.shaft) {
+              roomWidths.push(room.type.width * this.cellSize);
+              totalWidth += room.type.width * this.cellSize;
+            }
+          }
+          
+          // Position person within rooms based on their index
+          if (totalWidth > 0) {
+            const positionRatio = (i % waitingPeople.length) / Math.max(1, waitingPeople.length);
+            let accum = 0;
+            let personX = this.padding + 8;
+            for (let j = 0; j < floor.rooms.length; j += 1) {
+              const room = floor.rooms[j];
+              if (!room.type.shaft) {
+                const roomStart = this.padding + room.startX * this.cellSize;
+                const roomWidth = room.type.width * this.cellSize;
+                accum += roomWidth;
+                if (positionRatio * totalWidth < accum) {
+                  personX = roomStart + (roomWidth * 0.1) + (i % 4) * (roomWidth * 0.2);
+                  break;
+                }
+              }
+            }
+            baseX = personX;
+          } else {
+            baseX = this.padding + 8 + (i % 8) * 5;
+          }
+        } else {
+          baseX = this.padding + 8 + (i % 8) * 5;
+        }
+        
+        ctx.arc(baseX, baseY, 2.2, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    } else {
+      const lobbyY = this.floorBaseY(0);
+      if (!(lobbyY < -40 || lobbyY > height + 40)) {
+        ctx.save();
+        for (let i = 0; i < 4; i += 1) {
+          const offset = this.game.time / 6 + i;
+          const baseX =
+            this.padding + 10 + i * 8 + Math.sin(offset) * 2.5;
+          const baseY =
+            lobbyY - this.floorHeight + 12 + Math.cos(offset) * 1.5;
+          ctx.fillStyle = "#2d6e6a";
+          ctx.beginPath();
+          ctx.arc(baseX, baseY, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
     for (const car of this.game.elevators) {
       const shaftX = this.padding + car.shaftX * this.cellSize;
       const y = this.floorBaseY(car.position);
@@ -223,6 +323,21 @@ export class Renderer {
       ctx.fillRect(shaftX + 2, carY, carWidth, carHeight);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
       ctx.strokeRect(shaftX + 2, carY, carWidth, carHeight);
+
+      if (car.passengers.length > 0) {
+        ctx.save();
+        for (let i = 0; i < car.passengers.length; i += 1) {
+          const passenger = car.passengers[i];
+          const dotX = shaftX + 6 + (i % 2) * 6;
+          const dotY = carY + 6 + Math.floor(i / 2) * 6;
+          const color = PERSON_COLORS[passenger.role] || "#2d6e6a";
+          ctx.fillStyle = color;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
+        ctx.restore();
+      }
     }
   }
 }
