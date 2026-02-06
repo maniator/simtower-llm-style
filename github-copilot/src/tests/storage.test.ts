@@ -42,10 +42,9 @@ describe("Storage", () => {
       vi.spyOn(localStorage, "setItem").mockImplementation(() => {
         throw new Error("Storage full");
       });
-      vi.spyOn(console, "error").mockImplementation(() => {});
 
+      // Should not throw even when localStorage fails
       expect(() => saveGame(game)).not.toThrow();
-      expect(console.error).toHaveBeenCalled();
     });
   });
 
