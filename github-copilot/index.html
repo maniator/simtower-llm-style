@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SimTower - Tower Simulation</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-title">SimTower</span>
+          <span class="brand-sub">1994-inspired tower sim</span>
+        </div>
+        <div class="stats">
+          <div class="stat">
+            <span class="label">Money</span>
+            <span id="money">$0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Population</span>
+            <span id="population">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Happiness</span>
+            <span id="happiness">0</span>
+          </div>
+          <div class="stat">
+            <span class="label">Rating</span>
+            <span id="rating">1 Star</span>
+          </div>
+        </div>
+        <div class="time-controls">
+          <button class="time-btn" data-speed="0">Pause</button>
+          <button class="time-btn active" data-speed="1">Play</button>
+          <button class="time-btn" data-speed="3">Fast</button>
+        </div>
+      </header>
+      <div class="content">
+        <aside class="toolbar">
+          <div class="toolbar-head">
+            <h2>Construction</h2>
+            <p>Select a room, then click the tower.</p>
+          </div>
+          <div id="tool-categories" class="tool-categories"></div>
+        </aside>
+        <section class="viewport">
+          <canvas id="tower-canvas" aria-label="Tower simulation"></canvas>
+          <div class="time-indicator" id="time-indicator"></div>
+        </section>
+        <aside class="panels">
+          <section class="panel" id="info-panel"></section>
+          <section class="panel" id="elevator-panel"></section>
+        </aside>
+      </div>
+      <footer class="statusbar">
+        <span id="status-text"
+          >Click to build. Right-click to cancel construction. Residences need
+          support.</span
+        >
+      </footer>
+    </div>
+    <script type="module" src="main.js"></script>
+  </body>
+</html>
