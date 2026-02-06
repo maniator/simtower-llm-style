@@ -247,8 +247,8 @@ export class UI {
       (event: WheelEvent) => {
         event.preventDefault();
         if (event.ctrlKey || event.metaKey) {
-          // Zoom with Ctrl/Cmd + wheel
-          const zoomDelta = -Math.sign(event.deltaY) * 0.1;
+          // Zoom with Ctrl/Cmd + wheel (reduced speed for smoother control)
+          const zoomDelta = -Math.sign(event.deltaY) * 0.05;
           this.renderer.adjustZoom(zoomDelta);
         } else {
           // Normal scrolling

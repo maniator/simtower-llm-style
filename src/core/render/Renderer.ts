@@ -223,9 +223,9 @@ export class Renderer {
         const category = room.type.category;
         const color = CATEGORY_COLORS[category] || "#999";
         const roomX = this.padding + room.startX * scaledCellSize;
-        const roomY = y - scaledFloorHeight + 4;
+        const roomY = y - scaledFloorHeight + ROOM_VERTICAL_MARGIN;
         const roomWidth = room.type.width * scaledCellSize;
-        const roomHeight = scaledFloorHeight - 8;
+        const roomHeight = scaledFloorHeight - ROOM_INSET;
 
         if (room.type.shaft) {
           const shaftX = roomX + scaledCellSize * 0.2;
@@ -260,7 +260,7 @@ export class Renderer {
         ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
         const fontSize = Math.max(8, Math.min(11 * this.camera.zoom, 18));
         ctx.font = `${fontSize}px 'Space Grotesk', sans-serif`;
-        ctx.fillText(room.type.name, roomX + 4, roomY + roomHeight / 1.6);
+        ctx.fillText(room.type.name, roomX + TEXT_OFFSET, roomY + roomHeight / 1.6);
       }
     }
 
@@ -269,9 +269,9 @@ export class Renderer {
       const y = this.floorBaseY(ghost.floorIndex);
       if (!(y < -60 || y > height + 60)) {
         const roomX = this.padding + ghost.startX * scaledCellSize;
-        const roomY = y - scaledFloorHeight + 4;
+        const roomY = y - scaledFloorHeight + ROOM_VERTICAL_MARGIN;
         const roomWidth = ghost.type.width * scaledCellSize;
-        const roomHeight = scaledFloorHeight - 8;
+        const roomHeight = scaledFloorHeight - ROOM_INSET;
         const category = ghost.type.category;
         const color = CATEGORY_COLORS[category] || "#999";
 
@@ -301,7 +301,7 @@ export class Renderer {
         const y = this.floorBaseY(person.origin);
         if (y < -40 || y > height + 40) continue;
         const floor = this.game.floors.get(person.origin);
-        const baseY = y - scaledFloorHeight + 12;
+        const baseY = y - scaledFloorHeight + PERSON_VERTICAL_OFFSET;
         const color = PERSON_COLORS[person.role] || "#2d6e6a";
         ctx.fillStyle = color;
         ctx.beginPath();
@@ -324,7 +324,8 @@ export class Renderer {
             const positionRatio =
               (i % waitingPeople.length) / Math.max(1, waitingPeople.length);
             let accum = 0;
-            let personX = this.padding + 8;
+            const personPadding = ROOM_INSET;
+            let personX = this.padding + personPadding;
             for (let j = 0; j < floor.rooms.length; j += 1) {
               const room = floor.rooms[j];
               if (!room.type.shaft) {
@@ -340,10 +341,10 @@ export class Renderer {
             }
             baseX = personX;
           } else {
-            baseX = this.padding + 8 + (i % 8) * 5;
+            baseX = this.padding + ROOM_INSET + (i % 8) * (5 * this.camera.zoom);
           }
         } else {
-          baseX = this.padding + 8 + (i % 8) * 5;
+          baseX = this.padding + ROOM_INSET + (i % 8) * (5 * this.camera.zoom);
         }
 
         const personRadius = Math.max(1.5, 2.2 * this.camera.zoom);
@@ -357,8 +358,11 @@ export class Renderer {
         ctx.save();
         for (let i = 0; i < 4; i += 1) {
           const offset = this.game.time / 6 + i;
-          const baseX = this.padding + 10 + i * 8 + Math.sin(offset) * 2.5;
-          const baseY = lobbyY - scaledFloorHeight + 12 + Math.cos(offset) * 1.5;
+          const lobbyPadding = 10 * this.camera.zoom;
+          const lobbySpacing = 8 * this.camera.zoom;
+          const lobbyWiggle = 2.5 * this.camera.zoom;
+          const baseX = this.padding + lobbyPadding + i * lobbySpacing + Math.sin(offset) * lobbyWiggle;
+          const baseY = lobbyY - scaledFloorHeight + PERSON_VERTICAL_OFFSET + Math.cos(offset) * (1.5 * this.camera.zoom);
           ctx.fillStyle = "#2d6e6a";
           ctx.beginPath();
           const personRadius = Math.max(1.5, 2 * this.camera.zoom);
@@ -372,9 +376,9 @@ export class Renderer {
     for (const car of this.game.elevators) {
       const shaftX = this.padding + car.shaftX * scaledCellSize;
       const y = this.floorBaseY(car.position);
-      const carY = y - scaledFloorHeight + 6;
-      const carWidth = scaledCellSize - 4;
-      const carHeight = scaledFloorHeight - 12;
+      const carY = y - scaledFloorHeight + CAR_VERTICAL_MARGIN;
+      const carWidth = scaledCellSize - CAR_INSET;
+      const carHeight = scaledFloorHeight - PERSON_VERTICAL_OFFSET;
       const color =
         car.type === "express"
           ? "#264653"
@@ -383,17 +387,18 @@ export class Renderer {
             : "#2d6e6a";
 
       ctx.fillStyle = color;
-      ctx.fillRect(shaftX + 2, carY, carWidth, carHeight);
+      ctx.fillRect(shaftX + CAR_HORIZONTAL_INSET, carY, carWidth, carHeight);
       ctx.strokeStyle = "rgba(255, 255, 255, 0.8)";
-      ctx.strokeRect(shaftX + 2, carY, carWidth, carHeight);
+      ctx.strokeRect(shaftX + CAR_HORIZONTAL_INSET, carY, carWidth, carHeight);
 
       if (car.passengers.length > 0) {
         ctx.save();
         for (let i = 0; i < car.passengers.length; i += 1) {
           const passenger = car.passengers[i];
-          const spacing = Math.max(4, 6 * this.camera.zoom);
-          const dotX = shaftX + 6 + (i % 2) * spacing;
-          const dotY = carY + 6 + Math.floor(i / 2) * spacing;
+          const spacing = Math.max(4 * this.camera.zoom, 6 * this.camera.zoom);
+          const passengerPadding = CAR_VERTICAL_MARGIN;
+          const dotX = shaftX + passengerPadding + (i % 2) * spacing;
+          const dotY = carY + passengerPadding + Math.floor(i / 2) * spacing;
           const color = PERSON_COLORS[passenger.role] || "#2d6e6a";
           ctx.fillStyle = color;
           ctx.beginPath();
