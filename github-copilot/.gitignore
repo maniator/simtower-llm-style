@@ -4,3 +4,5 @@ dist/
 *.d.ts
 *.js
 !dist/*.js
+!eslint.config.js
+!vite.config.ts
