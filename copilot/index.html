@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>TowerSim V1</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <header class="top-bar">
+      <div class="stat">Money: <span id="money">0</span></div>
+      <div class="stat">Population: <span id="population">0</span></div>
+      <div class="stat">Rating: <span id="rating">1★</span></div>
+      <div class="stat">Time: <span id="time">Day 1, 06:00</span></div>
+      <div class="controls">
+        <button id="pause-btn">Pause</button>
+        <button id="play-btn">Play</button>
+        <button id="fast-btn">Fast</button>
+      </div>
+    </header>
+
+    <main class="main-layout">
+      <aside class="sidebar">
+        <h2>Build</h2>
+        <button class="build-btn" data-room="apartment">Apartment</button>
+        <button class="build-btn" data-room="office">Office</button>
+        <button class="build-btn" data-room="shop">Shop</button>
+        <button class="build-btn" data-room="restaurant">Restaurant</button>
+        <button class="build-btn" data-room="hotel">Hotel Room</button>
+        <button class="build-btn" data-room="elevator">Elevator Shaft</button>
+        <button class="build-btn" data-room="lobby">Lobby</button>
+
+        <h2>Info</h2>
+        <div id="info-panel">
+          <p>Select a tile to see details.</p>
+        </div>
+      </aside>
+
+      <section class="game-area">
+        <div id="game-root"></div>
+      </section>
+    </main>
+
+    <script src="main.js"></script>
+  </body>
+</html>

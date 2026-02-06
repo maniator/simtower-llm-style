@@ -1,0 +1,163 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  font-family: system-ui, sans-serif;
+}
+
+body {
+  background: #111;
+  color: #eee;
+}
+
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #222;
+  border-bottom: 1px solid #333;
+  font-size: 14px;
+}
+
+.stat {
+  margin-right: 12px;
+}
+
+.controls button {
+  margin-left: 4px;
+}
+
+.main-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  height: calc(100vh - 40px);
+}
+
+.sidebar {
+  background: #181818;
+  border-right: 1px solid #333;
+  padding: 10px;
+  font-size: 14px;
+}
+
+.sidebar h2 {
+  margin: 8px 0;
+  font-size: 16px;
+}
+
+.build-btn {
+  display: block;
+  width: 100%;
+  margin-bottom: 4px;
+  padding: 4px;
+  background: #333;
+  color: #eee;
+  border: 1px solid #444;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.build-btn:hover {
+  background: #444;
+}
+
+#info-panel {
+  margin-top: 8px;
+  padding: 6px;
+  background: #222;
+  border: 1px solid #333;
+  min-height: 80px;
+  font-size: 13px;
+}
+
+.game-area {
+  overflow: auto;
+  background: #000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+}
+
+#game-root {
+  position: relative;
+  background: #101010;
+  border-left: 1px solid #333;
+  border-right: 1px solid #333;
+}
+
+/* Tower grid */
+
+.floor-row {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 24px;
+  height: 24px;
+  border-top: 1px solid #222;
+}
+
+.tile {
+  width: 24px;
+  height: 24px;
+  border-right: 1px solid #181818;
+  position: relative;
+  background: #151515;
+  cursor: pointer;
+}
+
+.tile:hover {
+  outline: 1px solid #555;
+}
+
+/* Room colors */
+
+.tile.room-apartment {
+  background: #2e7d32;
+}
+
+.tile.room-office {
+  background: #1565c0;
+}
+
+.tile.room-shop {
+  background: #8e24aa;
+}
+
+.tile.room-restaurant {
+  background: #ef6c00;
+}
+
+.tile.room-hotel {
+  background: #6d4c41;
+}
+
+.tile.room-lobby {
+  background: #607d8b;
+}
+
+.tile.room-elevator {
+  background: #b0bec5;
+}
+
+/* People */
+
+.person {
+  position: absolute;
+  width: 6px;
+  height: 10px;
+  background: #ffeb3b;
+  bottom: 2px;
+  left: 9px;
+}
+
+/* Elevator car */
+
+.elevator-car {
+  position: absolute;
+  width: 24px;
+  height: 20px;
+  border: 1px solid #fff;
+  box-sizing: border-box;
+  background: rgba(200, 200, 200, 0.2);
+  pointer-events: none;
+}

@@ -1,0 +1,117 @@
+:root {
+    --bg-color: #2c3e50;
+    --panel-bg: #ecf0f1;
+    --highlight: #3498db;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--bg-color);
+    overflow: hidden;
+    height: 100vh;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+#ui-container {
+    width: 98vw;
+    height: 98vh;
+    background: var(--panel-bg);
+    display: flex;
+    flex-direction: column;
+    border: 2px solid #7f8c8d;
+    box-shadow: 0 0 30px rgba(0,0,0,0.5);
+}
+
+header {
+    height: 40px;
+    background: #34495e;
+    color: white;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    justify-content: space-between;
+    font-size: 14px;
+}
+
+.stat-group { display: flex; gap: 20px; }
+.stat-box span.val { color: #f1c40f; font-weight: bold; }
+
+#game-wrapper {
+    flex: 1;
+    display: flex;
+    overflow: hidden;
+    position: relative;
+}
+
+#game-canvas {
+    background: #87CEEB;
+    cursor: crosshair;
+    flex: 1;
+}
+
+#toolbar {
+    width: 220px;
+    background: #bdc3c7;
+    border-left: 2px solid #7f8c8d;
+    padding: 10px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+}
+
+.tool-category {
+    font-weight: bold;
+    margin-top: 10px;
+    font-size: 12px;
+    text-transform: uppercase;
+    color: #2c3e50;
+    border-bottom: 1px solid #95a5a6;
+    padding-bottom: 2px;
+}
+
+.tool-btn {
+    padding: 10px;
+    background: white;
+    border: 1px solid #bdc3c7;
+    cursor: pointer;
+    text-align: left;
+    font-size: 13px;
+    border-radius: 4px;
+    transition: all 0.2s;
+    position: relative;
+}
+
+.tool-btn:hover { background: #ecf0f1; border-color: #3498db; }
+
+/* Visual indicator for color of room */
+.tool-btn::before {
+    content: '';
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    background: var(--btn-color, #ccc);
+    margin-right: 8px;
+    border: 1px solid #777;
+}
+
+.tool-btn.selected {
+    background: #3498db;
+    color: white;
+    border-color: #2980b9;
+    box-shadow: inset 0 0 5px rgba(0,0,0,0.2);
+}
+
+#status-bar {
+    height: 25px;
+    background: #2c3e50;
+    color: #ecf0f1;
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    font-size: 12px;
+}
