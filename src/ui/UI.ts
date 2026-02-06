@@ -254,7 +254,7 @@ export class UI {
   private setSelectedTool(roomId: string): void {
     const room = this.roomTypes[roomId];
     if (!room) return;
-    if (room.unlock > this.game.rating) {
+    if (!this.game.unlockedBuildings.has(room.unlock)) {
       this.statusText.textContent = `Unlock ${room.name} at ${room.unlock}-star rating.`;
       return;
     }
@@ -331,7 +331,7 @@ export class UI {
       if (!roomId) return;
       const room = this.roomTypes[roomId];
       if (!room) return;
-      const locked = room.unlock > this.game.rating;
+      const locked = !this.game.unlockedBuildings.has(room.unlock);
       button.disabled = locked;
       button.title = locked ? `Unlock at ${room.unlock}-star rating.` : "";
     });

@@ -10,6 +10,7 @@ export interface SavedGameState {
   rating: number;
   day: number;
   time: number;
+  unlockedBuildings: number[];
   floors: Array<{
     index: number;
     rooms: Array<{
@@ -44,6 +45,7 @@ export function saveGame(game: Game): void {
       rating: game.rating,
       day: game.day,
       time: game.time,
+      unlockedBuildings: Array.from(game.unlockedBuildings),
       floors,
       timestamp: Date.now(),
     };
@@ -69,6 +71,7 @@ export function loadGame(game: Game): boolean {
     game.rating = data.rating;
     game.day = data.day;
     game.time = data.time;
+    game.unlockedBuildings = new Set(data.unlockedBuildings || [1]);
 
     // Clear existing floors
     game.floors.clear();
@@ -137,6 +140,7 @@ export function exportGame(game: Game): string {
     rating: game.rating,
     day: game.day,
     time: game.time,
+    unlockedBuildings: Array.from(game.unlockedBuildings),
     floors,
     timestamp: Date.now(),
   };
@@ -162,6 +166,7 @@ export function importGame(game: Game, encoded: string): boolean {
     game.rating = data.rating;
     game.day = data.day;
     game.time = data.time;
+    game.unlockedBuildings = new Set(data.unlockedBuildings || [1]);
 
     // Clear existing floors
     game.floors.clear();

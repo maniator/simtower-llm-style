@@ -52,6 +52,7 @@ export class Game {
   public waitSamples: number[];
   public vipPassed: boolean;
   public lastVipDay: number;
+  public unlockedBuildings: Set<number>;
 
   constructor(roomTypes: Readonly<Record<string, RoomType>>) {
     this.roomTypes = roomTypes;
@@ -75,6 +76,7 @@ export class Game {
     this.waitSamples = [];
     this.vipPassed = false;
     this.lastVipDay = 0;
+    this.unlockedBuildings = new Set([1]); // Start with star 1 unlocked
     this.initTower();
   }
 
@@ -104,6 +106,7 @@ export class Game {
     this.waitSamples = [];
     this.vipPassed = false;
     this.lastVipDay = 0;
+    this.unlockedBuildings = new Set([1]); // Start with star 1 unlocked
     this.initTower();
   }
 
@@ -140,7 +143,7 @@ export class Game {
     if (startX < 0 || startX + type.width > this.width) {
       return { ok: false, reason: "Out of bounds." };
     }
-    if (type.unlock > this.rating) {
+    if (!this.unlockedBuildings.has(type.unlock)) {
       return { ok: false, reason: `Unlock at ${type.unlock}-star rating.` };
     }
     if (type.rules?.groundOnly && floorIndex !== 0) {
@@ -752,6 +755,11 @@ export class Game {
     if (pop >= 320 && wait <= 10 && happy >= 80 && this.vipPassed) rating = 5;
 
     this.rating = rating;
+    
+    // Unlock buildings up to current rating
+    for (let i = 1; i <= rating; i++) {
+      this.unlockedBuildings.add(i);
+    }
   }
 
   private endOfDay(): void {
