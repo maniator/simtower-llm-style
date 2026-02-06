@@ -202,6 +202,121 @@ describe("Renderer", () => {
 
       expect(() => renderer.render()).not.toThrow();
     });
+
+    it("should render people waiting for elevators", () => {
+      game.people.push({
+        state: "waiting",
+        origin: 0,
+        destination: 2,
+        role: "resident",
+        patience: 100,
+      } as any);
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render multiple waiting people distributed across rooms", () => {
+      game.placeRoom("office", 1, 5);
+      for (let i = 0; i < 10; i++) {
+        game.people.push({
+          state: "waiting",
+          origin: 1,
+          destination: 2,
+          role: i % 2 === 0 ? "worker" : "shopper",
+          patience: 100,
+        } as any);
+      }
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render people on floor with shaft rooms", () => {
+      game.placeRoom("elevator_standard", 1, 5);
+      game.people.push({
+        state: "waiting",
+        origin: 1,
+        destination: 2,
+        role: "resident",
+        patience: 100,
+      } as any);
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render people on floor without rooms", () => {
+      game.people.push({
+        state: "waiting",
+        origin: 5,
+        destination: 0,
+        role: "vip",
+        patience: 100,
+      } as any);
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render idle animation when no people waiting", () => {
+      game.people = [];
+      game.time = 100;
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render elevators with passengers", () => {
+      game.placeRoom("elevator_standard", 1, 5);
+      game.elevators = [
+        {
+          position: 1.5,
+          direction: 1,
+          passengers: [
+            { role: "resident" } as any,
+            { role: "worker" } as any,
+          ],
+          type: "Standard",
+          capacity: 8,
+        } as any,
+      ];
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render events", () => {
+      game.events = [
+        {
+          type: "fire",
+          floor: 1,
+          severity: 3,
+          duration: 100,
+        },
+      ];
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should not render ghost when out of bounds", () => {
+      renderer.setGhost({
+        type: ROOM_TYPES.condo,
+        floorIndex: -100,
+        startX: 5,
+        valid: true,
+      });
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should scroll to max floor bounds", () => {
+      game.maxFloor = 10;
+      renderer.scroll(100);
+
+      expect(renderer.camera.y).toBeLessThanOrEqual(12);
+    });
+
+    it("should scroll to min floor bounds", () => {
+      game.minFloor = -5;
+      renderer.scroll(-100);
+
+      expect(renderer.camera.y).toBeGreaterThanOrEqual(-7);
+    });
   });
 });
 
