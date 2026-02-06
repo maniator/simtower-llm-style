@@ -161,7 +161,7 @@ export class Game {
         return { ok: false, reason: "Residences need support below." };
       }
     }
-    
+
     // Prevent placing non-shaft rooms on empty floors (midair)
     if (!type.shaft && floorIndex > 0) {
       const belowFloor = this.floors.get(floorIndex - 1);
@@ -169,7 +169,15 @@ export class Game {
         return { ok: false, reason: "Buildings need support below." };
       }
     }
-    
+
+    // Stairs also need support below
+    if (type.elevatorType === "stairs" && floorIndex > 0) {
+      const belowFloor = this.floors.get(floorIndex - 1);
+      if (!belowFloor || belowFloor.rooms.length === 0) {
+        return { ok: false, reason: "Stairs need support below." };
+      }
+    }
+
     const floor = this.floors.get(floorIndex);
     if (type.shaft) {
       if (floor) {

@@ -156,6 +156,38 @@ export class Renderer {
       ctx.stroke();
     }
 
+    // Draw shaft extensions (vertical lines connecting multiple floors)
+    const shaftPositions = new Map<number, number>(); // startX -> minFloor
+    for (const floor of this.game.floors.values()) {
+      for (const room of floor.rooms) {
+        if (room.type.shaft && room.active) {
+          if (
+            !shaftPositions.has(room.startX) ||
+            shaftPositions.get(room.startX)! > floor.index
+          ) {
+            shaftPositions.set(room.startX, floor.index);
+          }
+        }
+      }
+    }
+
+    ctx.save();
+    ctx.strokeStyle = "rgba(28, 26, 23, 0.15)";
+    ctx.lineWidth = this.cellSize * 0.5;
+    for (const [startX, minFloor] of shaftPositions.entries()) {
+      const shaftX =
+        this.padding + startX * this.cellSize + this.cellSize * 0.5;
+      const topY = this.floorBaseY(
+        Math.min(...Array.from(this.game.floors.keys())),
+      );
+      const bottomY = this.floorBaseY(minFloor) - this.floorHeight;
+      ctx.beginPath();
+      ctx.moveTo(shaftX, topY);
+      ctx.lineTo(shaftX, bottomY);
+      ctx.stroke();
+    }
+    ctx.restore();
+
     for (const floor of this.game.floors.values()) {
       const y = this.floorBaseY(floor.index);
       if (y < -50 || y > height + 50) continue;
@@ -244,7 +276,7 @@ export class Renderer {
         const color = PERSON_COLORS[person.role] || "#2d6e6a";
         ctx.fillStyle = color;
         ctx.beginPath();
-        
+
         // Distribute people across the actual room widths on the floor
         let baseX: number;
         if (floor && floor.rooms.length > 0) {
@@ -257,10 +289,11 @@ export class Renderer {
               totalWidth += room.type.width * this.cellSize;
             }
           }
-          
+
           // Position person within rooms based on their index
           if (totalWidth > 0) {
-            const positionRatio = (i % waitingPeople.length) / Math.max(1, waitingPeople.length);
+            const positionRatio =
+              (i % waitingPeople.length) / Math.max(1, waitingPeople.length);
             let accum = 0;
             let personX = this.padding + 8;
             for (let j = 0; j < floor.rooms.length; j += 1) {
@@ -270,7 +303,8 @@ export class Renderer {
                 const roomWidth = room.type.width * this.cellSize;
                 accum += roomWidth;
                 if (positionRatio * totalWidth < accum) {
-                  personX = roomStart + (roomWidth * 0.1) + (i % 4) * (roomWidth * 0.2);
+                  personX =
+                    roomStart + roomWidth * 0.1 + (i % 4) * (roomWidth * 0.2);
                   break;
                 }
               }
@@ -282,7 +316,7 @@ export class Renderer {
         } else {
           baseX = this.padding + 8 + (i % 8) * 5;
         }
-        
+
         ctx.arc(baseX, baseY, 2.2, 0, Math.PI * 2);
         ctx.fill();
       }
@@ -293,10 +327,8 @@ export class Renderer {
         ctx.save();
         for (let i = 0; i < 4; i += 1) {
           const offset = this.game.time / 6 + i;
-          const baseX =
-            this.padding + 10 + i * 8 + Math.sin(offset) * 2.5;
-          const baseY =
-            lobbyY - this.floorHeight + 12 + Math.cos(offset) * 1.5;
+          const baseX = this.padding + 10 + i * 8 + Math.sin(offset) * 2.5;
+          const baseY = lobbyY - this.floorHeight + 12 + Math.cos(offset) * 1.5;
           ctx.fillStyle = "#2d6e6a";
           ctx.beginPath();
           ctx.arc(baseX, baseY, 2, 0, Math.PI * 2);
