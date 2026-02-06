@@ -1,4 +1,4 @@
-import type { RoomCategory, RoomType } from "./types.js";
+import type { RoomCategory, RoomType } from "./types";
 
 export const CATEGORY_ORDER: readonly RoomCategory[] = [
   "Infrastructure",

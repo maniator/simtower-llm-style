@@ -1,7 +1,8 @@
-import type { Game } from "./sim.js";
-import type { Renderer } from "./render.js";
-import type { AudioSynth } from "./audio.js";
-import type { RoomType, RoomCategory, IRoom } from "./types.js";
+import type { Game } from "./sim";
+import type { Renderer } from "./render";
+import type { AudioSynth } from "./audio";
+import type { RoomType, RoomCategory, IRoom, CellPosition } from "./types";
+import { saveGame, clearSave, exportGame, importGame } from "./storage";
 
 const formatPercent = (value: number): string => `${Math.round(value)}%`;
 
@@ -13,6 +14,7 @@ export class UI {
   private audio: AudioSynth;
   private selectedRoomId: string;
   private hoverRoom: IRoom | null;
+  private hoverCell: CellPosition | null;
   private lastPopulation: number;
 
   private moneyEl: HTMLElement;
@@ -39,6 +41,7 @@ export class UI {
     this.audio = audio;
     this.selectedRoomId = "lobby";
     this.hoverRoom = null;
+    this.hoverCell = null;
     this.lastPopulation = 0;
 
     this.moneyEl = this.getElement("money");
@@ -106,6 +109,60 @@ export class UI {
         this.game.paused = speed === 0;
       });
     });
+
+    const resetBtn = document.getElementById("reset-btn");
+    if (resetBtn) {
+      resetBtn.addEventListener("click", () => {
+        if (
+          confirm(
+            "Are you sure you want to start a new game? All progress will be lost.",
+          )
+        ) {
+          clearSave();
+          this.game.reset();
+          this.renderer.camera.y = 0;
+          this.statusText.textContent = "New game started!";
+          this.updatePanels();
+          saveGame(this.game);
+        }
+      });
+    }
+
+    const exportBtn = document.getElementById("export-btn");
+    if (exportBtn) {
+      exportBtn.addEventListener("click", () => {
+        const encoded = exportGame(this.game);
+        navigator.clipboard
+          .writeText(encoded)
+          .then(() => {
+            this.statusText.textContent = "Game exported to clipboard!";
+            this.audio.uiClick();
+          })
+          .catch(() => {
+            prompt("Copy this save code:", encoded);
+          });
+      });
+    }
+
+    const importBtn = document.getElementById("import-btn");
+    if (importBtn) {
+      importBtn.addEventListener("click", () => {
+        const encoded = prompt("Paste your save code:");
+        if (encoded) {
+          const success = importGame(this.game, encoded.trim());
+          if (success) {
+            this.renderer.camera.y = 0;
+            this.statusText.textContent = "Game imported successfully!";
+            this.updatePanels();
+            this.audio.uiClick();
+          } else {
+            this.statusText.textContent =
+              "Failed to import game - invalid code.";
+            this.audio.buildFail();
+          }
+        }
+      });
+    }
   }
 
   private bindCanvasControls(): void {
@@ -132,6 +189,7 @@ export class UI {
         this.audio.buildFail();
         this.statusText.textContent = result.reason || "Placement failed.";
       }
+      this.updateGhostPreview();
     });
 
     canvas.addEventListener("contextmenu", (event: MouseEvent) => {
@@ -147,6 +205,7 @@ export class UI {
       } else {
         this.statusText.textContent = result.reason || "Removal failed.";
       }
+      this.updateGhostPreview();
     });
 
     canvas.addEventListener("mousemove", (event: MouseEvent) => {
@@ -154,12 +213,21 @@ export class UI {
         event.clientX,
         event.clientY,
       );
-      const floor = this.game.floors.get(floorIndex);
-      if (!floor || cellX < 0 || cellX >= this.game.width) {
+      this.hoverCell = { cellX, floorIndex };
+      if (cellX < 0 || cellX >= this.game.width) {
         this.hoverRoom = null;
+        this.renderer.setGhost(null);
         return;
       }
-      this.hoverRoom = floor.cells[cellX];
+      const floor = this.game.floors.get(floorIndex);
+      this.hoverRoom = floor ? floor.cells[cellX] : null;
+      this.updateGhostPreview();
+    });
+
+    canvas.addEventListener("mouseleave", () => {
+      this.hoverRoom = null;
+      this.hoverCell = null;
+      this.renderer.setGhost(null);
     });
 
     canvas.addEventListener(
@@ -185,7 +253,35 @@ export class UI {
     buttons.forEach((button) => {
       button.classList.toggle("active", button.dataset.room === roomId);
     });
+    this.updateGhostPreview();
     this.updatePanels();
+  }
+
+  private updateGhostPreview(): void {
+    if (!this.hoverCell) {
+      this.renderer.setGhost(null);
+      return;
+    }
+    const room = this.roomTypes[this.selectedRoomId];
+    if (!room) {
+      this.renderer.setGhost(null);
+      return;
+    }
+    if (this.hoverCell.cellX < 0 || this.hoverCell.cellX >= this.game.width) {
+      this.renderer.setGhost(null);
+      return;
+    }
+    const result = this.game.canPlaceRoom(
+      room.id,
+      this.hoverCell.floorIndex,
+      this.hoverCell.cellX,
+    );
+    this.renderer.setGhost({
+      type: room,
+      floorIndex: this.hoverCell.floorIndex,
+      startX: this.hoverCell.cellX,
+      valid: result.ok,
+    });
   }
 
   public updateHUD(): void {

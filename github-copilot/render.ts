@@ -1,5 +1,5 @@
-import type { Game } from "./sim.js";
-import type { RoomCategory, Camera, CellPosition } from "./types.js";
+import type { Game } from "./sim";
+import type { RoomCategory, Camera, CellPosition, RoomType } from "./types";
 
 const CATEGORY_COLORS: Record<RoomCategory, string> = {
   Infrastructure: "#2d6e6a",
@@ -17,7 +17,15 @@ export class Renderer {
   private cellSize: number;
   private floorHeight: number;
   private padding: number;
+  private viewWidth: number;
+  private viewHeight: number;
   public camera: Camera;
+  private ghost: {
+    type: RoomType;
+    floorIndex: number;
+    startX: number;
+    valid: boolean;
+  } | null;
 
   constructor(canvas: HTMLCanvasElement, game: Game) {
     this.canvas = canvas;
@@ -28,13 +36,20 @@ export class Renderer {
     this.cellSize = 18;
     this.floorHeight = 26;
     this.padding = 40;
+    this.viewWidth = 0;
+    this.viewHeight = 0;
     this.camera = { y: 0 };
+    this.ghost = null;
   }
 
   public resize(): void {
     const parent = this.canvas.parentElement;
-    if (!parent) return;
-    const rect = parent.getBoundingClientRect();
+    const rect = parent
+      ? parent.getBoundingClientRect()
+      : this.canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    this.viewWidth = rect.width;
+    this.viewHeight = rect.height;
     const dpr = window.devicePixelRatio || 1;
     this.canvas.width = rect.width * dpr;
     this.canvas.height = rect.height * dpr;
@@ -53,28 +68,37 @@ export class Renderer {
     const canvasRect = this.canvas.getBoundingClientRect();
     const localX = x - canvasRect.left;
     const localY = y - canvasRect.top;
+    const viewHeight = this.viewHeight || canvasRect.height;
     const cellX = Math.floor((localX - this.padding) / this.cellSize);
     const floorIndex = Math.floor(
-      (this.canvas.height / (window.devicePixelRatio || 1) -
-        localY -
-        this.padding) /
-        this.floorHeight +
-        this.camera.y,
+      (viewHeight - localY - this.padding) / this.floorHeight + this.camera.y,
     );
     return { cellX, floorIndex };
   }
 
+  public setGhost(
+    ghost: {
+      type: RoomType;
+      floorIndex: number;
+      startX: number;
+      valid: boolean;
+    } | null,
+  ): void {
+    this.ghost = ghost;
+  }
+
   private floorBaseY(floorIndex: number): number {
-    const height = this.canvas.height / (window.devicePixelRatio || 1);
     return (
-      height - this.padding - (floorIndex - this.camera.y) * this.floorHeight
+      this.viewHeight -
+      this.padding -
+      (floorIndex - this.camera.y) * this.floorHeight
     );
   }
 
   public render(): void {
     const ctx = this.ctx;
-    const width = this.canvas.width / (window.devicePixelRatio || 1);
-    const height = this.canvas.height / (window.devicePixelRatio || 1);
+    const width = this.viewWidth;
+    const height = this.viewHeight;
     ctx.clearRect(0, 0, width, height);
 
     ctx.fillStyle = "#f9f0dd";
@@ -86,6 +110,22 @@ export class Renderer {
       ctx.fillStyle = `rgba(27, 33, 48, ${darkness.toFixed(3)})`;
       ctx.fillRect(0, 0, width, height);
     }
+
+    const buildLeft = this.padding;
+    const buildRight = this.padding + this.game.width * this.cellSize;
+
+    ctx.fillStyle = "rgba(28, 26, 23, 0.04)";
+    ctx.fillRect(0, 0, buildLeft, height);
+    ctx.fillRect(buildRight, 0, width - buildRight, height);
+
+    ctx.strokeStyle = "rgba(28, 26, 23, 0.35)";
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(buildLeft, 0);
+    ctx.lineTo(buildLeft, height);
+    ctx.moveTo(buildRight, 0);
+    ctx.lineTo(buildRight, height);
+    ctx.stroke();
 
     const floorStart = Math.floor(this.camera.y - 2);
     const floorEnd = Math.floor(this.camera.y + height / this.floorHeight) + 2;
@@ -131,6 +171,33 @@ export class Renderer {
         ctx.fillStyle = "rgba(255, 255, 255, 0.85)";
         ctx.font = "11px 'Space Grotesk', sans-serif";
         ctx.fillText(room.type.name, roomX + 4, roomY + roomHeight / 1.6);
+      }
+    }
+
+    if (this.ghost) {
+      const ghost = this.ghost;
+      const y = this.floorBaseY(ghost.floorIndex);
+      if (!(y < -60 || y > height + 60)) {
+        const roomX = this.padding + ghost.startX * this.cellSize;
+        const roomY = y - this.floorHeight + 4;
+        const roomWidth = ghost.type.width * this.cellSize;
+        const roomHeight = this.floorHeight - 8;
+        const category = ghost.type.category as RoomCategory;
+        const color = CATEGORY_COLORS[category] || "#999";
+
+        ctx.save();
+        ctx.globalAlpha = ghost.valid ? 0.35 : 0.2;
+        ctx.fillStyle = ghost.valid ? color : "#b3261e";
+        ctx.fillRect(roomX, roomY, roomWidth, roomHeight);
+        ctx.globalAlpha = 0.85;
+        ctx.strokeStyle = ghost.valid
+          ? "rgba(28, 26, 23, 0.55)"
+          : "rgba(179, 38, 30, 0.85)";
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.strokeRect(roomX, roomY, roomWidth, roomHeight);
+        ctx.setLineDash([]);
+        ctx.restore();
       }
     }
 

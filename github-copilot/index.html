@@ -35,6 +35,19 @@
           <button class="time-btn" data-speed="0">Pause</button>
           <button class="time-btn active" data-speed="1">Play</button>
           <button class="time-btn" data-speed="3">Fast</button>
+          <button class="reset-btn" id="reset-btn" title="Start a new game">
+            New Game
+          </button>
+          <button
+            class="action-btn"
+            id="export-btn"
+            title="Export save code to clipboard"
+          >
+            Export
+          </button>
+          <button class="action-btn" id="import-btn" title="Import save code">
+            Import
+          </button>
         </div>
       </header>
       <div class="content">
@@ -61,6 +74,6 @@
         >
       </footer>
     </div>
-    <script type="module" src="dist/main.js"></script>
+    <script type="module" src="/main.ts"></script>
   </body>
 </html>

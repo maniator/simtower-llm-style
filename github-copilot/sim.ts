@@ -8,7 +8,7 @@ import type {
   ElevatorType,
   EventType,
   IRoom,
-} from "./types.js";
+} from "./types";
 
 const BASE_TICK_MS: number = 220;
 const MINUTES_PER_DAY: number = 1440;
@@ -172,6 +172,29 @@ export class Game {
     this.placeRoom("elevator_standard", 0, 16, true);
   }
 
+  public reset(): void {
+    this.floors.clear();
+    this.minFloor = 0;
+    this.maxFloor = 0;
+    this.money = 180000;
+    this.population = 0;
+    this.happiness = 70;
+    this.rating = 1;
+    this.day = 1;
+    this.time = START_TIME;
+    this.speed = 1;
+    this.paused = false;
+    this.accumulator = 0;
+    this.people = [];
+    this.elevators = [];
+    this.events = [];
+    this.statusMessage = "";
+    this.waitSamples = [];
+    this.vipPassed = false;
+    this.lastVipDay = 0;
+    this.initTower();
+  }
+
   private ensureFloor(index: number): void {
     if (!this.floors.has(index)) {
       this.floors.set(index, {
@@ -193,14 +216,12 @@ export class Game {
     return this.floors.get(index)!;
   }
 
-  public placeRoom(
-    typeId: string,
+  private validatePlacement(
+    type: RoomType,
     floorIndex: number,
     startX: number,
-    skipCost: boolean = false,
+    skipCost: boolean,
   ): PlacementResult {
-    const type = this.roomTypes[typeId];
-    if (!type) return { ok: false, reason: "Unknown room." };
     if (!skipCost && this.money < type.cost) {
       return { ok: false, reason: "Not enough money." };
     }
@@ -228,12 +249,44 @@ export class Game {
         return { ok: false, reason: "Residences need support below." };
       }
     }
-    const floor = this.getFloor(floorIndex);
-    for (let x = startX; x < startX + type.width; x += 1) {
-      if (floor.cells[x]) {
-        return { ok: false, reason: "Space occupied." };
+    const floor = this.floors.get(floorIndex);
+    if (floor) {
+      for (let x = startX; x < startX + type.width; x += 1) {
+        if (floor.cells[x]) {
+          return { ok: false, reason: "Space occupied." };
+        }
       }
     }
+    return { ok: true };
+  }
+
+  public canPlaceRoom(
+    typeId: string,
+    floorIndex: number,
+    startX: number,
+    skipCost: boolean = false,
+  ): PlacementResult {
+    const type = this.roomTypes[typeId];
+    if (!type) return { ok: false, reason: "Unknown room." };
+    return this.validatePlacement(type, floorIndex, startX, skipCost);
+  }
+
+  public placeRoom(
+    typeId: string,
+    floorIndex: number,
+    startX: number,
+    skipCost: boolean = false,
+  ): PlacementResult {
+    const type = this.roomTypes[typeId];
+    if (!type) return { ok: false, reason: "Unknown room." };
+    const validation = this.validatePlacement(
+      type,
+      floorIndex,
+      startX,
+      skipCost,
+    );
+    if (!validation.ok) return validation;
+    const floor = this.getFloor(floorIndex);
     const room = new Room(type, floorIndex, startX);
     floor.rooms.push(room);
     for (let x = startX; x < startX + type.width; x += 1) {
@@ -309,6 +362,21 @@ export class Game {
     if (this.time % 60 === 0) {
       this.onHourChange();
     }
+
+    // Auto-save every hour
+    if (this.time % 60 === 30) {
+      this.requestAutoSave();
+    }
+  }
+
+  private autoSaveCallback?: () => void;
+
+  public setAutoSaveCallback(callback: () => void): void {
+    this.autoSaveCallback = callback;
+  }
+
+  private requestAutoSave(): void {
+    this.autoSaveCallback?.();
   }
 
   private onHourChange(): void {
