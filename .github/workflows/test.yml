@@ -10,6 +10,10 @@ jobs:
   test:
     runs-on: ubuntu-latest
 
+    defaults:
+      run:
+        working-directory: ./github-copilot
+
     strategy:
       matrix:
         node-version: [18.x, 20.x]
@@ -25,21 +29,16 @@ jobs:
           cache-dependency-path: "github-copilot/package-lock.json"
 
       - name: Install dependencies
-        working-directory: ./github-copilot
         run: npm ci
 
       - name: Lint
-        working-directory: ./github-copilot
         run: npm run lint
 
       - name: Typecheck
-        working-directory: ./github-copilot
         run: npm run typecheck
 
       - name: Run tests
-        working-directory: ./github-copilot
         run: npm run test:coverage -- --run
 
       - name: Build
-        working-directory: ./github-copilot
         run: npm run build
