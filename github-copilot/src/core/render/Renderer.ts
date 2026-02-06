@@ -192,7 +192,7 @@ export class Renderer {
       const y = this.floorBaseY(floor.index);
       if (y < -50 || y > height + 50) continue;
       for (const room of floor.rooms) {
-        const category = room.type.category as RoomCategory;
+        const category = room.type.category;
         const color = CATEGORY_COLORS[category] || "#999";
         const roomX = this.padding + room.startX * this.cellSize;
         const roomY = y - this.floorHeight + 4;
@@ -243,7 +243,7 @@ export class Renderer {
         const roomY = y - this.floorHeight + 4;
         const roomWidth = ghost.type.width * this.cellSize;
         const roomHeight = this.floorHeight - 8;
-        const category = ghost.type.category as RoomCategory;
+        const category = ghost.type.category;
         const color = CATEGORY_COLORS[category] || "#999";
 
         ctx.save();

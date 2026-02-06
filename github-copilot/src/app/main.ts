@@ -92,7 +92,7 @@ window.addEventListener("beforeunload", () => {
 // Accept HMR updates
 if (import.meta.hot) {
   import.meta.hot.accept(() => {
-    console.log("🔥 HMR: Reloading...");
+    console.warn("HMR: Reloading...");
   });
 
   import.meta.hot.dispose(() => {

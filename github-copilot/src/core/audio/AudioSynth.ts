@@ -17,8 +17,15 @@ export class AudioSynth {
   private masterGain: GainNode;
 
   constructor() {
+    const windowContext = window as unknown as {
+      AudioContext?: typeof AudioContext;
+      webkitAudioContext?: typeof AudioContext;
+    };
     const AudioContextClass =
-      window.AudioContext || (window as any).webkitAudioContext;
+      windowContext.AudioContext || windowContext.webkitAudioContext;
+    if (!AudioContextClass) {
+      throw new Error("AudioContext not supported in this browser");
+    }
     this.audioContext = new AudioContextClass();
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.value = 0.3;

@@ -59,7 +59,7 @@ export function loadGame(game: Game): boolean {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (!saved) return false;
 
-    const data: SavedGameState = JSON.parse(saved);
+    const data: SavedGameState = JSON.parse(saved) as unknown as SavedGameState;
     if (data.version !== 1) return false;
 
     // Restore basic state
@@ -93,7 +93,6 @@ export function loadGame(game: Game): boolean {
       }
     }
 
-    console.log("✅ Game loaded from save");
     return true;
   } catch (error) {
     console.error("Failed to load game:", error);
@@ -104,7 +103,7 @@ export function loadGame(game: Game): boolean {
 export function clearSave(): void {
   try {
     localStorage.removeItem(STORAGE_KEY);
-    console.log("🗑️ Save data cleared");
+    // Save cleared successfully
   } catch (error) {
     console.error("Failed to clear save:", error);
   }
@@ -189,7 +188,7 @@ export function importGame(game: Game, encoded: string): boolean {
 
     // Also save to localStorage
     saveGame(game);
-    console.log("✅ Game imported successfully");
+    // Game imported successfully
     return true;
   } catch (error) {
     console.error("Failed to import game:", error);
