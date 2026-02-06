@@ -1,0 +1,14 @@
+{
+  "name": "simtower-github-copilot",
+  "version": "1.0.0",
+  "description": "SimTower-inspired tower building game with TypeScript",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.3.3"
+  }
+}

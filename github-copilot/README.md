@@ -1,6 +1,6 @@
 # SimTower - GitHub Copilot Build
 
-A browser-playable tower simulation inspired by the public mechanics of the 1994 classic, implemented with original code and assets.
+A browser-playable tower simulation inspired by the public mechanics of the 1994 classic, implemented with TypeScript for type safety and maintainability.
 
 ## Architecture Outline
 
@@ -8,16 +8,51 @@ A browser-playable tower simulation inspired by the public mechanics of the 1994
   - UI shell with stats, build toolbar, canvas viewport, and status panels.
 - **style.css**
   - Visual language, responsive layout, and UI styling.
-- **main.js**
+- **main.ts**
   - App bootstrap, ties together simulation, renderer, and UI.
-- **data.js**
-  - Room definitions, costs, stats, unlocks, and categories.
-- **sim.js**
+- **data.ts**
+  - Room definitions, costs, stats, unlocks, and categories with strict typing.
+- **sim.ts**
   - Core simulation: time, economy, people, elevators, events, rating.
-- **render.js**
+- **render.ts**
   - Canvas renderer with floor grid, room blocks, elevators, and day/night lighting.
-- **ui.js**
+- **ui.ts**
   - DOM controls, tool selection, panels, and input handling.
+- **audio.ts**
+  - Procedural sound synthesis using Web Audio API.
+- **types.ts**
+  - Shared type definitions and interfaces for the entire application.
+
+## TypeScript Build Setup
+
+This project uses TypeScript with strict type checking enabled. All source files are in TypeScript (`.ts`) and compile to JavaScript in the `dist/` folder.
+
+### Prerequisites
+
+- Node.js (for npm)
+
+### Build Commands
+
+```bash
+# Install dependencies
+npm install
+
+# Build once
+npm run build
+
+# Watch mode (rebuild on changes)
+npm run watch
+
+# Type check only (no build)
+npm run typecheck
+```
+
+### Compiler Options
+
+- **Target**: ES2020
+- **Module**: ES2020
+- **Strict mode**: Enabled with all strict flags
+- **Output**: `dist/` folder with source maps and declaration files
 
 ## Design Decisions
 
@@ -44,12 +79,17 @@ A browser-playable tower simulation inspired by the public mechanics of the 1994
 
 ## How To Run
 
-1. Open `github-copilot/index.html` in a modern browser.
-2. Select a room from the Construction panel.
-3. **Left-click** the tower grid to place rooms and build upward/downward.
-4. **Right-click** construction sites to cancel and get a partial refund.
-5. Residences require support (a building below them).
-6. Use time controls to pause or speed up the simulation.
+1. **Build the project**:
+   ```bash
+   npm install
+   npm run build
+   ```
+2. Open `github-copilot/index.html` in a modern browser (or use a local web server).
+3. Select a room from the Construction panel.
+4. **Left-click** the tower grid to place rooms and build upward/downward.
+5. **Right-click** construction sites to cancel and get a partial refund.
+6. Residences require support (a building below them).
+7. Use time controls to pause or speed up the simulation.
 
 ## How To Extend
 
