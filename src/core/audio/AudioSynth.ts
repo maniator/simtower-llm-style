@@ -3,6 +3,8 @@
  * Generates retro-style sounds procedurally
  */
 
+import { MidiPlayer } from "./MidiPlayer.ts";
+
 type OscillatorType = "sine" | "square" | "sawtooth" | "triangle";
 
 interface EnvelopeParams {
@@ -15,6 +17,7 @@ interface EnvelopeParams {
 export class AudioSynth {
   private audioContext: AudioContext;
   private masterGain: GainNode;
+  private midiPlayer: MidiPlayer;
 
   constructor() {
     const windowContext = window as unknown as {
@@ -30,6 +33,7 @@ export class AudioSynth {
     this.masterGain = this.audioContext.createGain();
     this.masterGain.gain.value = 0.3;
     this.masterGain.connect(this.audioContext.destination);
+    this.midiPlayer = new MidiPlayer(this.audioContext, this.masterGain);
   }
 
   private playTone(
@@ -162,6 +166,31 @@ export class AudioSynth {
       sustain: 0.2,
       release: 0.02,
     });
+  }
+
+  // Background music controls
+  public playBackgroundMusic(isDaytime: boolean): void {
+    this.midiPlayer.play(isDaytime);
+  }
+
+  public stopBackgroundMusic(): void {
+    this.midiPlayer.stop();
+  }
+
+  public setMusicVolume(volume: number): void {
+    this.midiPlayer.setVolume(volume);
+  }
+
+  public getMusicVolume(): number {
+    return this.midiPlayer.getVolume();
+  }
+
+  public isMusicPlaying(): boolean {
+    return this.midiPlayer.getIsPlaying();
+  }
+
+  public getCurrentTrackName(): string {
+    return this.midiPlayer.getCurrentTrackName();
   }
 }
 

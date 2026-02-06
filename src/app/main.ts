@@ -52,6 +52,29 @@ if (window.__appState) {
 ui.init();
 renderer.resize();
 
+// Initialize background music
+let currentMusicMode: boolean | null = null;
+const updateBackgroundMusic = () => {
+  const isDaytime = game.isDaytime();
+  if (currentMusicMode !== isDaytime) {
+    currentMusicMode = isDaytime;
+    audio.playBackgroundMusic(isDaytime);
+  }
+};
+
+// Start music on first user interaction (browsers require user gesture)
+let musicStarted = false;
+const startMusicOnInteraction = () => {
+  if (!musicStarted) {
+    musicStarted = true;
+    updateBackgroundMusic();
+    document.removeEventListener("click", startMusicOnInteraction);
+    document.removeEventListener("keydown", startMusicOnInteraction);
+  }
+};
+document.addEventListener("click", startMusicOnInteraction);
+document.addEventListener("keydown", startMusicOnInteraction);
+
 const resizeHandler = () => renderer.resize();
 window.addEventListener("resize", resizeHandler);
 
@@ -69,6 +92,12 @@ const loop = (now: number): void => {
   game.update(delta);
   renderer.render();
   ui.updateHUD();
+  
+  // Update background music based on time of day
+  if (musicStarted) {
+    updateBackgroundMusic();
+  }
+  
   window.__appState!.rafId = requestAnimationFrame(loop);
 };
 

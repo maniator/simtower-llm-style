@@ -173,6 +173,32 @@ export class UI {
         }
       });
     }
+
+    // Music controls
+    const musicToggleBtn = document.getElementById("music-toggle-btn");
+    const musicVolumeSlider = document.getElementById("music-volume") as HTMLInputElement;
+    
+    if (musicToggleBtn) {
+      musicToggleBtn.addEventListener("click", () => {
+        if (this.audio.isMusicPlaying()) {
+          this.audio.stopBackgroundMusic();
+          musicToggleBtn.classList.remove("active");
+          this.statusText.textContent = "Music stopped";
+        } else {
+          this.audio.playBackgroundMusic(this.game.isDaytime());
+          musicToggleBtn.classList.add("active");
+          this.statusText.textContent = `Playing: ${this.audio.getCurrentTrackName()}`;
+        }
+        this.audio.uiClick();
+      });
+    }
+
+    if (musicVolumeSlider) {
+      musicVolumeSlider.addEventListener("input", () => {
+        const volume = Number(musicVolumeSlider.value) / 100;
+        this.audio.setMusicVolume(volume);
+      });
+    }
   }
 
   private bindCanvasControls(): void {

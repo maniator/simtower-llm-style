@@ -776,6 +776,11 @@ export class Game {
     return `Day ${this.day} - ${displayHour}:${displayMinute} ${suffix}`;
   }
 
+  public isDaytime(): boolean {
+    const hour = Math.floor(this.time / 60);
+    return hour >= 6 && hour < 20; // Daytime: 6 AM to 8 PM
+  }
+
   public formatMoney(): string {
     return formatMoney(this.money);
   }

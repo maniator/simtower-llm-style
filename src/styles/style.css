@@ -94,6 +94,86 @@ body {
 .time-controls {
   display: flex;
   gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.music-controls {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-left: 8px;
+  padding-left: 12px;
+  border-left: 1px solid var(--panel-border);
+}
+
+.music-btn {
+  border: 1px solid var(--panel-border);
+  background: #fff;
+  color: var(--ink);
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 600;
+  cursor: pointer;
+  transition:
+    transform 0.15s ease,
+    background 0.2s ease;
+}
+
+.music-btn:hover {
+  transform: translateY(-1px);
+  background: #f0e8ff;
+  border-color: #9b7fde;
+}
+
+.music-btn.active {
+  background: #9b7fde;
+  color: #fff;
+  border-color: transparent;
+}
+
+.music-btn:active {
+  transform: translateY(0);
+}
+
+.volume-slider {
+  width: 80px;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--panel-border);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.volume-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sea);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.volume-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--sea);
+  cursor: pointer;
+  border: none;
+  transition: background 0.2s ease;
+}
+
+.volume-slider::-webkit-slider-thumb:hover {
+  background: var(--sun);
+}
+
+.volume-slider::-moz-range-thumb:hover {
+  background: var(--sun);
 }
 
 .time-btn {
