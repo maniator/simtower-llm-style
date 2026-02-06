@@ -88,6 +88,10 @@ export class Renderer {
     this.setZoom(this.camera.zoom + delta);
   }
 
+  public get zoom(): number {
+    return this.camera.zoom;
+  }
+
   public screenToCell(x: number, y: number): CellPosition {
     const canvasRect = this.canvas.getBoundingClientRect();
     const localX = x - canvasRect.left;
@@ -140,6 +144,16 @@ export class Renderer {
 
     const scaledCellSize = this.cellSize * this.camera.zoom;
     const scaledFloorHeight = this.floorHeight * this.camera.zoom;
+    
+    // Define scaled offsets for consistent zoom behavior
+    const ROOM_VERTICAL_MARGIN = 4 * this.camera.zoom;
+    const ROOM_INSET = 8 * this.camera.zoom;
+    const TEXT_OFFSET = 4 * this.camera.zoom;
+    const PERSON_VERTICAL_OFFSET = 12 * this.camera.zoom;
+    const CAR_VERTICAL_MARGIN = 6 * this.camera.zoom;
+    const CAR_HORIZONTAL_INSET = 2 * this.camera.zoom;
+    const CAR_INSET = 4 * this.camera.zoom;
+    
     const buildLeft = this.padding;
     const buildRight = this.padding + this.game.width * scaledCellSize;
 

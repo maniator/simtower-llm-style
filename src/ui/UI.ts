@@ -313,7 +313,7 @@ export class UI {
     this.happinessEl.textContent = formatPercent(this.game.happiness);
     this.ratingEl.textContent = `${this.game.rating} Star${this.game.rating > 1 ? "s" : ""}`;
     this.timeIndicator.textContent = this.game.getTimeLabel();
-    this.zoomIndicator.textContent = `Zoom: ${Math.round(this.renderer.camera.zoom * 100)}%`;
+    this.zoomIndicator.textContent = `Zoom: ${Math.round(this.renderer.zoom * 100)}%`;
 
     if (this.game.population > prevPopulation && prevPopulation > 0) {
       this.audio.populationGain();
