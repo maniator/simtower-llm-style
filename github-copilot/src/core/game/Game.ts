@@ -1,14 +1,15 @@
 import type {
-  RoomType,
-  FloorData,
-  PlacementResult,
-  GameEvent,
-  PersonRole,
-  PersonState,
   ElevatorType,
   EventType,
-  IRoom,
-} from "./types";
+  FloorData,
+  GameEvent,
+  PersonRole,
+  PlacementResult,
+  RoomType,
+} from "../../types/types.ts";
+import { ElevatorCar } from "./ElevatorCar.ts";
+import { Person } from "./Person.ts";
+import { Room } from "./Room.ts";
 
 const BASE_TICK_MS: number = 220;
 const MINUTES_PER_DAY: number = 1440;
@@ -28,95 +29,6 @@ const clamp = (value: number, min: number, max: number): number =>
 
 const formatMoney = (value: number): string =>
   `$${Math.round(value).toLocaleString("en-US")}`;
-
-export class Room implements IRoom {
-  public type: RoomType;
-  public floorIndex: number;
-  public startX: number;
-  public endX: number;
-  public buildRemaining: number;
-  public active: boolean;
-  public cleanliness: number;
-
-  constructor(type: RoomType, floorIndex: number, startX: number) {
-    this.type = type;
-    this.floorIndex = floorIndex;
-    this.startX = startX;
-    this.endX = startX + type.width - 1;
-    this.buildRemaining = type.buildTime;
-    this.active = false;
-    this.cleanliness = 100;
-  }
-
-  tickConstruction(): void {
-    if (this.active) return;
-    this.buildRemaining -= 1;
-    if (this.buildRemaining <= 0) {
-      this.active = true;
-      this.buildRemaining = 0;
-    }
-  }
-}
-
-class Person {
-  public role: PersonRole;
-  public origin: number;
-  public target: number;
-  public elevatorType: ElevatorType;
-  public waitTime: number;
-  public state: PersonState;
-
-  constructor(
-    role: PersonRole,
-    origin: number,
-    target: number,
-    elevatorType: ElevatorType,
-  ) {
-    this.role = role;
-    this.origin = origin;
-    this.target = target;
-    this.elevatorType = elevatorType;
-    this.waitTime = 0;
-    this.state = "waiting";
-  }
-}
-
-class ElevatorCar {
-  public type: ElevatorType;
-  public shaftX: number;
-  public capacity: number;
-  public passengers: Person[];
-  public direction: number;
-  public position: number;
-  public baseSpeed: number;
-  public speed: number;
-  public stops: Set<number>;
-  public doorTimer: number;
-  public idle: boolean;
-
-  constructor(type: ElevatorType, shaftX: number, capacity: number) {
-    this.type = type;
-    this.shaftX = shaftX;
-    this.capacity = capacity;
-    this.passengers = [];
-    this.direction = 1;
-    this.position = 0;
-    this.baseSpeed = 0.2;
-    this.speed = this.baseSpeed;
-    this.stops = new Set<number>();
-    this.doorTimer = 0;
-    this.idle = true;
-  }
-
-  addStop(floorIndex: number): void {
-    this.stops.add(floorIndex);
-    this.idle = false;
-  }
-
-  isAvailable(): boolean {
-    return this.passengers.length < this.capacity;
-  }
-}
 
 export class Game {
   public roomTypes: Readonly<Record<string, RoomType>>;

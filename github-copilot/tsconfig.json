@@ -10,6 +10,8 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "moduleResolution": "bundler",
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
     "resolveJsonModule": true,
     "declaration": true,
     "sourceMap": true,
@@ -25,6 +27,6 @@
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["*.ts"],
-  "exclude": ["node_modules", "dist"]
+  "include": ["src/**/*.ts", "*.d.ts"],
+  "exclude": ["node_modules", "dist", "**/*.test.ts", "**/*.spec.ts"]
 }

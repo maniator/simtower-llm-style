@@ -1,5 +1,10 @@
-import type { Game } from "./sim";
-import type { RoomCategory, Camera, CellPosition, RoomType } from "./types";
+import type { Game } from "../game/Game.ts";
+import type {
+  RoomCategory,
+  Camera,
+  CellPosition,
+  RoomType,
+} from "../../types/types.ts";
 
 const CATEGORY_COLORS: Record<RoomCategory, string> = {
   Infrastructure: "#2d6e6a",

@@ -1,9 +1,9 @@
-import { ROOM_TYPES, CATEGORY_ORDER } from "./data";
-import { Game } from "./sim";
-import { Renderer } from "./render";
-import { UI } from "./ui";
-import { AudioSynth } from "./audio";
-import { saveGame, loadGame, hasSave } from "./storage";
+import { ROOM_TYPES, CATEGORY_ORDER } from "../data/roomTypes.ts";
+import { Game } from "../core/game/Game.ts";
+import { Renderer } from "../core/render/Renderer.ts";
+import { UI } from "../ui/UI.ts";
+import { AudioSynth } from "../core/audio/AudioSynth.ts";
+import { saveGame, loadGame, hasSave } from "../storage/storage.ts";
 
 const canvasElement = document.getElementById("tower-canvas");
 if (!(canvasElement instanceof HTMLCanvasElement)) {

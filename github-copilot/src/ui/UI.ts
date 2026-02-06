@@ -1,8 +1,18 @@
-import type { Game } from "./sim";
-import type { Renderer } from "./render";
-import type { AudioSynth } from "./audio";
-import type { RoomType, RoomCategory, IRoom, CellPosition } from "./types";
-import { saveGame, clearSave, exportGame, importGame } from "./storage";
+import type { Game } from "../core/game/Game.ts";
+import type { Renderer } from "../core/render/Renderer.ts";
+import type { AudioSynth } from "../core/audio/AudioSynth.ts";
+import type {
+  RoomType,
+  RoomCategory,
+  IRoom,
+  CellPosition,
+} from "../types/types.ts";
+import {
+  saveGame,
+  clearSave,
+  exportGame,
+  importGame,
+} from "../storage/storage.ts";
 
 const formatPercent = (value: number): string => `${Math.round(value)}%`;
 
