@@ -1,4 +1,4 @@
-import type { IRoom, RoomType } from "@types/types.ts";
+import type { IRoom, RoomType } from "@appTypes/types.ts";
 
 export class Room implements IRoom {
   public type: RoomType;
@@ -28,3 +28,4 @@ export class Room implements IRoom {
     }
   }
 }
+

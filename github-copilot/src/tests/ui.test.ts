@@ -109,3 +109,4 @@ describe("UI", () => {
     expect(timeLabel?.textContent).toContain("Day 2");
   });
 });
+

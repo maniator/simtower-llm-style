@@ -4,7 +4,7 @@ import type {
   Camera,
   CellPosition,
   RoomType,
-} from "@types/types.ts";
+} from "@appTypes/types.ts";
 
 const CATEGORY_COLORS: Record<RoomCategory, string> = {
   Infrastructure: "#2d6e6a",
@@ -373,3 +373,4 @@ export class Renderer {
     }
   }
 }
+

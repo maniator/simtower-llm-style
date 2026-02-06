@@ -1,4 +1,4 @@
-import type { RoomCategory, RoomType } from "@types/types.ts";
+import type { RoomCategory, RoomType } from "@appTypes/types.ts";
 
 export const CATEGORY_ORDER: readonly RoomCategory[] = [
   "Infrastructure",
@@ -341,3 +341,4 @@ export const ROOM_TYPES: Readonly<Record<string, RoomType>> = {
     unlock: 2,
   },
 } as const;
+

@@ -195,3 +195,4 @@ export function importGame(game: Game, encoded: string): boolean {
     return false;
   }
 }
+

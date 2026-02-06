@@ -11,7 +11,7 @@ export default defineConfig({
       "@ui": path.resolve(__dirname, "./src/ui"),
       "@data": path.resolve(__dirname, "./src/data"),
       "@storage": path.resolve(__dirname, "./src/storage"),
-      "@types": path.resolve(__dirname, "./src/types"),
+      "@appTypes": path.resolve(__dirname, "./src/types"),
       "@tests": path.resolve(__dirname, "./src/tests"),
     },
   },

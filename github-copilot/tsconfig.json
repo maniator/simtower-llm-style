@@ -33,7 +33,7 @@
       "@ui/*": ["src/ui/*"],
       "@data/*": ["src/data/*"],
       "@storage/*": ["src/storage/*"],
-      "@types/*": ["src/types/*"],
+      "@appTypes/*": ["src/types/*"],
       "@tests/*": ["src/tests/*"]
     }
   },

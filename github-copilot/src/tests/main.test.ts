@@ -98,3 +98,4 @@ describe("main bootstrap", () => {
     expect((window as any).__appState).toBeTruthy();
   });
 });
+

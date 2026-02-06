@@ -1,4 +1,4 @@
-import type { ElevatorType, PersonRole, PersonState } from "@types/types.ts";
+import type { ElevatorType, PersonRole, PersonState } from "@appTypes/types.ts";
 
 export class Person {
   public role: PersonRole;
@@ -22,3 +22,4 @@ export class Person {
     this.state = "waiting";
   }
 }
+

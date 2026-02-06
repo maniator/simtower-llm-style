@@ -6,7 +6,7 @@ import type {
   RoomCategory,
   IRoom,
   CellPosition,
-} from "@types/types.ts";
+} from "@appTypes/types.ts";
 import {
   saveGame,
   clearSave,
@@ -367,3 +367,4 @@ export class UI {
     `;
   }
 }
+

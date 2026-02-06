@@ -1,4 +1,4 @@
-import type { ElevatorType } from "@types/types.ts";
+import type { ElevatorType } from "@appTypes/types.ts";
 import { Person } from "./Person.ts";
 
 export class ElevatorCar {
@@ -37,3 +37,4 @@ export class ElevatorCar {
     return this.passengers.length < this.capacity;
   }
 }
+

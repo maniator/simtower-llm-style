@@ -29,3 +29,4 @@ describe("ElevatorCar", () => {
     expect(car.isAvailable()).toBe(false);
   });
 });
+

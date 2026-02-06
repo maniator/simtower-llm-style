@@ -68,3 +68,4 @@ describe("AudioSynth", () => {
     expect(lastContext.createOscillator).toHaveBeenCalledTimes(1);
   });
 });
+
