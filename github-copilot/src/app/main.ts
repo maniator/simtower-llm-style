@@ -91,10 +91,12 @@ window.addEventListener("beforeunload", () => {
 
 // Accept HMR updates
 if (import.meta.hot) {
+  // @ts-expect-error - Vite-specific property
   import.meta.hot.accept(() => {
     console.warn("HMR: Reloading...");
   });
 
+  // @ts-expect-error - Vite-specific property
   import.meta.hot.dispose(() => {
     if (window.__appState) {
       cancelAnimationFrame(window.__appState.rafId);

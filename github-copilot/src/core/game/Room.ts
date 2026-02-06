@@ -1,4 +1,4 @@
-import type { IRoom, RoomType } from "@types/types.ts";
+import type { IRoom, RoomType } from "@types/types";
 
 export class Room implements IRoom {
   public type: RoomType;
