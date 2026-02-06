@@ -14,6 +14,7 @@ const setupDom = (): HTMLCanvasElement => {
     <div id="tool-categories"></div>
     <div id="status-text"></div>
     <div id="time-indicator"></div>
+    <div id="zoom-indicator"></div>
     <button class="time-btn" data-speed="0">Pause</button>
     <button class="time-btn" data-speed="1">Play</button>
     <button class="time-btn" data-speed="3">Fast</button>
@@ -39,7 +40,7 @@ describe("UI", () => {
     game = new Game(ROOM_TYPES);
     renderer = {
       canvas,
-      camera: { y: 0 },
+      camera: { y: 0, zoom: 1.0 },
       screenToCell: vi.fn(() => ({ cellX: 0, floorIndex: 0 })),
       setGhost: vi.fn(),
       scroll: vi.fn(),
