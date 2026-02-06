@@ -36,6 +36,7 @@ export class UI {
   private toolCategories: HTMLElement;
   private statusText: HTMLElement;
   private timeIndicator: HTMLElement;
+  private zoomIndicator: HTMLElement;
 
   constructor(
     game: Game,
@@ -63,6 +64,7 @@ export class UI {
     this.toolCategories = this.getElement("tool-categories");
     this.statusText = this.getElement("status-text");
     this.timeIndicator = this.getElement("time-indicator");
+    this.zoomIndicator = this.getElement("zoom-indicator");
   }
 
   private getElement(id: string): HTMLElement {
@@ -244,8 +246,15 @@ export class UI {
       "wheel",
       (event: WheelEvent) => {
         event.preventDefault();
-        const delta = Math.sign(event.deltaY) * 0.6;
-        this.renderer.scroll(delta);
+        if (event.ctrlKey || event.metaKey) {
+          // Zoom with Ctrl/Cmd + wheel
+          const zoomDelta = -Math.sign(event.deltaY) * 0.1;
+          this.renderer.adjustZoom(zoomDelta);
+        } else {
+          // Normal scrolling
+          const delta = Math.sign(event.deltaY) * 0.6;
+          this.renderer.scroll(delta);
+        }
       },
       { passive: false },
     );
@@ -304,6 +313,7 @@ export class UI {
     this.happinessEl.textContent = formatPercent(this.game.happiness);
     this.ratingEl.textContent = `${this.game.rating} Star${this.game.rating > 1 ? "s" : ""}`;
     this.timeIndicator.textContent = this.game.getTimeLabel();
+    this.zoomIndicator.textContent = `Zoom: ${Math.round(this.renderer.camera.zoom * 100)}%`;
 
     if (this.game.population > prevPopulation && prevPopulation > 0) {
       this.audio.populationGain();
@@ -342,6 +352,35 @@ export class UI {
     const infoRoom = this.hoverRoom?.type || selected;
 
     if (infoRoom) {
+      let additionalStats = "";
+      
+      // If hovering over an actual room, show instance-specific stats
+      if (this.hoverRoom) {
+        const floor = this.game.floors.get(this.hoverRoom.floorIndex);
+        const activeStatus = this.hoverRoom.active ? "Active" : "Under Construction";
+        const buildProgress = this.hoverRoom.active 
+          ? "" 
+          : ` (${Math.round((1 - this.hoverRoom.buildRemaining / this.hoverRoom.type.buildTime) * 100)}%)`;
+        
+        additionalStats = `
+          <hr style="margin: 8px 0; border: none; border-top: 1px solid var(--panel-border);">
+          <p><strong>Room Stats:</strong></p>
+          <p>Status: ${activeStatus}${buildProgress}</p>
+          <p>Cleanliness: ${Math.round(this.hoverRoom.cleanliness)}%</p>
+          <p>Floor: ${this.hoverRoom.floorIndex}</p>
+        `;
+        
+        // Add floor-level stats
+        if (floor) {
+          additionalStats += `
+            <p><strong>Floor Stats:</strong></p>
+            <p>Traffic: ${Math.round(floor.traffic)} | Noise: ${Math.round(floor.noise)}</p>
+            <p>Cleanliness: ${Math.round(floor.cleanliness)}%</p>
+            <p>Avg Wait: ${floor.waitAverage.toFixed(1)} min</p>
+          `;
+        }
+      }
+      
       this.infoPanel.innerHTML = `
         <h3>${infoRoom.name}</h3>
         <p>Category: ${infoRoom.category}</p>
@@ -349,6 +388,7 @@ export class UI {
         <p>Maintenance: $${infoRoom.maintenance}/hr</p>
         <p>Revenue: $${infoRoom.revenue}/hr</p>
         <p>Noise: ${infoRoom.noise} | Traffic: ${infoRoom.traffic}</p>
+        ${additionalStats}
       `;
     }
 

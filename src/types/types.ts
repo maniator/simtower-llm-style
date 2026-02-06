@@ -99,5 +99,6 @@ export interface CellPosition {
 
 export interface Camera {
   y: number;
+  zoom: number;
 }
 
