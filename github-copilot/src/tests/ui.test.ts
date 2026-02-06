@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { UI } from "../ui/UI.ts";
-import { Game } from "../core/game/Game.ts";
-import { ROOM_TYPES, CATEGORY_ORDER } from "../data/roomTypes.ts";
+import { UI } from "@ui/UI.ts";
+import { Game } from "@core/game/Game.ts";
+import { ROOM_TYPES, CATEGORY_ORDER } from "@data/roomTypes.ts";
 
 const setupDom = (): HTMLCanvasElement => {
   document.body.innerHTML = `

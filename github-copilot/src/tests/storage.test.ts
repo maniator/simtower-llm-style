@@ -6,9 +6,9 @@ import {
   hasSave,
   exportGame,
   importGame,
-} from "../storage/storage.ts";
-import { Game } from "../core/game/Game.ts";
-import { ROOM_TYPES } from "../data/roomTypes.ts";
+} from "@storage/storage.ts";
+import { Game } from "@core/game/Game.ts";
+import { ROOM_TYPES } from "@data/roomTypes.ts";
 
 describe("Storage", () => {
   let game: Game;

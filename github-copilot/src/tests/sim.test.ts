@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { Game } from "../core/game/Game.ts";
-import { Room } from "../core/game/Room.ts";
-import { ROOM_TYPES } from "../data/roomTypes.ts";
+import { Game } from "@core/game/Game.ts";
+import { Room } from "@core/game/Room.ts";
+import { ROOM_TYPES } from "@data/roomTypes.ts";
 
 describe("Room", () => {
   it("should initialize with correct properties", () => {

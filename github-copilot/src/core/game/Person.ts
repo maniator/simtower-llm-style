@@ -2,7 +2,7 @@ import type {
   ElevatorType,
   PersonRole,
   PersonState,
-} from "../../types/types.ts";
+} from "@types/types.ts";
 
 export class Person {
   public role: PersonRole;

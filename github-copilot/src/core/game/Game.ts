@@ -6,7 +6,7 @@ import type {
   PersonRole,
   PlacementResult,
   RoomType,
-} from "../../types/types.ts";
+} from "@types/types.ts";
 import { ElevatorCar } from "./ElevatorCar.ts";
 import { Person } from "./Person.ts";
 import { Room } from "./Room.ts";

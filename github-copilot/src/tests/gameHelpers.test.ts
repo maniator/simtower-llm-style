@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { Person } from "../core/game/Person.ts";
-import { ElevatorCar } from "../core/game/ElevatorCar.ts";
+import { Person } from "@core/game/Person.ts";
+import { ElevatorCar } from "@core/game/ElevatorCar.ts";
 
 describe("Person", () => {
   it("should initialize with default state", () => {

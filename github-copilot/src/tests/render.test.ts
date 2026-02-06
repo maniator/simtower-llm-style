@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { Renderer } from "../core/render/Renderer.ts";
-import { Game } from "../core/game/Game.ts";
-import { ROOM_TYPES } from "../data/roomTypes.ts";
+import { Renderer } from "@core/render/Renderer.ts";
+import { Game } from "@core/game/Game.ts";
+import { ROOM_TYPES } from "@data/roomTypes.ts";
 
 describe("Renderer", () => {
   let canvas: HTMLCanvasElement;

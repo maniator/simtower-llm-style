@@ -1,4 +1,4 @@
-import type { Game } from "../core/game/Game.ts";
+import type { Game } from "@core/game/Game.ts";
 
 const STORAGE_KEY = "simtower_save";
 
