@@ -112,6 +112,12 @@ src/
 - Prettier code formatting
 - 70 unit tests with 67% coverage
 
+### Import Conventions
+- **Always use `.ts` extensions** in relative imports (e.g., `import { Game } from "./Game.ts"`)
+- This project uses `allowImportingTsExtensions: true` in tsconfig.json
+- Vite handles the extensions during bundling
+- Do not omit extensions as it will cause TypeScript errors
+
 ### Performance Optimization
 - Vite with native ES modules
 - Minified production build ~34KB gzipped

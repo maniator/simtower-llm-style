@@ -26,6 +26,8 @@ export class UI {
   private hoverRoom: IRoom | null;
   private hoverCell: CellPosition | null;
   private lastPopulation: number;
+  private onMusicEnable?: () => void;
+  private onMusicDisable?: () => void;
 
   private moneyEl: HTMLElement;
   private populationEl: HTMLElement;
@@ -77,6 +79,14 @@ export class UI {
     this.bindCanvasControls();
     this.setSelectedTool(this.selectedRoomId);
     this.updatePanels();
+  }
+
+  public setMusicCallbacks(
+    onEnable: () => void,
+    onDisable: () => void,
+  ): void {
+    this.onMusicEnable = onEnable;
+    this.onMusicDisable = onDisable;
   }
 
   private buildToolbar(): void {
@@ -181,11 +191,11 @@ export class UI {
     if (musicToggleBtn) {
       musicToggleBtn.addEventListener("click", () => {
         if (this.audio.isMusicPlaying()) {
-          this.audio.stopBackgroundMusic();
+          this.onMusicDisable?.();
           musicToggleBtn.classList.remove("active");
           this.statusText.textContent = "Music stopped";
         } else {
-          this.audio.playBackgroundMusic(this.game.isDaytime());
+          this.onMusicEnable?.();
           musicToggleBtn.classList.add("active");
           this.statusText.textContent = `Playing: ${this.audio.getCurrentTrackName()}`;
         }

@@ -49,12 +49,13 @@ if (window.__appState) {
   window.__appState.resizeObserver?.disconnect();
 }
 
-ui.init();
-renderer.resize();
-
 // Initialize background music
 let currentMusicMode: boolean | null = null;
+let musicEnabled: boolean = false; // Track if music is enabled by user
+
 const updateBackgroundMusic = () => {
+  if (!musicEnabled) return; // Don't play if music is disabled
+  
   const isDaytime = game.isDaytime();
   if (currentMusicMode !== isDaytime) {
     currentMusicMode = isDaytime;
@@ -62,12 +63,28 @@ const updateBackgroundMusic = () => {
   }
 };
 
+// Export music control functions for UI
+export const enableMusic = () => {
+  musicEnabled = true;
+  currentMusicMode = null; // Reset to trigger immediate track selection
+  updateBackgroundMusic();
+};
+
+export const disableMusic = () => {
+  musicEnabled = false;
+  audio.stopBackgroundMusic();
+};
+
+ui.init();
+ui.setMusicCallbacks(enableMusic, disableMusic);
+renderer.resize();
+
 // Start music on first user interaction (browsers require user gesture)
 let musicStarted = false;
 const startMusicOnInteraction = () => {
   if (!musicStarted) {
     musicStarted = true;
-    updateBackgroundMusic();
+    // Don't auto-start music, wait for user to click the music button
     document.removeEventListener("click", startMusicOnInteraction);
     document.removeEventListener("keydown", startMusicOnInteraction);
   }
