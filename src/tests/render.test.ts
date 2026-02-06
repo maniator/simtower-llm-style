@@ -317,6 +317,44 @@ describe("Renderer", () => {
 
       expect(renderer.camera.y).toBeGreaterThanOrEqual(-7);
     });
+
+    it("should render shaft positions correctly", () => {
+      game.placeRoom("elevator_standard", 1, 5);
+      game.placeRoom("elevator_standard", 2, 5);
+      const result = game.placeRoom("elevator_standard", 3, 5);
+      if (result.room) result.room.active = true;
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should render rooms with different categories", () => {
+      game.placeRoom("condo", 1, 5);
+      game.placeRoom("office", 2, 10);
+      game.placeRoom("restaurant", 3, 15);
+
+      expect(() => renderer.render()).not.toThrow();
+    });
+
+    it("should handle negative coordinates in screenToCell", () => {
+      const result = renderer.screenToCell(-100, -100);
+
+      expect(result.cellX).toBeLessThan(0);
+      expect(typeof result.floorIndex).toBe("number");
+    });
+
+    it("should render people at specific floor positions", () => {
+      game.placeRoom("condo", 1, 5);
+      game.people.push({
+        state: "waiting",
+        origin: 1,
+        destination: 2,
+        role: "resident",
+        patience: 100,
+      } as any);
+
+      renderer.camera.y = 1;
+      expect(() => renderer.render()).not.toThrow();
+    });
   });
 });
 

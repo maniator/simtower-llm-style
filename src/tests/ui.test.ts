@@ -301,5 +301,24 @@ describe("UI", () => {
     expect(infoPanel?.innerHTML).toContain("Lobby");
     expect(infoPanel?.innerHTML).toContain("Cost:");
   });
+
+  it("should handle invalid room ID in ghost preview", () => {
+    ui.init();
+    (ui as any).selectedRoomId = "nonexistent_room";
+    (ui as any).hoverCell = { cellX: 5, floorIndex: 1 };
+
+    (ui as any).updateGhostPreview();
+
+    expect(renderer.setGhost).toHaveBeenCalledWith(null);
+  });
+
+  it("should handle out-of-bounds hover cell in ghost preview", () => {
+    ui.init();
+    (ui as any).hoverCell = { cellX: 100, floorIndex: 1 };
+
+    (ui as any).updateGhostPreview();
+
+    expect(renderer.setGhost).toHaveBeenCalledWith(null);
+  });
 });
 
