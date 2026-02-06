@@ -176,7 +176,7 @@ export class UI {
 
     // Music controls
     const musicToggleBtn = document.getElementById("music-toggle-btn");
-    const musicVolumeSlider = document.getElementById("music-volume") as HTMLInputElement;
+    const musicVolumeSlider = document.querySelector<HTMLInputElement>("#music-volume");
     
     if (musicToggleBtn) {
       musicToggleBtn.addEventListener("click", () => {

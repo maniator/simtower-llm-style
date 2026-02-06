@@ -19,6 +19,7 @@ interface MusicPattern {
 export class MidiPlayer {
   private audioContext: AudioContext;
   private masterGain: GainNode;
+  private musicGain: GainNode; // Dedicated gain for music control
   private isPlaying: boolean = false;
   private currentPattern: MusicPattern | null = null;
   private nextNoteTime: number = 0;
@@ -101,6 +102,11 @@ export class MidiPlayer {
   constructor(audioContext: AudioContext, masterGain: GainNode) {
     this.audioContext = audioContext;
     this.masterGain = masterGain;
+    
+    // Create dedicated gain node for music
+    this.musicGain = this.audioContext.createGain();
+    this.musicGain.gain.value = 1.0;
+    this.musicGain.connect(this.masterGain);
   }
 
   private midiToFrequency(midiNote: number): number {
@@ -135,7 +141,7 @@ export class MidiPlayer {
     gainNode.gain.linearRampToValueAtTime(0, startTime + noteDuration);
     
     oscillator.connect(gainNode);
-    gainNode.connect(this.masterGain);
+    gainNode.connect(this.musicGain);
     
     oscillator.start(startTime);
     oscillator.stop(startTime + noteDuration);
@@ -188,6 +194,20 @@ export class MidiPlayer {
       clearInterval(this.scheduleInterval);
       this.scheduleInterval = null;
     }
+    
+    // Fade out music gain to prevent abrupt stops
+    const now = this.audioContext.currentTime;
+    this.musicGain.gain.cancelScheduledValues(now);
+    this.musicGain.gain.setValueAtTime(this.musicGain.gain.value, now);
+    this.musicGain.gain.linearRampToValueAtTime(0, now + 0.1);
+    
+    // Reset gain after fade out
+    setTimeout(() => {
+      if (!this.isPlaying) {
+        this.musicGain.gain.setValueAtTime(1.0, this.audioContext.currentTime);
+      }
+    }, 150);
+    
     this.currentPattern = null;
   }
 
