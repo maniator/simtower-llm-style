@@ -1,0 +1,231 @@
+import { describe, it, expect } from "vitest";
+import { Simulation, ECON } from "../engine/Simulation";
+import { GRID } from "../engine/facilities";
+
+/** Build a serviced office tower with `n` offices on floor 2. */
+function builtTower(seed = 7): Simulation {
+  const sim = Simulation.newGame(seed);
+  const x0 = Math.floor(GRID.width / 2) - 20;
+  // Floor 2 structure.
+  for (let i = 0; i < 40; i++) sim.tower.place("floor", 2, x0 + i);
+  // Elevator linking ground to floor 2.
+  sim.buildTransport("elevatorStandard", x0, 1, 2);
+  return sim;
+}
+
+describe("Simulation economy", () => {
+  it("starts with the correct money and one star", () => {
+    const sim = Simulation.newGame();
+    expect(sim.money).toBe(ECON.startingMoney);
+    expect(sim.star).toBe(1);
+  });
+
+  it("charges for building and refunds on sell", () => {
+    const sim = Simulation.newGame();
+    const before = sim.money;
+    const res = sim.build("floor", 2, Math.floor(GRID.width / 2) - 20);
+    expect(res.ok).toBe(true);
+    expect(sim.money).toBe(before - 500);
+    sim.sellAt(2, Math.floor(GRID.width / 2) - 20);
+    expect(sim.money).toBe(before - 500 + 250);
+  });
+
+  it("blocks building when unaffordable", () => {
+    const sim = Simulation.newGame();
+    sim.money = 100;
+    const res = sim.build("office", 1, 0);
+    expect(res.ok).toBe(false);
+  });
+
+  it("locks facilities behind star ratings", () => {
+    const sim = Simulation.newGame();
+    expect(sim.isUnlocked("office")).toBe(true);
+    expect(sim.isUnlocked("cinema")).toBe(false); // needs 3 stars
+    sim.star = 3;
+    expect(sim.isUnlocked("cinema")).toBe(true);
+  });
+
+  it("fills offices over time and collects quarterly rent", () => {
+    const sim = builtTower(3);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.build("office", 2, x0);
+    sim.build("office", 2, x0 + 10);
+    sim.build("office", 2, x0 + 20);
+    const moneyAfterBuild = sim.money;
+    // Run several simulated weekdays of hours.
+    for (let i = 0; i < 24 * 14; i++) sim.tick(60);
+    const occupied = sim.tower.units.filter(
+      (u) => u.kind === "office" && u.state === "occupied",
+    ).length;
+    expect(occupied).toBeGreaterThan(0);
+    // Money should have grown from collected rent over two weeks.
+    expect(sim.money).toBeGreaterThan(moneyAfterBuild);
+  });
+
+  it("sells a condo once for a lump sum", () => {
+    const sim = builtTower(5);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.build("condo", 2, x0);
+    const before = sim.money;
+    // Force the resident in.
+    const condo = sim.tower.units.find((u) => u.kind === "condo")!;
+    (sim as any).moveIn(condo);
+    expect(sim.money).toBe(before + ECON.condoSalePrice);
+    expect(condo.everOccupied).toBe(true);
+    // A second move-in does not re-sell.
+    const mid = sim.money;
+    (sim as any).moveIn(condo);
+    expect(sim.money).toBe(mid);
+  });
+});
+
+describe("Simulation ratings", () => {
+  it("promotes to 2 stars when population crosses 300", () => {
+    const sim = Simulation.newGame(9);
+    // Fabricate population by marking many occupied offices.
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let f = 2; f <= 20; f++) {
+      for (let i = 0; i < 40; i++) sim.tower.place("floor", f, x0 + i);
+    }
+    let placed = 0;
+    for (let f = 2; f <= 20 && placed < 60; f++) {
+      for (let i = 0; i + 9 <= 40 && placed < 60; i += 9) {
+        const r = sim.tower.place("office", f, x0 + i);
+        if (r.ok) {
+          const u = sim.tower.units.find((uu) => uu.id === r.unitId)!;
+          u.state = "occupied";
+          placed++;
+        }
+      }
+    }
+    expect(sim.population).toBeGreaterThanOrEqual(300);
+    sim.evaluateStar();
+    expect(sim.star).toBeGreaterThanOrEqual(2);
+  });
+
+  it("gates 3 stars on having security", () => {
+    const sim = Simulation.newGame(11);
+    // Force a large population. Build in the connected region above the
+    // starter lobby (centred near width/2).
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let f = 2; f <= 60; f++)
+      for (let i = 0; i < 40; i++) sim.tower.place("floor", f, x0 + i);
+    let placed = 0;
+    for (let f = 2; f <= 60 && placed < 200; f++) {
+      for (let i = 0; i + 9 <= 40 && placed < 200; i += 9) {
+        const r = sim.tower.place("office", f, x0 + i);
+        if (r.ok) {
+          sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+          placed++;
+        }
+      }
+    }
+    expect(sim.population).toBeGreaterThanOrEqual(1000);
+    sim.evaluateStar();
+    expect(sim.star).toBe(2); // blocked at 2 without security
+    sim.star = 2;
+    // Security sits on the ground lobby (lobby tiles count as structure).
+    const sec = sim.tower.place("security", 1, x0);
+    expect(sec.ok).toBe(true);
+    sim.evaluateStar();
+    expect(sim.star).toBeGreaterThanOrEqual(3);
+  });
+});
+
+describe("Hotel housekeeping", () => {
+  function hotelTower(seed = 4): Simulation {
+    const sim = Simulation.newGame(seed);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let i = 0; i < 20; i++) sim.tower.place("floor", 2, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 2);
+    return sim;
+  }
+
+  it("marks rooms dirty on checkout and needs housekeeping to clean", () => {
+    const sim = hotelTower(4);
+    sim.star = 2;
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    const r = sim.tower.place("hotelDouble", 2, x0);
+    const room = sim.tower.units.find((u) => u.id === r.unitId)!;
+    room.state = "asleep";
+    // Advance one day → checkout runs at midnight, no housekeeping built.
+    for (let i = 0; i < 24; i++) sim.tick(60);
+    expect(room.state).toBe("dirty");
+    expect(sim.dirtyRooms()).toBe(1);
+  });
+
+  it("cleans dirty rooms when housekeeping exists", () => {
+    const sim = hotelTower(6);
+    sim.star = 2;
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    const r = sim.tower.place("hotelDouble", 2, x0);
+    sim.tower.place("housekeeping", 2, x0 + 8);
+    const room = sim.tower.units.find((u) => u.id === r.unitId)!;
+    room.state = "dirty";
+    // Trigger a day boundary so housekeeping runs.
+    for (let i = 0; i < 25; i++) sim.tick(60);
+    expect(room.state).not.toBe("dirty");
+  });
+});
+
+describe("Transport editing", () => {
+  function base(seed = 1): Simulation {
+    const sim = Simulation.newGame(seed);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let f = 2; f <= 10; f++) for (let i = 0; i < 20; i++) sim.tower.place("floor", f, x0 + i);
+    return sim;
+  }
+
+  it("adds and removes elevator cars within bounds", () => {
+    const sim = base(1);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.buildTransport("elevatorStandard", x0, 1, 6);
+    const t = sim.tower.transports[0];
+    const start = t.cars;
+    expect(sim.tower.setCars(t.id, start + 1)).toBe(true);
+    expect(t.cars).toBe(start + 1);
+    expect(t.carPositions.length).toBe(t.cars);
+    sim.tower.setCars(t.id, 99);
+    expect(t.cars).toBe(8); // clamped
+    sim.tower.setCars(t.id, 0);
+    expect(t.cars).toBe(1); // clamped
+  });
+
+  it("resizes a transport and validates collisions", () => {
+    const sim = base(2);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.buildTransport("elevatorStandard", x0, 1, 6);
+    const t = sim.tower.transports[0];
+    const ok = sim.tower.resizeTransport(t.id, 1, 8);
+    expect(ok.ok).toBe(true);
+    expect(t.top).toBe(8);
+    // A room directly in the shaft column blocks extension.
+    sim.tower.place("office", 9, x0);
+    const blocked = sim.tower.resizeTransport(t.id, 1, 9);
+    expect(blocked.ok).toBe(false);
+  });
+});
+
+describe("Simulation time", () => {
+  it("advances the clock and tracks days", () => {
+    const sim = Simulation.newGame();
+    const startDay = sim.clock.day;
+    sim.tick(60 * 24);
+    expect(sim.clock.day).toBe(startDay + 1);
+  });
+
+  it("evicts tenants from unreachable floors", () => {
+    const sim = Simulation.newGame(2);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    // Floor 5 with an office but NO transport reaching it.
+    for (let f = 2; f <= 5; f++)
+      for (let i = 0; i < 12; i++) sim.tower.place("floor", f, x0 + i);
+    const r = sim.tower.place("office", 5, x0);
+    const office = sim.tower.units.find((u) => u.id === r.unitId)!;
+    office.state = "occupied";
+    office.satisfaction = 0.2;
+    // Run a day of hours; unreachable floor should bleed satisfaction.
+    for (let i = 0; i < 24; i++) sim.tick(60);
+    expect(office.state).toBe("empty");
+  });
+});

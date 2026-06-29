@@ -1,0 +1,316 @@
+import type { Facility, FacilityKind } from "./types";
+
+/**
+ * Facility catalog. Costs and sizes are tuned to mirror the scale and balance
+ * of the 1994 SimTower (Maxis/OpenBook). Widths are in grid tiles.
+ *
+ * In the original, a single office is the base unit of "width". We use a tile
+ * grid where the smallest commercial unit is a few tiles wide.
+ */
+export const FACILITIES: Record<FacilityKind, Facility> = {
+  lobby: {
+    kind: "lobby",
+    category: "structure",
+    name: "Lobby",
+    width: 1,
+    cost: 5000,
+    minStar: 1,
+    population: 0,
+    color: "#d8d2b0",
+    description:
+      "Ground-floor and sky lobbies. People pass through to reach elevators. Build every 15 floors.",
+  },
+  floor: {
+    kind: "floor",
+    category: "structure",
+    name: "Floor",
+    width: 1,
+    cost: 500,
+    minStar: 1,
+    population: 0,
+    color: "#9a9486",
+    description: "Structural floor space. Must exist before placing rooms.",
+  },
+  office: {
+    kind: "office",
+    category: "office",
+    name: "Office",
+    width: 9,
+    cost: 40000,
+    minStar: 1,
+    population: 6,
+    color: "#6fb1d6",
+    description: "Rents to a company. Workers arrive mornings, leave evenings. Pays quarterly rent.",
+  },
+  condo: {
+    kind: "condo",
+    category: "residential",
+    name: "Condominium",
+    width: 16,
+    cost: 80000,
+    minStar: 1,
+    population: 3,
+    color: "#7ec97e",
+    description: "Sold once to a resident family for a large lump sum. Residents live here permanently.",
+  },
+  hotelSingle: {
+    kind: "hotelSingle",
+    category: "hotel",
+    name: "Single Room",
+    width: 4,
+    cost: 20000,
+    minStar: 2,
+    population: 1,
+    color: "#e0b15e",
+    description: "Hotel single. Guests check in at night, out in the morning. Needs housekeeping.",
+  },
+  hotelDouble: {
+    kind: "hotelDouble",
+    category: "hotel",
+    name: "Double Room",
+    width: 6,
+    cost: 40000,
+    minStar: 2,
+    population: 2,
+    color: "#e0a94e",
+    description: "Hotel double room. Higher nightly income than a single.",
+  },
+  hotelSuite: {
+    kind: "hotelSuite",
+    category: "hotel",
+    name: "Suite",
+    width: 12,
+    cost: 100000,
+    minStar: 2,
+    population: 2,
+    color: "#d99a2e",
+    description: "Luxury hotel suite. Best nightly income, demanding guests.",
+  },
+  fastFood: {
+    kind: "fastFood",
+    category: "food",
+    name: "Fast Food",
+    width: 16,
+    cost: 100000,
+    minStar: 1,
+    population: 0,
+    color: "#e87b6e",
+    description: "Quick dining. Busy at lunch. Income scales with foot traffic.",
+  },
+  restaurant: {
+    kind: "restaurant",
+    category: "food",
+    name: "Restaurant",
+    width: 24,
+    cost: 200000,
+    minStar: 2,
+    population: 0,
+    color: "#d4564a",
+    description: "Fine dining, busy at lunch and dinner. Needs good elevator access.",
+  },
+  shop: {
+    kind: "shop",
+    category: "retail",
+    name: "Retail Shop",
+    width: 12,
+    cost: 100000,
+    minStar: 2,
+    population: 0,
+    color: "#b58ad6",
+    description: "Retail. Earns from shoppers passing by. Thrives near lobbies and offices.",
+  },
+  cinema: {
+    kind: "cinema",
+    category: "entertainment",
+    name: "Cinema",
+    width: 31,
+    cost: 500000,
+    minStar: 3,
+    population: 0,
+    color: "#8a6fd6",
+    description: "Movie theater. Draws large evening crowds; demands heavy transport capacity.",
+  },
+  partyHall: {
+    kind: "partyHall",
+    category: "entertainment",
+    name: "Party Hall",
+    width: 24,
+    cost: 100000,
+    minStar: 3,
+    population: 0,
+    color: "#cf7fb0",
+    description: "Rentable function space for events. Periodic income.",
+  },
+  stairs: {
+    kind: "stairs",
+    category: "transport",
+    name: "Stairway",
+    width: 4,
+    cost: 5000,
+    minStar: 1,
+    population: 0,
+    color: "#b0a890",
+    transport: true,
+    description: "Cheap vertical link spanning a few floors. People will only climb a short distance.",
+  },
+  escalator: {
+    kind: "escalator",
+    category: "transport",
+    name: "Escalator",
+    width: 4,
+    cost: 20000,
+    minStar: 2,
+    population: 0,
+    color: "#c8c0a0",
+    transport: true,
+    description: "Moves crowds between adjacent floors. Great for lobbies, shops and food courts.",
+  },
+  elevatorStandard: {
+    kind: "elevatorStandard",
+    category: "transport",
+    name: "Standard Elevator",
+    width: 4,
+    cost: 200000,
+    minStar: 1,
+    population: 0,
+    color: "#5a5a6a",
+    transport: true,
+    description: "Serves up to 30 floors with several cars. The backbone of any tower.",
+  },
+  elevatorService: {
+    kind: "elevatorService",
+    category: "transport",
+    name: "Service Elevator",
+    width: 4,
+    cost: 150000,
+    minStar: 2,
+    population: 0,
+    color: "#4a4a52",
+    transport: true,
+    description: "Carries staff and freight. Keeps service traffic off passenger elevators.",
+  },
+  elevatorExpress: {
+    kind: "elevatorExpress",
+    category: "transport",
+    name: "Express Elevator",
+    width: 4,
+    cost: 400000,
+    minStar: 3,
+    population: 0,
+    color: "#3a3a8a",
+    transport: true,
+    description: "Stops only at lobbies and sky lobbies. Essential for very tall towers.",
+  },
+  parking: {
+    kind: "parking",
+    category: "service",
+    name: "Parking Space",
+    width: 6,
+    cost: 30000,
+    minStar: 2,
+    population: 0,
+    color: "#888888",
+    description: "Basement parking. Reduces tenant stress for those who drive.",
+  },
+  security: {
+    kind: "security",
+    category: "service",
+    name: "Security",
+    width: 8,
+    cost: 100000,
+    minStar: 3,
+    population: 0,
+    color: "#4f6f9f",
+    description: "Security office. Reduces crime/terrorist events and improves evaluation.",
+  },
+  medical: {
+    kind: "medical",
+    category: "service",
+    name: "Medical Center",
+    width: 16,
+    cost: 500000,
+    minStar: 3,
+    population: 0,
+    color: "#e0e0e8",
+    description: "Handles illness and emergencies. Required for high ratings in large towers.",
+  },
+  housekeeping: {
+    kind: "housekeeping",
+    category: "service",
+    name: "Housekeeping",
+    width: 8,
+    cost: 50000,
+    minStar: 2,
+    population: 0,
+    color: "#c0d0c0",
+    description: "Cleans hotel rooms each day so they can be rented again. One per ~20 rooms.",
+  },
+  recycling: {
+    kind: "recycling",
+    category: "service",
+    name: "Recycling Center",
+    width: 24,
+    cost: 500000,
+    minStar: 4,
+    population: 0,
+    color: "#7f9f5f",
+    description: "Basement facility that processes the tower's waste. Improves large-tower rating.",
+  },
+  metro: {
+    kind: "metro",
+    category: "special",
+    name: "Metro Station",
+    width: 32,
+    cost: 1000000,
+    minStar: 4,
+    population: 0,
+    color: "#9f7f5f",
+    description: "Deep-basement subway station. Brings huge numbers of visitors to your tower.",
+  },
+  cathedral: {
+    kind: "cathedral",
+    category: "special",
+    name: "Cathedral",
+    width: 16,
+    cost: 3000000,
+    minStar: 5,
+    population: 0,
+    color: "#efe9d0",
+    description: "Built atop a 5-star tower on floor 100. Triggers the final TOWER evaluation.",
+  },
+};
+
+export const ALL_KINDS: FacilityKind[] = Object.keys(FACILITIES) as FacilityKind[];
+
+/** Star rating population thresholds, matching the original game. */
+export const STAR_THRESHOLDS: Record<number, number> = {
+  1: 0,
+  2: 300,
+  3: 1000,
+  4: 5000,
+  5: 10000,
+};
+
+/** Tower geometry constants. */
+export const GRID = {
+  /** Highest above-ground floor. */
+  maxFloor: 100,
+  /** Deepest basement floor (negative). B10. */
+  minFloor: -10,
+  /** Total buildable width in tiles. */
+  width: 200,
+  /** Floors between required (sky) lobbies. */
+  lobbyInterval: 15,
+} as const;
+
+export function isHotelKind(kind: FacilityKind): boolean {
+  return kind === "hotelSingle" || kind === "hotelDouble" || kind === "hotelSuite";
+}
+
+export function isElevatorKind(kind: FacilityKind): boolean {
+  return (
+    kind === "elevatorStandard" ||
+    kind === "elevatorService" ||
+    kind === "elevatorExpress"
+  );
+}

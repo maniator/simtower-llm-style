@@ -1,208 +1,57 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import {
-  saveGame,
-  loadGame,
-  clearSave,
-  hasSave,
-  exportGame,
-  importGame,
-} from "@storage/storage.ts";
-import { Game } from "@core/game/Game.ts";
-import { ROOM_TYPES } from "@data/roomTypes.ts";
+import { describe, it, expect, beforeEach } from "vitest";
+import { Simulation } from "../engine/Simulation";
+import { SaveGame } from "../storage/SaveGame";
+import { GRID } from "../engine/facilities";
 
-describe("Storage", () => {
-  let game: Game;
+describe("SaveGame", () => {
+  beforeEach(() => localStorage.clear());
 
-  beforeEach(() => {
-    localStorage.clear();
-    vi.restoreAllMocks();
-    game = new Game(ROOM_TYPES);
+  function sampleGame(): Simulation {
+    const sim = Simulation.newGame(42);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let i = 0; i < 12; i++) sim.tower.place("floor", 2, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 2);
+    sim.build("office", 2, x0);
+    sim.money = 1234567;
+    sim.tick(60 * 5);
+    return sim;
+  }
+
+  it("round-trips through localStorage", () => {
+    const sim = sampleGame();
+    SaveGame.save(sim);
+    expect(SaveGame.hasSave()).toBe(true);
+    const loaded = SaveGame.load()!;
+    expect(loaded).not.toBeNull();
+    expect(loaded.money).toBe(sim.money);
+    expect(loaded.clock.minutes).toBe(sim.clock.minutes);
+    expect(loaded.tower.units.length).toBe(sim.tower.units.length);
+    expect(loaded.tower.transports.length).toBe(sim.tower.transports.length);
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
+  it("preserves occupancy lookups after load", () => {
+    const sim = sampleGame();
+    SaveGame.save(sim);
+    const loaded = SaveGame.load()!;
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    expect(loaded.tower.unitAt(2, x0)).toBeDefined();
   });
 
-  describe("saveGame", () => {
-    it("should save game to localStorage", () => {
-      game.money = 50000;
-      game.day = 5;
-
-      saveGame(game);
-
-      const saved = localStorage.getItem("simtower_save");
-      expect(saved).toBeTruthy();
-
-      const data = JSON.parse(saved!);
-      expect(data.money).toBe(50000);
-      expect(data.day).toBe(5);
-    });
-
-    it("should handle save errors gracefully", () => {
-      vi.spyOn(localStorage, "setItem").mockImplementation(() => {
-        throw new Error("Storage full");
-      });
-
-      // Should not throw even when localStorage fails
-      expect(() => saveGame(game)).not.toThrow();
-    });
+  it("exports and imports JSON", () => {
+    const sim = sampleGame();
+    const json = SaveGame.export(sim);
+    const loaded = SaveGame.import(json);
+    expect(loaded.money).toBe(sim.money);
+    expect(loaded.star).toBe(sim.star);
   });
 
-  describe("loadGame", () => {
-    it("should load game from localStorage", () => {
-      // Save a specific game state
-      const saveGame1 = new Game(ROOM_TYPES);
-      saveGame1.money = 50000;
-      saveGame1.day = 5;
-      saveGame1.placeRoom("condo", 1, 5);
-
-      saveGame(saveGame1);
-
-      // Load into a new game instance
-      const newGame = new Game(ROOM_TYPES);
-      const result = loadGame(newGame);
-
-      expect(result).toBe(true);
-      // Money should match what was saved from saveGame1 AFTER placing the condo
-      expect(newGame.money).toBe(saveGame1.money);
-      expect(newGame.day).toBe(5);
-    });
-
-    it("should return false when no save exists", () => {
-      const result = loadGame(game);
-
-      expect(result).toBe(false);
-    });
-
-    it("should handle invalid save data", () => {
-      localStorage.setItem("simtower_save", "invalid json");
-      vi.spyOn(console, "error").mockImplementation(() => {});
-
-      const result = loadGame(game);
-
-      expect(result).toBe(false);
-    });
-
-    it("should reject incompatible save versions", () => {
-      localStorage.setItem(
-        "simtower_save",
-        JSON.stringify({ version: 999, money: 1000 }),
-      );
-
-      const result = loadGame(game);
-
-      expect(result).toBe(false);
-    });
+  it("rejects malformed imports", () => {
+    expect(() => SaveGame.import("{}")).toThrow();
+    expect(() => SaveGame.import("not json")).toThrow();
   });
 
-  describe("clearSave", () => {
-    it("should clear saved game", () => {
-      saveGame(game);
-      expect(hasSave()).toBe(true);
-
-      clearSave();
-
-      expect(hasSave()).toBe(false);
-    });
-
-    it("should handle clear errors gracefully", () => {
-      vi.spyOn(localStorage, "removeItem").mockImplementation(() => {
-        throw new Error("Storage error");
-      });
-      vi.spyOn(console, "error").mockImplementation(() => {});
-
-      expect(() => clearSave()).not.toThrow();
-    });
-  });
-
-  describe("hasSave", () => {
-    it("should return true when save exists", () => {
-      saveGame(game);
-
-      expect(hasSave()).toBe(true);
-    });
-
-    it("should return false when no save exists", () => {
-      expect(hasSave()).toBe(false);
-    });
-
-    it("should handle storage errors", () => {
-      vi.spyOn(localStorage, "getItem").mockImplementation(() => {
-        throw new Error("Storage error");
-      });
-
-      expect(hasSave()).toBe(false);
-    });
-  });
-
-  describe("exportGame", () => {
-    it("should export game as base64 string", () => {
-      game.money = 50000;
-      game.day = 5;
-
-      const exported = exportGame(game);
-
-      expect(typeof exported).toBe("string");
-      expect(exported.length).toBeGreaterThan(0);
-
-      // Should be valid base64
-      expect(() => atob(exported)).not.toThrow();
-    });
-
-    it("should include all game state", () => {
-      game.money = 50000;
-      game.population = 100;
-      game.rating = 3;
-
-      const exported = exportGame(game);
-      const decoded = JSON.parse(atob(exported));
-
-      expect(decoded.money).toBe(50000);
-      expect(decoded.population).toBe(100);
-      expect(decoded.rating).toBe(3);
-    });
-  });
-
-  describe("importGame", () => {
-    it("should import game from base64 string", () => {
-      game.money = 50000;
-      game.day = 5;
-      const exported = exportGame(game);
-
-      const newGame = new Game(ROOM_TYPES);
-      const result = importGame(newGame, exported);
-
-      expect(result).toBe(true);
-      expect(newGame.money).toBe(50000);
-      expect(newGame.day).toBe(5);
-    });
-
-    it("should handle invalid base64", () => {
-      vi.spyOn(console, "error").mockImplementation(() => {});
-
-      const result = importGame(game, "invalid base64!!!");
-
-      expect(result).toBe(false);
-    });
-
-    it("should reject incompatible versions", () => {
-      const invalidData = btoa(JSON.stringify({ version: 999 }));
-      vi.spyOn(console, "error").mockImplementation(() => {});
-
-      const result = importGame(game, invalidData);
-
-      expect(result).toBe(false);
-    });
-
-    it("should save imported game to localStorage", () => {
-      game.money = 50000;
-      const exported = exportGame(game);
-
-      const newGame = new Game(ROOM_TYPES);
-      importGame(newGame, exported);
-
-      expect(hasSave()).toBe(true);
-    });
+  it("returns null when no save exists", () => {
+    expect(SaveGame.load()).toBeNull();
+    expect(SaveGame.hasSave()).toBe(false);
   });
 });
-
