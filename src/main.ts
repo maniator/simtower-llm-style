@@ -29,6 +29,11 @@ class GameApp {
   private movedDist = 0;
   private dragStart = { x: 0, y: 0, tile: 0, floor: 0 };
   private lastPointer = { x: 0, y: 0 };
+  /** Active pointers for multi-touch pinch handling. */
+  private pointers = new Map<number, { x: number; y: number }>();
+  private pinch: { dist: number } | null = null;
+  /** A pending touch tap (acts on pointerup if it wasn't a drag). */
+  private touchTap: { floor: number; tile: number } | null = null;
 
   /** Currently selected facility for the edit panel. */
   private selected: { type: "unit" | "transport"; id: number } | null = null;
@@ -53,6 +58,25 @@ class GameApp {
       onEditAction: (action, root) => this.handleEditAction(action, root),
       onRenameTower: (name) => (this.sim.tower.towerName = name),
       onShowStats: () => this.ui.showStats(this.buildStatsHtml()),
+      onShowSaves: () => this.ui.showSaves(SaveGame.listSlots()),
+      onSaveSlot: (n) => {
+        SaveGame.saveSlot(n, this.sim);
+        this.ui.toast(`Saved to slot ${n}.`, "good");
+      },
+      onLoadSlot: (slot) => {
+        const loaded = slot === "auto" ? SaveGame.load() : SaveGame.loadSlot(slot);
+        if (loaded) {
+          this.sim = loaded;
+          this.clearSelection();
+          this.ui.toast("Tower loaded.", "good");
+        } else {
+          this.ui.toast("That slot is empty or corrupt.", "bad");
+        }
+      },
+      onDeleteSlot: (n) => {
+        SaveGame.deleteSlot(n);
+        this.ui.toast(`Deleted slot ${n}.`, "info");
+      },
     });
 
     this.bindInput();
@@ -103,10 +127,28 @@ class GameApp {
   private onPointerDown(e: PointerEvent): void {
     this.audio.start();
     const p = this.localPos(e);
+    this.pointers.set(e.pointerId, p);
+    // Two fingers → pinch-zoom (overrides any single-pointer action).
+    if (this.pointers.size === 2) {
+      this.startPinch();
+      return;
+    }
+    if (this.pointers.size > 2) return;
+
     this.lastPointer = p;
     const tile = this.renderer.screenToTile(p.x);
     const floor = this.renderer.screenToFloor(p.y);
     this.dragStart = { x: p.x, y: p.y, tile, floor };
+
+    // On touch, a single finger pans the view and a tap performs the tool's
+    // action — except for transport tools, where a drag defines the span.
+    if (e.pointerType === "touch" && !this.isTransportTool()) {
+      this.panning = true;
+      this.clickCandidate = true;
+      this.movedDist = 0;
+      this.touchTap = { floor, tile };
+      return;
+    }
 
     const wantPan = e.button === 1 || e.button === 2 || this.spaceHeld || this.tool.type === "inspect";
     if (wantPan) {
@@ -128,6 +170,11 @@ class GameApp {
 
   private onPointerMove(e: PointerEvent): void {
     const p = this.localPos(e);
+    if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, p);
+    if (this.pinch) {
+      this.updatePinch();
+      return;
+    }
     const tile = this.renderer.screenToTile(p.x);
     const floor = this.renderer.screenToFloor(p.y);
 
@@ -184,6 +231,17 @@ class GameApp {
   }
 
   private onPointerUp(e: PointerEvent): void {
+    this.pointers.delete(e.pointerId);
+    if (this.pinch) {
+      if (this.pointers.size < 2) {
+        this.pinch = null;
+        const rem = [...this.pointers.values()][0];
+        if (rem) this.lastPointer = rem; // avoid a jump when one finger lifts
+      }
+      this.resetDrag();
+      return;
+    }
+
     if (this.dragging && this.isTransportTool() && this.renderer.transportPreview) {
       const tp = this.renderer.transportPreview;
       if (tp.valid) {
@@ -193,14 +251,48 @@ class GameApp {
       }
       this.renderer.transportPreview = null;
     }
-    // Inspect-tool click (no real drag) selects a facility to edit.
-    if (this.panning && this.clickCandidate && this.tool.type === "inspect") {
+
+    // Touch tap → perform the current tool's action at the tapped cell.
+    if (this.touchTap && this.clickCandidate) {
+      const { floor, tile } = this.touchTap;
+      if (this.tool.type === "inspect") this.selectAt(floor, tile);
+      else if (this.tool.type === "bulldoze") this.doBulldoze(floor, tile);
+      else if (this.tool.type === "build" && !this.isTransportTool()) {
+        this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
+      }
+    } else if (this.panning && this.clickCandidate && this.tool.type === "inspect") {
+      // Mouse inspect click (no real drag) selects a facility to edit.
       const p = this.localPos(e);
       this.selectAt(this.renderer.screenToFloor(p.y), this.renderer.screenToTile(p.x));
     }
+    this.resetDrag();
+  }
+
+  private resetDrag(): void {
     this.dragging = false;
     this.panning = false;
     this.clickCandidate = false;
+    this.touchTap = null;
+  }
+
+  // ---- Pinch-zoom (touch) ------------------------------------------------
+
+  private startPinch(): void {
+    const pts = [...this.pointers.values()];
+    this.pinch = { dist: dist2(pts[0], pts[1]) };
+    this.resetDrag();
+    this.renderer.preview = null;
+    this.renderer.transportPreview = null;
+  }
+
+  private updatePinch(): void {
+    const pts = [...this.pointers.values()];
+    if (pts.length < 2 || !this.pinch) return;
+    const newDist = dist2(pts[0], pts[1]);
+    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
+    const ratio = newDist / (this.pinch.dist || 1);
+    if (ratio > 0 && Number.isFinite(ratio)) this.renderer.zoomAt(ratio, mid.x, mid.y);
+    this.pinch.dist = newDist;
   }
 
   // ---- Selection & per-facility editing ---------------------------------
@@ -506,6 +598,10 @@ class GameApp {
 
 function escapeAttr(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}
+
+function dist2(a: { x: number; y: number }, b: { x: number; y: number }): number {
+  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 // Bootstrap once the DOM is ready.

@@ -136,6 +136,73 @@ async function main() {
   await page.screenshot({ path: `${OUT}/05-detail.png` });
   console.log("captured 05-detail");
 
+  // 5b) People moving — pause at the morning rush and zoom into the lobby so
+  // the walking crowds (lobby + busy corridors) and elevator riders are shown.
+  await page.evaluate(() => {
+    const g = window.game;
+    g.speed = 0; // freeze game time; walkers still animate on the render clock
+    const c = g.sim.clock;
+    const target = 8 * 60 + 30; // 08:30
+    let delta = target - c.minuteOfDay;
+    if (delta < 0) delta += 1440;
+    c.advance(delta);
+    const cx = 100;
+    g.renderer.cam.zoom = 1.7;
+    g.renderer.cam.x = -cx * 11 * 1.7 + g.renderer.viewWidth / 2;
+    g.renderer.cam.y = g.renderer.viewHeight * 0.62 + 1 * 34 * 1.7;
+  });
+  await page.waitForTimeout(1200);
+  await page.screenshot({ path: `${OUT}/07-people-rush.png` });
+  console.log("captured 07-people-rush");
+
+  // 5c) Construction in progress — fresh rooms show scaffolding/cranes.
+  await page.evaluate(() => {
+    const g = window.game;
+    const Sim = g.sim.constructor;
+    g.sim = Sim.newGame(99);
+    const s = g.sim;
+    s.money = 50_000_000;
+    s.star = 4;
+    const left = 70;
+    for (let x = left - 6; x < left + 50; x++) s.tower.place("lobby", 1, x);
+    for (let f = 2; f <= 8; f++) for (let x = left; x < left + 44; x++) s.tower.place("floor", f, x);
+    s.buildTransport("elevatorStandard", left, 1, 8);
+    // Build via the public API so they enter the construction phase.
+    for (let f = 2; f <= 8; f++) {
+      for (let x = left + 6; x + 9 <= left + 44; x += 9) s.build("office", f, x);
+    }
+    g.renderer.cam.zoom = 1.4;
+    g.renderer.cam.x = -(left + 18) * 11 * 1.4 + g.renderer.viewWidth / 2;
+    g.renderer.cam.y = g.renderer.viewHeight * 0.78 + 4 * 34 * 1.4;
+    g.speed = 0; // freeze so construction is visible
+  });
+  await page.waitForTimeout(700);
+  await page.screenshot({ path: `${OUT}/08-construction.png` });
+  console.log("captured 08-construction");
+
+  // 5d) Mobile viewport.
+  const mobile = await browser.newPage({
+    viewport: { width: 390, height: 844 },
+    isMobile: true,
+    hasTouch: true,
+    deviceScaleFactor: 2,
+  });
+  await mobile.goto(BASE, { waitUntil: "networkidle" });
+  await mobile.waitForFunction(() => !!window.game, null, { timeout: 10000 });
+  await mobile.evaluate(buildDemoScript);
+  await mobile.evaluate(() => {
+    const g = window.game;
+    g.renderer.resize();
+    g.renderer.cam.zoom = 0.7;
+    g.renderer.cam.x = -100 * 11 * 0.7 + g.renderer.viewWidth / 2;
+    g.renderer.cam.y = g.renderer.viewHeight * 0.8 + 14 * 34 * 0.7;
+    g.speed = 2;
+  });
+  await mobile.waitForTimeout(1000);
+  await mobile.screenshot({ path: `${OUT}/09-mobile.png` });
+  console.log("captured 09-mobile");
+  await mobile.close();
+
   // 6) Sprite gallery (full screenshot of the catalog).
   const gpage = await browser.newPage({ viewport: { width: 960, height: 1200 } });
   await gpage.goto(`${BASE}/gallery.html`, { waitUntil: "networkidle" });

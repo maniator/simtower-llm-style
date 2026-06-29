@@ -1,5 +1,6 @@
 import { ALL_KINDS, FACILITIES } from "../engine/facilities";
 import type { Simulation, LogEntry } from "../engine/Simulation";
+import type { SlotInfo } from "../storage/SaveGame";
 import type { FacilityCategory, FacilityKind } from "../engine/types";
 
 export type Tool = { type: "build"; kind: FacilityKind } | { type: "bulldoze" } | { type: "inspect" };
@@ -26,6 +27,10 @@ export interface UICallbacks {
   onEditAction(action: string, root: HTMLElement): void;
   onRenameTower(name: string): void;
   onShowStats(): void;
+  onShowSaves(): void;
+  onSaveSlot(slot: number): void;
+  onLoadSlot(slot: number | "auto"): void;
+  onDeleteSlot(slot: number): void;
 }
 
 /** Owns all DOM controls outside the canvas and keeps them in sync. */
@@ -126,8 +131,12 @@ export class UI {
       this.el.audioToggle.textContent = muted ? "🔇" : "🔊";
     });
 
+    document.getElementById("panel-toggle")?.addEventListener("click", () => {
+      document.body.classList.toggle("panels-open");
+    });
+
     document.getElementById("btn-save")!.addEventListener("click", () => this.cb.onSave());
-    document.getElementById("btn-load")!.addEventListener("click", () => this.cb.onLoad());
+    document.getElementById("btn-load")!.addEventListener("click", () => this.cb.onShowSaves());
     document.getElementById("btn-new")!.addEventListener("click", () => {
       this.confirmModal("Start a new tower?", "This abandons your current tower (it is not auto-saved).", () =>
         this.cb.onNew(),
@@ -168,6 +177,54 @@ export class UI {
     const box = this.openModal(`<h2>Tower Statistics</h2>${html}
       <div class="modal-actions"><button class="primary" data-act="close">Close</button></div>`);
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+  }
+
+  /** Saves manager: auto-save + numbered slots, plus export/import. */
+  showSaves(slots: SlotInfo[]): void {
+    const fmtWhen = (ms?: number) =>
+      ms ? new Date(ms).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "";
+    const row = (s: SlotInfo): string => {
+      const name = s.slot === "auto" ? "Auto-save" : `Slot ${s.slot}`;
+      const detail = s.exists
+        ? `<div class="slot-detail">${escapeHtml(s.towerName ?? "Tower")} · ${s.star === 6 ? "TOWER" : (s.star ?? 1) + "★"} · pop ${(s.population ?? 0).toLocaleString()} · $${Math.round(s.funds ?? 0).toLocaleString()}<br><span class="slot-when">${fmtWhen(s.savedAt)}</span></div>`
+        : `<div class="slot-detail slot-empty">empty</div>`;
+      const saveBtn =
+        s.slot === "auto" ? "" : `<button data-save="${s.slot}">Save</button>`;
+      const loadBtn = s.exists ? `<button data-load="${s.slot}">Load</button>` : "";
+      const delBtn =
+        s.exists && s.slot !== "auto" ? `<button class="danger" data-del="${s.slot}">✕</button>` : "";
+      return `<div class="slot"><div class="slot-head"><b>${name}</b>${detail}</div><div class="slot-actions">${saveBtn}${loadBtn}${delBtn}</div></div>`;
+    };
+    const box = this.openModal(`
+      <h2>Saved Towers</h2>
+      <div class="slots">${slots.map(row).join("")}</div>
+      <div class="modal-actions">
+        <button data-act="export">Export JSON</button>
+        <button data-act="import">Import JSON</button>
+        <button class="primary" data-act="close">Close</button>
+      </div>`);
+    box.querySelectorAll<HTMLElement>("[data-save]").forEach((b) =>
+      b.addEventListener("click", () => {
+        this.cb.onSaveSlot(Number(b.dataset.save));
+        this.cb.onShowSaves();
+      }),
+    );
+    box.querySelectorAll<HTMLElement>("[data-load]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const v = b.dataset.load!;
+        this.cb.onLoadSlot(v === "auto" ? "auto" : Number(v));
+        this.closeModal();
+      }),
+    );
+    box.querySelectorAll<HTMLElement>("[data-del]").forEach((b) =>
+      b.addEventListener("click", () => {
+        this.cb.onDeleteSlot(Number(b.dataset.del));
+        this.cb.onShowSaves();
+      }),
+    );
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    box.querySelector('[data-act="export"]')!.addEventListener("click", () => this.cb.onExport());
+    box.querySelector('[data-act="import"]')!.addEventListener("click", () => this.openImport());
   }
 
   setTowerName(name: string): void {
@@ -268,13 +325,20 @@ export class UI {
   // ---- Modals ------------------------------------------------------------
 
   private openModal(html: string): HTMLElement {
-    this.el.modal.innerHTML = `<div class="modal-box">${html}</div>`;
-    this.el.modal.classList.remove("hidden");
-    return this.el.modal.querySelector(".modal-box")!;
+    const dialog = this.el.modal as HTMLDialogElement;
+    dialog.innerHTML = `<div class="modal-box">${html}</div>`;
+    if (!dialog.open) dialog.showModal();
+    // Click outside the box (on the backdrop) closes the dialog.
+    dialog.onclick = (e) => {
+      if (e.target === dialog) this.closeModal();
+    };
+    dialog.oncancel = () => this.closeModal(); // Esc key
+    return dialog.querySelector(".modal-box")!;
   }
   closeModal(): void {
-    this.el.modal.classList.add("hidden");
-    this.el.modal.innerHTML = "";
+    const dialog = this.el.modal as HTMLDialogElement;
+    if (dialog.open) dialog.close();
+    dialog.innerHTML = "";
   }
 
   private confirmModal(title: string, body: string, onYes: () => void): void {
