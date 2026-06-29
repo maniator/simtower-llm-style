@@ -215,12 +215,21 @@ export class Tower {
     }
 
     // Transports share the structural column but cannot collide with rooms or
-    // other shafts.
+    // other shafts — and every floor they serve must actually exist as built
+    // structure at the shaft, so elevators can never float outside the tower.
     for (let fl = bottom; fl <= top; fl++) {
+      let hasStructure = false;
       for (let i = 0; i < f.width; i++) {
         if (this.rooms.has(this.key(fl, x + i))) {
           return { ok: false, reason: "Transport would collide with a room." };
         }
+        if (this.structure.has(this.key(fl, x + i))) hasStructure = true;
+      }
+      if (!hasStructure) {
+        return {
+          ok: false,
+          reason: "Transport must run through built floors — lay floors first.",
+        };
       }
       for (const t of this.transports) {
         if (this.transportOverlaps(t, x, f.width, fl)) {

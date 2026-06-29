@@ -47,6 +47,7 @@ export type FacilityKind =
 
 /** Occupancy / activity state of a unit. */
 export type UnitState =
+  | "construction" // under construction, not yet usable
   | "empty" // built, awaiting a tenant
   | "occupied" // has a tenant / in service
   | "moving_in"
@@ -92,6 +93,8 @@ export interface Unit {
   pendingIncome: number;
   /** Name shown when inspected (e.g. tenant company / guest). */
   label: string;
+  /** Game-clock minute at which construction finishes (for the build phase). */
+  completeAt?: number;
 }
 
 /** A vertical transport instance (elevator shaft / stairs / escalator). */

@@ -58,6 +58,17 @@ describe("Tower transport", () => {
   beforeEach(() => {
     tower = new Tower();
     for (let i = 0; i < 40; i++) tower.place("lobby", 1, i);
+    // Transports may only run through built floors, so raise structure first.
+    for (let f = 2; f <= 30; f++) for (let i = 0; i < 40; i++) tower.place("floor", f, i);
+  });
+
+  it("rejects a shaft that runs outside the built structure", () => {
+    // Floor 50 has no structure → an elevator reaching it is invalid.
+    expect(tower.placeTransport("elevatorStandard", 4, 1, 50).ok).toBe(false);
+    // A floating stair on bare floors above the build is rejected too.
+    const t2 = new Tower();
+    for (let i = 0; i < 10; i++) t2.place("lobby", 1, i);
+    expect(t2.placeTransport("elevatorStandard", 4, 1, 10).ok).toBe(false);
   });
 
   it("places an elevator and allocates cars", () => {

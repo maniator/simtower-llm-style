@@ -132,6 +132,31 @@ describe("Simulation ratings", () => {
   });
 });
 
+describe("Construction time", () => {
+  it("puts new rooms under construction, then opens them on the global clock", () => {
+    const sim = Simulation.newGame(7);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let i = 0; i < 12; i++) sim.tower.place("floor", 2, x0 + i);
+    const res = sim.build("office", 2, x0);
+    expect(res.ok).toBe(true);
+    const u = sim.tower.units.find((uu) => uu.kind === "office")!;
+    expect(u.state).toBe("construction");
+    expect(u.completeAt).toBeGreaterThan(sim.clock.minutes);
+    // Advance past the construction window.
+    for (let i = 0; i < 12; i++) sim.tick(60);
+    expect(u.state).not.toBe("construction");
+  });
+
+  it("does not delay structural floors/lobbies", () => {
+    const sim = Simulation.newGame(1);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    const r = sim.build("floor", 2, x0);
+    expect(r.ok).toBe(true);
+    const f = sim.tower.units.find((u) => u.kind === "floor" && u.floor === 2)!;
+    expect(f.state).not.toBe("construction");
+  });
+});
+
 describe("Hotel housekeeping", () => {
   function hotelTower(seed = 4): Simulation {
     const sim = Simulation.newGame(seed);

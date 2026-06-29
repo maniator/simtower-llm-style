@@ -3,8 +3,8 @@ import type { Simulation } from "../engine/Simulation";
 import type { FacilityKind, Unit } from "../engine/types";
 import { drawTransport, drawUnit, type DrawCtx } from "./sprites";
 
-export const TILE_W = 9;
-export const FLOOR_H = 26;
+export const TILE_W = 11;
+export const FLOOR_H = 34;
 
 export interface Camera {
   x: number;

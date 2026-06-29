@@ -1,4 +1,4 @@
-import { FACILITIES, isElevatorKind } from "../engine/facilities";
+import { FACILITIES, hasBusinessHours, isElevatorKind, isOpenAt } from "../engine/facilities";
 import type { Transport, Unit } from "../engine/types";
 
 /**
@@ -47,6 +47,8 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
   if (u.kind === "floor") return drawFloor(ctx, x, y, w, h);
   if (u.kind === "lobby") return drawLobby(d, x, y, w, h);
 
+  if (u.state === "construction") return drawConstruction(d, x, y, w, h);
+
   const f = FACILITIES[u.kind];
   const empty = u.state === "empty";
 
@@ -68,6 +70,21 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
     return drawVacancy(ctx, u, x, y, w, h);
   }
 
+  // Businesses that keep hours show a closed shutter outside opening times.
+  if (hasBusinessHours(u.kind) && !isOpenAt(u.kind, d.hour)) {
+    drawClosed(d, u, x, y, w, h);
+    drawTypeBadge(d, u.kind, x, y, w, h);
+    return;
+  }
+
+  drawInterior(d, u, x, y, w, h);
+  // A clear type badge in the corner makes every room identifiable at a glance.
+  drawTypeBadge(d, u.kind, x, y, w, h);
+}
+
+/** Dispatch to the per-facility interior drawing. */
+function drawInterior(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number): void {
+  const ctx = d.ctx;
   switch (u.kind) {
     case "office":
       return drawOffice(d, u, x, y, w, h);
@@ -102,8 +119,150 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
     case "cathedral":
       return drawCathedral(ctx, x, y, w, h);
     default:
-      ctx.fillStyle = f.color;
+      ctx.fillStyle = FACILITIES[u.kind].color;
       ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
+  }
+}
+
+/**
+ * Small colour-coded badge with a drawn icon in the top-left of a room — the
+ * single biggest readability win, letting you tell room types apart instantly.
+ */
+function drawTypeBadge(d: DrawCtx, kind: import("../engine/types").FacilityKind, x: number, y: number, w: number, h: number): void {
+  if (w < 22 || h < 16) return; // too small to be legible
+  const ctx = d.ctx;
+  const s = 11;
+  const bx = x + 1;
+  const by = y + 1;
+  // Chip background in the facility colour.
+  ctx.fillStyle = "rgba(12,14,20,0.66)";
+  ctx.fillRect(bx, by, s, s);
+  ctx.fillStyle = FACILITIES[kind].color;
+  ctx.fillRect(bx, by, s, 2);
+  const cx = bx + s / 2;
+  const cy = by + s / 2 + 1;
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#fff";
+  ctx.lineWidth = 1;
+  drawIcon(ctx, kind, cx, cy);
+}
+
+/** Draws a tiny white pictogram centred at (cx, cy) for the given kind. */
+function drawIcon(ctx: CanvasRenderingContext2D, kind: import("../engine/types").FacilityKind, cx: number, cy: number): void {
+  const rect = (w: number, hh: number) => ctx.fillRect(cx - w / 2, cy - hh / 2, w, hh);
+  switch (kind) {
+    case "office": // briefcase
+      rect(8, 5);
+      ctx.fillRect(cx - 2, cy - 4, 4, 2);
+      ctx.fillStyle = "rgba(0,0,0,0.5)";
+      ctx.fillRect(cx - 4, cy, 8, 1);
+      break;
+    case "condo": { // house
+      ctx.beginPath();
+      ctx.moveTo(cx - 5, cy);
+      ctx.lineTo(cx, cy - 5);
+      ctx.lineTo(cx + 5, cy);
+      ctx.closePath();
+      ctx.fill();
+      ctx.fillRect(cx - 3, cy, 6, 4);
+      break;
+    }
+    case "hotelSingle":
+    case "hotelDouble":
+    case "hotelSuite": // bed
+      ctx.fillRect(cx - 5, cy, 10, 3);
+      ctx.fillRect(cx - 5, cy - 3, 4, 3); // pillow
+      ctx.fillRect(cx - 5, cy + 3, 1, 2);
+      ctx.fillRect(cx + 4, cy + 3, 1, 2);
+      break;
+    case "fastFood": // burger
+      ctx.beginPath();
+      ctx.arc(cx, cy - 1, 4, Math.PI, 0);
+      ctx.fill();
+      ctx.fillRect(cx - 4, cy - 1, 8, 2);
+      ctx.fillStyle = "#caa42e";
+      ctx.fillRect(cx - 4, cy + 1, 8, 2);
+      break;
+    case "restaurant": // fork & knife
+      ctx.fillRect(cx - 3, cy - 5, 1, 10);
+      ctx.fillRect(cx - 4, cy - 5, 1, 3);
+      ctx.fillRect(cx - 2, cy - 5, 1, 3);
+      ctx.fillRect(cx + 2, cy - 5, 1, 10);
+      ctx.fillRect(cx + 1, cy - 5, 3, 3);
+      break;
+    case "shop": // shopping bag
+      ctx.fillRect(cx - 4, cy - 2, 8, 7);
+      ctx.strokeRect(cx - 2, cy - 5, 4, 3);
+      break;
+    case "cinema": // play triangle
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy - 4);
+      ctx.lineTo(cx - 3, cy + 4);
+      ctx.lineTo(cx + 4, cy);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "partyHall": // music note
+      ctx.fillRect(cx + 1, cy - 5, 1, 7);
+      ctx.beginPath();
+      ctx.arc(cx, cy + 2, 2, 0, Math.PI * 2);
+      ctx.fill();
+      break;
+    case "parking":
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("P", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      break;
+    case "security": // shield
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 5);
+      ctx.lineTo(cx + 4, cy - 3);
+      ctx.lineTo(cx + 4, cy + 1);
+      ctx.lineTo(cx, cy + 5);
+      ctx.lineTo(cx - 4, cy + 1);
+      ctx.lineTo(cx - 4, cy - 3);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "medical": // cross
+      ctx.fillStyle = "#e23b3b";
+      ctx.fillRect(cx - 4, cy - 1, 8, 2);
+      ctx.fillRect(cx - 1, cy - 4, 2, 8);
+      break;
+    case "housekeeping": // broom
+      ctx.fillRect(cx - 1, cy - 5, 2, 6);
+      ctx.beginPath();
+      ctx.moveTo(cx - 3, cy + 4);
+      ctx.lineTo(cx, cy + 1);
+      ctx.lineTo(cx + 3, cy + 4);
+      ctx.closePath();
+      ctx.fill();
+      break;
+    case "recycling": // triangle
+      ctx.beginPath();
+      ctx.moveTo(cx, cy - 4);
+      ctx.lineTo(cx + 4, cy + 3);
+      ctx.lineTo(cx - 4, cy + 3);
+      ctx.closePath();
+      ctx.stroke();
+      break;
+    case "metro":
+      ctx.font = "bold 9px system-ui, sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("M", cx, cy);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      break;
+    case "cathedral": // cross
+      ctx.fillRect(cx - 1, cy - 5, 2, 10);
+      ctx.fillRect(cx - 3, cy - 2, 6, 2);
+      break;
+    default:
+      ctx.fillRect(cx - 2, cy - 2, 4, 4);
   }
 }
 
@@ -143,6 +302,76 @@ function drawLobby(d: DrawCtx, x: number, y: number, w: number, h: number) {
   for (let px = x + 5; px < x + w - 3; px += 13) {
     const r = rand(px | 0);
     if (r > 0.45) ctx.fillRect(px + Math.floor(r * 5), y + h - 9, 2, 5);
+  }
+}
+
+function drawConstruction(d: DrawCtx, x: number, y: number, w: number, h: number) {
+  const ctx = d.ctx;
+  // Bare concrete shell.
+  ctx.fillStyle = "#6f6a5e";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#5c574c";
+  ctx.fillRect(x, y, w, 2);
+  // Yellow/black hazard band along the floor.
+  for (let hx = x; hx < x + w; hx += 8) {
+    ctx.fillStyle = (Math.floor(hx / 8) % 2) === 0 ? "#e8c14a" : "#2a2a2a";
+    ctx.fillRect(hx, y + h - 4, 4, 4);
+  }
+  // Scaffolding poles and cross-braces.
+  ctx.strokeStyle = "rgba(220,220,230,0.55)";
+  ctx.lineWidth = 1;
+  for (let sx = x + 6; sx < x + w - 2; sx += 14) {
+    ctx.beginPath();
+    ctx.moveTo(sx, y + 2);
+    ctx.lineTo(sx, y + h - 4);
+    ctx.moveTo(sx, y + h - 4);
+    ctx.lineTo(sx + 14, y + 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = "rgba(220,220,230,0.4)";
+  ctx.beginPath();
+  ctx.moveTo(x + 2, y + h / 2);
+  ctx.lineTo(x + w - 2, y + h / 2);
+  ctx.stroke();
+  // A little crane hook swinging on the global clock.
+  const hookX = x + 8 + (Math.sin(d.anim) * 0.5 + 0.5) * Math.max(0, w - 16);
+  ctx.strokeStyle = "#caa84a";
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.moveTo(hookX, y - 2);
+  ctx.lineTo(hookX, y + h * 0.4);
+  ctx.stroke();
+  ctx.fillStyle = "#caa84a";
+  ctx.fillRect(hookX - 2, y + h * 0.4, 4, 3);
+}
+
+function drawClosed(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
+  const ctx = d.ctx;
+  const f = FACILITIES[u.kind];
+  // Dim sign band keeps the shop identifiable.
+  ctx.fillStyle = shade(f.color, -50);
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = shade(f.color, -20);
+  ctx.fillRect(x, y, w, 4);
+  // Rolling shutter.
+  ctx.fillStyle = "#3a3f48";
+  ctx.fillRect(x + 2, y + 5, w - 4, h - 9);
+  ctx.strokeStyle = "rgba(0,0,0,0.35)";
+  ctx.lineWidth = 1;
+  for (let ly = y + 7; ly < y + h - 5; ly += 3) {
+    ctx.beginPath();
+    ctx.moveTo(x + 2, ly);
+    ctx.lineTo(x + w - 2, ly);
+    ctx.stroke();
+  }
+  if (w > 26) {
+    ctx.fillStyle = "#1b1f2a";
+    ctx.fillRect(x + w / 2 - 16, y + h / 2 - 5, 32, 10);
+    ctx.fillStyle = "#e0556b";
+    ctx.font = "bold 7px system-ui, sans-serif";
+    ctx.textAlign = "center";
+    ctx.fillText("CLOSED", x + w / 2, y + h / 2 + 2);
+    ctx.textAlign = "left";
   }
 }
 
@@ -186,19 +415,28 @@ function windows(
   spacing = 7,
 ) {
   const ctx = d.ctx;
-  const wy = y + Math.max(3, h * 0.22);
-  const wh = Math.max(3, h * 0.42);
+  const wy = y + Math.max(3, h * 0.2);
+  const wh = Math.max(4, h * 0.4);
+  const pane = Math.max(5, spacing - 4);
   let i = 0;
-  for (let wx = x + 3; wx + 3 < x + w; wx += spacing) {
+  for (let wx = x + 4; wx + pane < x + w - 1; wx += spacing) {
     const r = rand(seed * 131 + i * 17);
     // Most windows lit when the room is "on"; a few glow even when off.
     let on = baseLit ? r > 0.22 : r > 0.86;
     // Rare flicker keeps the facade alive.
     if (r > 0.6 && Math.floor(d.anim * 0.7 + r * 20) % 17 === 0) on = !on;
-    ctx.fillStyle = on ? tint : "rgba(74,92,120,0.5)";
-    ctx.fillRect(wx, wy, 4, wh);
+    // Window frame + glass.
+    ctx.fillStyle = "rgba(40,46,60,0.55)";
+    ctx.fillRect(wx - 1, wy - 1, pane + 2, wh + 2);
+    ctx.fillStyle = on ? tint : "#3d4a63";
+    ctx.fillRect(wx, wy, pane, wh);
     ctx.fillStyle = "rgba(255,255,255,0.18)";
     ctx.fillRect(wx, wy, 1, wh);
+    if (on) {
+      // Warm sill glow.
+      ctx.fillStyle = "rgba(255,220,140,0.25)";
+      ctx.fillRect(wx, wy + wh - 1, pane, 1);
+    }
     i++;
   }
 }
@@ -209,7 +447,7 @@ function drawOffice(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: num
   const { ctx } = d;
   ctx.fillStyle = "#cfd6df";
   ctx.fillRect(x, y, w, h * 0.55);
-  windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#fff4c0", 8);
+  windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#fff4c0", 14);
   // Cubicle desks with monitors along the floor.
   const deskY = y + h - 8;
   for (let dx = x + 4; dx + 7 < x + w; dx += 11) {
@@ -235,10 +473,10 @@ function drawOffice(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: num
 function drawCondo(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
   const { ctx } = d;
   // Warm wallpaper, varied per unit.
-  const hue = rand(u.id) > 0.5 ? "#6a5240" : "#5a4a52";
+  const hue = rand(u.id) > 0.5 ? "#8a6f54" : "#7a6470";
   ctx.fillStyle = shade(hue, 10);
   ctx.fillRect(x, y + 2, w, h - 5);
-  windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#ffe7b0", 9);
+  windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#ffe7b0", 16);
   // Curtains in a per-unit accent.
   const accent = ACCENTS[u.id % ACCENTS.length];
   ctx.fillStyle = accent;
@@ -270,9 +508,9 @@ function drawHotel(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: numb
   const { ctx } = d;
   const asleep = u.state === "asleep";
   const dirty = u.state === "dirty";
-  ctx.fillStyle = "#4a4150";
+  ctx.fillStyle = "#6a5f70";
   ctx.fillRect(x, y + 2, w, h - 5);
-  windows(d, u.id, x, y, w, h, !asleep && (d.lit || u.occupants > 0), asleep ? "#26304a" : "#ffe9a8", 9);
+  windows(d, u.id, x, y, w, h, !asleep && (d.lit || u.occupants > 0), asleep ? "#26304a" : "#ffe9a8", 15);
   const fy = y + h - 8;
   // Headboard + bed with linens.
   ctx.fillStyle = "#5a3f2c";

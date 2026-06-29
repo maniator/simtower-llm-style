@@ -282,6 +282,17 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
 
 export const ALL_KINDS: FacilityKind[] = Object.keys(FACILITIES) as FacilityKind[];
 
+const KIND_SET = new Set<string>(ALL_KINDS);
+
+/**
+ * Runtime guard for facility kinds. TypeScript's string-literal union gives us
+ * compile-time safety; this closes the runtime hole at trust boundaries (loaded
+ * saves, imported JSON) so an invalid kind can never enter the model.
+ */
+export function isFacilityKind(value: unknown): value is FacilityKind {
+  return typeof value === "string" && KIND_SET.has(value);
+}
+
 /** Star rating population thresholds, matching the original game. */
 export const STAR_THRESHOLDS: Record<number, number> = {
   1: 0,
@@ -305,6 +316,46 @@ export const GRID = {
 
 export function isHotelKind(kind: FacilityKind): boolean {
   return kind === "hotelSingle" || kind === "hotelDouble" || kind === "hotelSuite";
+}
+
+/**
+ * How long a facility takes to build, in in-game minutes. Structure goes up
+ * instantly; rooms take a while (bigger/pricier → longer), like the original's
+ * construction phase. Driven entirely by the global clock — no per-room timers.
+ */
+export function buildMinutes(kind: FacilityKind): number {
+  const f = FACILITIES[kind];
+  if (kind === "floor" || kind === "lobby") return 0;
+  return Math.min(8 * 60, Math.round(60 + f.width * 8 + f.cost / 5000));
+}
+
+/** Opening hours by facility, shared by the economy and the renderer. */
+export function isOpenAt(kind: FacilityKind, hour: number): boolean {
+  switch (kind) {
+    case "fastFood":
+      return hour >= 7 && hour < 22;
+    case "restaurant":
+      return (hour >= 11 && hour < 14) || (hour >= 17 && hour < 23);
+    case "shop":
+      return hour >= 10 && hour < 21;
+    case "cinema":
+      return hour >= 12 && hour < 24;
+    case "partyHall":
+      return hour >= 17 && hour < 24;
+    default:
+      return true;
+  }
+}
+
+/** True for facilities that keep posted business hours (can be "closed"). */
+export function hasBusinessHours(kind: FacilityKind): boolean {
+  return (
+    kind === "fastFood" ||
+    kind === "restaurant" ||
+    kind === "shop" ||
+    kind === "cinema" ||
+    kind === "partyHall"
+  );
 }
 
 export function isElevatorKind(kind: FacilityKind): boolean {

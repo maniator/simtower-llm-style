@@ -83,10 +83,10 @@ function buildDemoScript() {
   s.tower.place("medical", 2, left);
 
   s.evaluateStar();
-  // Centre the camera on the mid tower.
-  g.renderer.cam.zoom = 0.9;
-  g.renderer.cam.x = -(cx - 6) * 9 * 0.9 + g.renderer.viewWidth / 2;
-  g.renderer.cam.y = g.renderer.viewHeight * 0.9 + 14 * 26 * 0.9;
+  // Centre the camera on the mid tower (TILE_W=11, FLOOR_H=34).
+  g.renderer.cam.zoom = 0.8;
+  g.renderer.cam.x = -(cx - 6) * 11 * 0.8 + g.renderer.viewWidth / 2;
+  g.renderer.cam.y = g.renderer.viewHeight * 0.92 + 14 * 34 * 0.8;
 }
 
 async function main() {
@@ -128,9 +128,9 @@ async function main() {
   // 5) Zoomed-in office detail.
   await page.evaluate(() => {
     const g = window.game;
-    g.renderer.cam.zoom = 1.9;
-    g.renderer.cam.x = -(70) * 9 * 1.9 + g.renderer.viewWidth / 2;
-    g.renderer.cam.y = g.renderer.viewHeight * 0.6 + 6 * 26 * 1.9;
+    g.renderer.cam.zoom = 1.8;
+    g.renderer.cam.x = -(70) * 11 * 1.8 + g.renderer.viewWidth / 2;
+    g.renderer.cam.y = g.renderer.viewHeight * 0.6 + 6 * 34 * 1.8;
   });
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/05-detail.png` });

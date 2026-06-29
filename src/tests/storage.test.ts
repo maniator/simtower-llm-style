@@ -54,4 +54,15 @@ describe("SaveGame", () => {
     expect(SaveGame.load()).toBeNull();
     expect(SaveGame.hasSave()).toBe(false);
   });
+
+  it("drops units with an unrecognised kind on load", () => {
+    const sim = sampleGame();
+    const data = sim.serialize();
+    const before = data.units.length;
+    // Inject a bogus unit as if from a tampered/old save file.
+    (data.units as any).push({ ...data.units[0], id: 99999, kind: "spaceport" });
+    const loaded = SaveGame.import(JSON.stringify(data));
+    expect(loaded.tower.units.length).toBe(before);
+    expect(loaded.tower.units.some((u) => (u.kind as string) === "spaceport")).toBe(false);
+  });
 });

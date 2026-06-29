@@ -5,8 +5,11 @@ import {
   FACILITIES,
   GRID,
   STAR_THRESHOLDS,
+  buildMinutes,
   isElevatorKind,
+  isFacilityKind,
   isHotelKind,
+  isOpenAt,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit } from "./types";
 
@@ -53,6 +56,9 @@ export class Simulation {
   evaluatedTower = false;
   log: LogEntry[] = [];
 
+  /** Ids of units currently under construction (finalised on the global tick). */
+  private constructing = new Set<number>();
+
   /** Bookkeeping for period boundaries. */
   private lastDay = 0;
   private lastQuarter = -1;
@@ -80,6 +86,7 @@ export class Simulation {
   }
 
   build(kind: FacilityKind, floor: number, x: number): { ok: boolean; reason?: string } {
+    if (!isFacilityKind(kind)) return { ok: false, reason: "Unknown facility." };
     const f = FACILITIES[kind];
     if (!this.isUnlocked(kind)) {
       return { ok: false, reason: `${f.name} unlocks at ${f.minStar}★.` };
@@ -90,6 +97,16 @@ export class Simulation {
     const res = this.tower.place(kind, floor, x);
     if (!res.ok) return { ok: false, reason: res.reason };
     this.money -= f.cost;
+    // Rooms spend time under construction before they can be used.
+    const dur = buildMinutes(kind);
+    if (dur > 0 && res.unitId !== undefined) {
+      const u = this.tower.units.find((uu) => uu.id === res.unitId);
+      if (u) {
+        u.state = "construction";
+        u.completeAt = this.clock.minutes + dur;
+        this.constructing.add(u.id);
+      }
+    }
     if (kind === "cathedral") {
       this.emit("Cathedral built! A VIP will inspect your tower soon.", "good");
       this.vipVisitDay = this.clock.day + 3;
@@ -147,6 +164,7 @@ export class Simulation {
   tick(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
     this.updateTransportAnimation(dtMinutes);
+    this.finishConstruction();
 
     const hour = this.clock.hour;
     if (hour !== this.lastHour) {
@@ -158,6 +176,24 @@ export class Simulation {
     if (day !== this.lastDay) {
       this.lastDay = day;
       this.onDay();
+    }
+  }
+
+  /** Finalise any units whose construction period has elapsed. */
+  private finishConstruction(): void {
+    if (this.constructing.size === 0) return;
+    for (const id of [...this.constructing]) {
+      const u = this.tower.units.find((uu) => uu.id === id);
+      if (!u || u.state !== "construction") {
+        this.constructing.delete(id);
+        continue;
+      }
+      if (this.clock.minutes >= (u.completeAt ?? 0)) {
+        u.state = "empty";
+        u.completeAt = undefined;
+        this.constructing.delete(id);
+        this.emit(`${FACILITIES[u.kind].name} on floor ${u.floor} is now open for business.`, "good");
+      }
     }
   }
 
@@ -196,7 +232,7 @@ export class Simulation {
     const weekend = this.clock.isWeekend;
     for (const u of this.tower.units) {
       const f = FACILITIES[u.kind];
-      if (u.state === "empty") {
+      if (u.state === "empty" || u.state === "construction") {
         u.occupants = 0;
         continue;
       }
@@ -226,7 +262,7 @@ export class Simulation {
 
   private updateSatisfaction(): void {
     for (const u of this.tower.units) {
-      if (u.state === "empty") continue;
+      if (u.state === "empty" || u.state === "construction") continue;
       const served = this.tower.isFloorServed(u.floor);
       if (!served) {
         u.satisfaction = Math.max(0, u.satisfaction - 0.15);
@@ -316,9 +352,13 @@ export class Simulation {
     for (const u of this.tower.units) {
       const daily = ECON.dailyTrafficIncome[u.kind];
       if (daily === undefined) continue;
+      if (u.state === "construction") continue;
       if (!this.tower.isFloorServed(u.floor)) continue;
-      const open = this.isOpenNow(u.kind);
-      if (!open) continue;
+      if (!isOpenAt(u.kind, this.clock.hour)) {
+        // Closed for the night — no patrons.
+        if (u.state === "occupied") u.occupants = 0;
+        continue;
+      }
       u.state = "occupied";
       const hourly = (daily / 8) * appeal * (0.6 + this.rng.next() * 0.4);
       u.pendingIncome += hourly;
@@ -330,22 +370,6 @@ export class Simulation {
     }
   }
 
-  private isOpenNow(kind: FacilityKind): boolean {
-    switch (kind) {
-      case "fastFood":
-        return this.clock.hour >= 7 && this.clock.hour < 22;
-      case "restaurant":
-        return this.clock.isLunch() || this.clock.isEvening();
-      case "shop":
-        return this.clock.hour >= 10 && this.clock.hour < 21;
-      case "cinema":
-        return this.clock.hour >= 12 && this.clock.hour < 24;
-      case "partyHall":
-        return this.clock.isEvening();
-      default:
-        return true;
-    }
-  }
 
   /** 0..~1.5 multiplier from how busy the tower is. */
   private trafficAppeal(): number {
@@ -593,12 +617,21 @@ export class Simulation {
     sim.star = data.star;
     sim.clock = new Clock(data.minutes);
     sim.evaluatedTower = data.evaluatedTower;
-    sim.tower.units = data.units.map((u) => ({ ...u }));
-    sim.tower.transports = data.transports.map((t) => ({ ...t }));
+    // Reject any unit/transport with an unrecognised kind from untrusted saves.
+    sim.tower.units = (data.units ?? [])
+      .filter((u) => isFacilityKind(u.kind))
+      .map((u) => ({ ...u }));
+    sim.tower.transports = (data.transports ?? [])
+      .filter((t) => isFacilityKind(t.kind))
+      .map((t) => ({ ...t }));
     sim.tower.setNextId(data.nextId);
     sim.tower.towerName = data.towerName;
     sim.tower.builtCathedral = data.builtCathedral;
     sim.tower.reindex();
+    // Resume any in-progress construction.
+    for (const u of sim.tower.units) {
+      if (u.state === "construction") sim.constructing.add(u.id);
+    }
     sim.lastDay = sim.clock.day;
     sim.lastQuarter = sim.clock.quarter;
     sim.lastMonth = Math.floor(sim.clock.day / 30);
