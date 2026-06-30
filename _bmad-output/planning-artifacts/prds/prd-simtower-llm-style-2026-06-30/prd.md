@@ -126,9 +126,11 @@ research.]`
   −1 = B2 … −9 = B10 (no gap at 0); top is floor 100. The basement therefore has
   10 levels (B1…B10).
 - **Lobby** — a transit-only concourse floor where people pass to reach
-  transport. **Sky lobby** = a lobby above ground. Lobbies are required on the
-  ground floor and every 15th floor (15, 30, 45 …); rooms cannot be placed on a
-  lobby.
+  transport. **Sky lobby** = a lobby above ground, placed on the ground floor and
+  every 15th floor (15, 30, 45 …) as the tower's transit hubs (where express
+  elevators stop and passengers transfer). Rooms cannot be placed on a lobby
+  (enforced); the every-15-floors placement is a structural/transit convention,
+  not a rating gate (see FR-6).
 - **Facility** — any placeable thing: structure (floor/lobby), a **Room** (a
   tenant/commercial/service unit), or **Transport**.
 - **Room** — a non-structural, non-transport facility occupied by tenants or
@@ -192,9 +194,14 @@ Realizes **UJ-1**, **UJ-4**.
   click-drag along a floor.
 - **FR-5** — **Lobby** concourses are transit-only: the system must reject any
   attempt to place a Room on a lobby tile.
-- **FR-6** — The system requires (for rating/win purposes) a **ground lobby** on
-  floor 1 and a **sky lobby** on each multiple of **15 floors** (15, 30, 45 …)
-  [`GRID.lobbyInterval`]; sky lobbies are valid only on those multiples of 15.
+- **FR-6** — Lobbies are the tower's **vertical transit hubs**: a **ground
+  lobby** sits on floor 1, and **sky lobbies** may be placed on multiples of
+  **15 floors** (15, 30, 45 …) [`GRID.lobbyInterval`] — the floors where express
+  elevators stop and passengers transfer between elevator banks. Sky lobbies are
+  valid only on those multiples of 15. `[NOTE FOR PM: this is a structural /
+  transit convention, NOT an enforced rating or win gate — promotion (FR-43/44)
+  and the TOWER win (FR-46) are decided by population and required facilities
+  only; the shipped build performs no lobby check in star/VIP evaluation.]`
 - **FR-7** — Multi-story facilities occupy their declared height: cinema **2
   floors**, recycling **2 floors**, metro **1 full basement floor** spanning the
   whole lot width [`FACILITIES`].
@@ -277,10 +284,11 @@ transport network. Realizes **UJ-2**, **UJ-4**.
 - **FR-24** — The player can edit a placed elevator in-game: adjust its **car
   count** and its **per-floor stop configuration** (which floors a car serves /
   skips).
-- **FR-25** — **Express** elevators serve only lobby and sky-lobby floors;
-  service elevators are intended for staff/freight to keep service traffic off
-  passenger shafts. `[ASSUMPTION: express auto-restricts to lobby floors rather
-  than relying purely on manual per-floor config.]`
+- **FR-25** — **Express** elevators skip intermediate non-lobby floors, stopping
+  only at lobby/sky-lobby floors — **except their own shaft endpoints (bottom and
+  top), which always remain stops** so the shaft stays connected even when an
+  endpoint is not a lobby [`Tower.setExpressStops()`]. Service elevators are
+  intended for staff/freight to keep service traffic off passenger shafts.
 - **FR-26** — Elevator cars are dispatched **on demand**: a car travels to serve
   waiting passengers, boards riders up to capacity, lets them alight at their
   floor, and idles at the ground lobby when there is no demand. *(Dispatch
@@ -571,8 +579,9 @@ as implemented and test-covered.)*
    use "Tower Tycoon".)
 2. Is floor-100-only the intended hard constraint for the Wedding Hall, or
    should any top-most floor qualify? (FR-19)
-3. Should Express elevators auto-restrict to lobby floors, or rely entirely on
-   manual per-floor stop config? (FR-25)
+3. *(Resolved 2026-06-30)* Express auto-restriction is confirmed in
+   `Tower.setExpressStops()`: express skips intermediate non-lobby floors but
+   always keeps its shaft endpoints as stops. FR-25 updated accordingly.
 4. Is the 12,000 TOWER target final, or should a future larger-scale population
    model restore the original 15,000? (FR-46)
 5. What is the precise trigger/odds model for buried treasure, and is it strictly
@@ -586,8 +595,6 @@ as implemented and test-covered.)*
   project goals, not user research.
 - **§4.2 (FR-19)** — Wedding Hall placement is hard-required on floor 100,
   mirroring the original Cathedral.
-- **§4.3 (FR-25)** — Express elevators auto-restrict to lobby/sky-lobby floors
-  rather than relying solely on manual config.
 - **§4.5 (FR-39)** — Buried treasure is tied to basement excavation and surfaced
   as an event headline.
 - **§4.7 (FR-54)** — Event randomness is seeded and separated from cosmetic

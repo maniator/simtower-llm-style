@@ -62,3 +62,19 @@ PRD at `prd.md`. Newest entries at the bottom.
 - **Note (resolved):** test counts were stale — README said "33", PARITY.md
   said "82"; the suite actually runs **84 passing tests** (`npx vitest run`).
   Corrected README.md, PARITY.md, and the PRD/addendum to 84.
+
+## 2026-06-30 — PR #33 review resolution (Codex)
+
+Two P2 findings from the Codex automated review, both confirmed accurate against
+the shipped code and fixed:
+
+- **FR-6 (lobby gate):** the PRD claimed lobbies are required "for rating/win
+  purposes," but `Simulation.evaluateStar()` / `checkVip()` gate only on
+  population + Security/Medical/Wedding Hall/Metro — there is no lobby check.
+  Rescoped FR-6 (and the Glossary "Lobby" entry) to a **structural/transit
+  convention**, with an explicit note that it is not a rating/win gate.
+- **FR-25 (express endpoints):** `Tower.setExpressStops()` always keeps a shaft's
+  bottom and top as stops even when they are not lobbies (test
+  `simulation.test.ts:286` covers floor 1→8). Updated FR-25 to state express
+  skips intermediate non-lobby floors **except its shaft endpoints**. Open
+  Question 3 marked resolved; the obsolete FR-25 `[ASSUMPTION]` removed from §9.
