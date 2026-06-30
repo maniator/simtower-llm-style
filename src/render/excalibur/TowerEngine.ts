@@ -72,7 +72,7 @@ export class TowerEngine {
   private d: DrawCtx;
 
   // Set by the controller each frame; rendered by the overlay.
-  preview: { kind: FacilityKind; floor: number; x: number; valid: boolean } | null = null;
+  preview: { kind: FacilityKind; floor: number; x: number; valid: boolean; span?: number } | null = null;
   transportPreview: { kind: FacilityKind; x: number; bottom: number; top: number; valid: boolean } | null = null;
   selectedId: number | null = null;
 
@@ -110,6 +110,12 @@ export class TowerEngine {
   private builtRev = -1;
   private litState = false;
   private lastSyncHour = -1;
+  /** Set by the controller from the game speed: when paused, the decorative
+   *  animation clock stops so on-screen people freeze with everything else. */
+  paused = false;
+  /** Wall-clock-derived animation time that only advances while unpaused. */
+  private animClock = 0;
+  private lastAnimWall = 0;
 
   // Individually-routed commuters (SimTower's signature) are owned and advanced
   // by the engine; the renderer only draws each person and removes them as they
@@ -283,7 +289,14 @@ export class TowerEngine {
 
   private tick(elapsed: number): void {
     const c = this.sim.clock;
-    this.d.anim = (globalThis.performance ? performance.now() : 0) / 1000;
+    // Advance the decorative animation clock by real elapsed time, but only
+    // while the game is running — paused (speed 0) freezes the walkers, train
+    // and street just like the simulated crowd and elevators.
+    const nowWall = (globalThis.performance ? performance.now() : 0) / 1000;
+    if (this.lastAnimWall === 0) this.lastAnimWall = nowWall;
+    if (!this.paused) this.animClock += nowWall - this.lastAnimWall;
+    this.lastAnimWall = nowWall;
+    this.d.anim = this.animClock;
     this.d.hour = c.hour;
     this.d.lit = c.isNight() || c.isEvening();
     this.d.stress = Math.max(0, Math.min(1, this.sim.congestion() - 1));
@@ -556,7 +569,9 @@ export class TowerEngine {
     if (this.preview) {
       const p = this.preview;
       const hgt = facilityFloors(p.kind);
-      const w = this.sim.tower.facilityOf({ kind: p.kind } as Unit).width;
+      // Floor/lobby tools lay a multi-tile brush strip; `span` (when set) is the
+      // real footprint so the shadow matches what a click actually places.
+      const w = p.span ?? this.sim.tower.facilityOf({ kind: p.kind } as Unit).width;
       const sx = this.worldToScreenX(p.x);
       const sy = this.worldToScreenY(p.floor + hgt - 1);
       const sw = w * TILE * this.cam.zoom;
@@ -836,7 +851,9 @@ export class TowerEngine {
       const n = t.kind === "escalator" ? 3 : 2;
       for (let i = 0; i < n; i++) {
         const seed = (t.id * 17 + i * 29) | 0;
-        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7, 0.15 + i * 0.25);
+        // Low ranks so stairs/escalators show climbers even in a modest tower —
+        // otherwise the routed crowd (elevators only) makes stairs look unused.
+        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7, 0.04 + i * 0.18);
       }
     }
   }
@@ -893,9 +910,13 @@ export class TowerEngine {
       const visible = w.rank <= crowd;
       if (w.actor.graphics.visible !== visible) w.actor.graphics.visible = visible;
       if (!visible) continue;
-      let p = w.phase + anim * w.speed * 0.03;
+      let p = w.phase + (w.dir > 0 ? 0 : 0.5) + anim * w.speed * 0.03;
       p -= Math.floor(p);
-      const tt = w.dir > 0 ? p : 1 - p;
+      // Ping-pong 0→1→0 so figures pace back and forth (and stair climbers go
+      // up *and* down) instead of teleporting from the far end back to the
+      // start each loop — the old sawtooth made people look like they spawned on
+      // one side, ran across, then vanished.
+      const tt = 1 - Math.abs(2 * p - 1);
       w.actor.pos = ex.vec(w.x0w + tt * (w.x1w - w.x0w), w.y0w + tt * (w.y1w - w.y0w));
       const red = w.impatient && stress > 0.25;
       if (red !== w.red) {
