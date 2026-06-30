@@ -1,14 +1,32 @@
 :root {
-  --bg: #1b1f2a;
-  --panel: #262c3a;
-  --panel-light: #313a4d;
-  --ink: #e7ecf5;
-  --muted: #9aa6bd;
-  --accent: #ffcf3f;
-  --good: #6bd47a;
-  --bad: #ff6b6b;
-  --money: #7be0a0;
-  --line: #3a445c;
+  /* Retro palette — Windows 3.1 / SimTower. The whole stylesheet derives its
+     colours from these tokens, so swapping them here re-themes everything with
+     no dark-theme bleed-through. Bevels/title-bars are layered on at EOF. */
+  --bg: #008080;          /* teal desktop */
+  --panel: #c0c0c0;       /* system gray */
+  --panel-light: #d7d7d7;
+  --ink: #000000;         /* body text */
+  --muted: #2f2f38;       /* secondary text — dark enough to read on gray */
+  --accent: #000080;      /* navy — titles & highlights */
+  --good: #15722e;
+  --bad: #b01023;
+  --money: #0a6e26;
+  --line: #7a7a7a;
+  /* Win3.1 chrome tokens + the signature two-pixel bevels. */
+  --r-face: #c0c0c0;
+  --r-shadow: #808080;
+  --r-dark: #000000;
+  --r-light: #dfdfdf;
+  --r-hi: #ffffff;
+  --r-title: #000080;
+  --r-title-fg: #ffffff;
+  --r-ink: #000000;
+  --r-desktop: #008080;
+  --r-font: "MS Sans Serif", "Tahoma", "Geneva", "Segoe UI", sans-serif;
+  --bevel-out: inset -1px -1px var(--r-dark), inset 1px 1px var(--r-hi),
+    inset -2px -2px var(--r-shadow), inset 2px 2px var(--r-light);
+  --bevel-in: inset 1px 1px var(--r-dark), inset -1px -1px var(--r-hi),
+    inset 2px 2px var(--r-shadow), inset -2px -2px var(--r-light);
 }
 
 * {
@@ -43,7 +61,7 @@ body {
   align-items: center;
   gap: 18px;
   padding: 6px 12px;
-  background: linear-gradient(#2c3344, #222838);
+  background: var(--r-face);
   border-bottom: 2px solid #11141d;
   box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   z-index: 5;
@@ -70,7 +88,7 @@ body {
   flex-direction: column;
   line-height: 1.1;
   min-width: 92px;
-  background: rgba(0, 0, 0, 0.25);
+  background: var(--r-face);
   border: 1px solid #11141d;
   border-radius: 4px;
   padding: 3px 8px;
@@ -113,7 +131,7 @@ body {
 }
 #speed button.active {
   background: var(--accent);
-  color: #1b1f2a;
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -157,9 +175,14 @@ body {
   background: var(--panel-light);
   border-color: var(--accent);
 }
+/* Disabled-state dimming (single source of truth; toggled by classes in UI.ts).
+ * Kept legible rather than washed out on the light retro theme. */
 .pal-item.locked {
-  opacity: 0.4;
+  opacity: 0.72;
   cursor: not-allowed;
+}
+.pal-item.unaffordable {
+  opacity: 0.85;
 }
 .pal-swatch {
   width: 14px;
@@ -185,7 +208,7 @@ body {
   position: relative;
   flex: 1;
   min-width: 0;
-  background: #0d1018;
+  background: #9aa6bd;
   overflow: hidden;
 }
 #view {
@@ -203,7 +226,7 @@ body {
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: rgba(0, 0, 0, 0.55);
+  background: var(--r-face);
   padding: 4px 10px;
   border-radius: 10px;
   font-size: 11px;
@@ -214,7 +237,7 @@ body {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: rgba(10, 13, 20, 0.92);
+  background: var(--r-face);
   border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
@@ -240,7 +263,7 @@ body {
   align-items: flex-end;
 }
 .toast {
-  background: rgba(10, 13, 20, 0.92);
+  background: var(--r-face);
   border-left: 3px solid var(--accent);
   padding: 6px 10px;
   border-radius: 4px;
@@ -305,7 +328,7 @@ body {
 }
 .name-input {
   width: 100%;
-  background: #11141d;
+  background: #ffffff;
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -327,7 +350,7 @@ body {
   cursor: pointer;
 }
 .wide-btn:hover {
-  background: #3c4761;
+  background: #d8d8d8;
 }
 #tower-stats {
   font-size: 12px;
@@ -342,7 +365,7 @@ body {
   bottom: 10px;
   left: 10px;
   width: 250px;
-  background: rgba(12, 16, 24, 0.96);
+  background: var(--r-face);
   border: 1px solid var(--accent);
   border-radius: 8px;
   padding: 10px 12px;
@@ -390,7 +413,7 @@ body {
   cursor: pointer;
 }
 #editor button:hover {
-  background: #3c4761;
+  background: #d8d8d8;
 }
 #editor button.danger {
   background: #5a2a2a;
@@ -400,7 +423,7 @@ body {
 }
 #editor input {
   flex: 2;
-  background: #11141d;
+  background: #ffffff;
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -483,7 +506,7 @@ body {
   cursor: pointer;
 }
 .slot-actions button:hover {
-  background: #3c4761;
+  background: #d8d8d8;
 }
 .slot-actions button.danger {
   background: #5a2a2a;
@@ -499,7 +522,7 @@ body {
   gap: 2px 10px;
   margin: 8px 0;
   padding: 6px;
-  background: #11141d;
+  background: #ffffff;
   border-radius: 6px;
 }
 .stop-row {
@@ -562,7 +585,7 @@ body {
   font-size: 12px;
 }
 .btn-row button:hover {
-  background: #3c4761;
+  background: #d8d8d8;
 }
 
 /* ---- Modal (native <dialog>) ---- */
@@ -572,6 +595,7 @@ body {
   padding: 0;
   max-width: min(560px, 94vw);
   color: var(--ink);
+  margin: auto; /* center the dialog over its backdrop instead of top-left */
 }
 #modal::backdrop {
   background: rgba(0, 0, 0, 0.62);
@@ -602,7 +626,7 @@ body {
 .modal-box textarea {
   width: 100%;
   height: 160px;
-  background: #11141d;
+  background: #ffffff;
   color: var(--ink);
   border: 1px solid var(--line);
   border-radius: 4px;
@@ -627,7 +651,7 @@ body {
 }
 .modal-actions button.primary {
   background: var(--accent);
-  color: #1b1f2a;
+  color: #ffffff;
   font-weight: 700;
 }
 
@@ -651,11 +675,15 @@ body {
     overflow-x: auto;
   }
   .stat {
-    min-width: 0;
+    /* Keep each box at its content width so #status scrolls (overflow-x:auto)
+     * instead of shrinking the boxes and clipping the value behind the opaque
+     * next box (DATE/FUND were truncated). */
+    flex: none;
     padding: 2px 6px;
   }
   .stat .value {
     font-size: 13px;
+    white-space: nowrap;
   }
   #panel-toggle {
     display: inline-block;
@@ -767,6 +795,327 @@ body {
   }
   #editor {
     width: min(250px, 80vw);
+  }
+}
+
+/* ===================================================================== */
+/* RETRO SKIN — the Win3.1 / SimTower chrome layer.                       */
+/* Layout (flex, sizing, positioning) lives in the rules above; this      */
+/* section owns the visual skin (gray faces, bevels, navy title bars).    */
+/* Design tokens are defined once in :root at the top of the file.        */
+/* ===================================================================== */
+body {
+  font-family: var(--r-font);
+  font-size: 12px;
+  background: var(--r-desktop);
+  color: var(--r-ink);
+  -webkit-font-smoothing: none;
+}
+#view {
+  image-rendering: pixelated; /* crisp retro pixels, no blur */
+}
+
+/* ---- Top "Information" bar ---- */
+#topbar {
+  background: var(--r-face);
+  border: 0;
+  box-shadow: inset 0 1px var(--r-hi), 0 2px 0 var(--r-shadow), 0 3px 0 var(--r-dark);
+  gap: 6px;
+  padding: 4px 8px;
+}
+.brand {
+  background: var(--r-title);
+  color: var(--r-title-fg);
+  text-shadow: none;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  padding: 2px 8px;
+  box-shadow: var(--bevel-out);
+}
+.brand span {
+  color: var(--r-title-fg);
+}
+#status {
+  gap: 5px;
+}
+.stat {
+  background: var(--r-face);
+  border: 0;
+  border-radius: 0;
+  box-shadow: var(--bevel-in);
+  padding: 2px 8px;
+  min-width: 0;
+  color: var(--r-ink);
+}
+.stat .label {
+  color: var(--r-title);
+  font-weight: 700;
+}
+.stat .value {
+  color: var(--r-ink);
+  font-size: 13px;
+}
+.value.money {
+  color: #008000;
+}
+.value.stars {
+  color: #a07000;
+  text-shadow: 0 0 0 #000;
+}
+#stat-date,
+#stat-time {
+  white-space: nowrap;
+}
+
+/* ---- Buttons (speed, sidebar, rows, wide) ---- */
+#speed button,
+#sidebar button,
+.btn-row button,
+.wide-btn,
+#audio-toggle,
+#panel-toggle {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border: 0;
+  border-radius: 0;
+  box-shadow: var(--bevel-out);
+  padding: 3px 9px;
+  font-family: var(--r-font);
+}
+#speed button:active,
+#sidebar button:active,
+.btn-row button:active,
+.wide-btn:active,
+.wide-btn:hover {
+  background: var(--r-face);
+  box-shadow: var(--bevel-in);
+}
+#speed button.active {
+  background: var(--r-face);
+  color: var(--r-ink);
+  font-weight: 700;
+  box-shadow: var(--bevel-in);
+}
+
+/* ---- Tool palette ("Tools" window) ---- */
+#palette {
+  width: 176px;
+  background: var(--r-face);
+  border: 0;
+  margin: 6px 0 6px 6px;
+  box-shadow: var(--bevel-out);
+}
+.palette-scroll::before {
+  content: "Tools";
+  display: block;
+  background: var(--r-title);
+  color: var(--r-title-fg);
+  font-weight: 700;
+  padding: 2px 6px;
+  margin: 0 -6px 6px;
+}
+.pal-group-title {
+  color: var(--r-title);
+  font-weight: 700;
+}
+.pal-item {
+  border-radius: 0;
+  border: 1px solid transparent;
+  color: var(--r-ink);
+}
+.pal-item:hover {
+  background: #d8d8d8;
+}
+.pal-item.active {
+  background: var(--r-title);
+  color: var(--r-title-fg);
+  border-color: transparent;
+}
+.pal-cost {
+  color: #333;
+}
+/* On the navy selection highlight, name AND cost must read light, not dark. */
+.pal-item.active .pal-name,
+.pal-item.active .pal-cost {
+  color: #eef2ff;
+}
+.pal-swatch {
+  border-radius: 0;
+  box-shadow: var(--bevel-in);
+  border: 0;
+}
+
+/* ---- Stage frame ---- */
+#main {
+  background: var(--r-desktop);
+}
+#stage {
+  background: #9aa6bd;
+  margin: 6px;
+  box-shadow: var(--bevel-in);
+}
+
+/* ---- Side panels (each reads as a little window) ---- */
+#sidebar {
+  width: 232px;
+  background: var(--r-face);
+  border: 0;
+  margin: 6px 6px 6px 0;
+  box-shadow: var(--bevel-out);
+  gap: 6px;
+  padding: 6px;
+}
+.panel {
+  background: var(--r-face);
+  border: 0;
+  box-shadow: var(--bevel-out);
+  padding: 0 8px 8px;
+}
+.panel h3 {
+  color: var(--r-title-fg);
+  background: var(--r-title);
+  font-weight: 700;
+  letter-spacing: 0;
+  margin: 0 -8px 6px;
+  padding: 2px 6px;
+}
+#tool-info .ti-name {
+  color: var(--r-title);
+}
+.name-input,
+#editor input {
+  background: var(--r-hi);
+  color: var(--r-ink);
+  border: 0;
+  border-radius: 0;
+  box-shadow: var(--bevel-in);
+}
+#tower-stats,
+#tool-info,
+#log {
+  color: var(--r-ink);
+}
+
+/* ---- Bulletin / event log ---- */
+#log {
+  background: var(--r-hi);
+  box-shadow: var(--bevel-in);
+  padding: 4px 6px;
+}
+
+/* ---- Editor + dialogs as framed windows ---- */
+#editor,
+#inspector,
+dialog#modal {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border: 0;
+  border-radius: 0;
+  box-shadow: var(--bevel-out), 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+#editor h4,
+#inspector h4 {
+  background: var(--r-title);
+  color: var(--r-title-fg);
+}
+#editor button {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border: 0;
+  box-shadow: var(--bevel-out);
+}
+#editor button:active {
+  box-shadow: var(--bevel-in);
+}
+
+/* ---- Toasts as little gray alert boxes ---- */
+.toast {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border-radius: 0;
+  box-shadow: var(--bevel-out), 2px 2px 0 rgba(0, 0, 0, 0.4);
+}
+
+/* ---- Readability addendum: modal as a framed window, legible disabled items ---- */
+.modal-box {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border: 0;
+  border-radius: 0;
+  box-shadow: var(--bevel-out), 3px 3px 0 rgba(0, 0, 0, 0.4);
+}
+.modal-box h2 {
+  background: var(--r-title);
+  color: var(--r-title-fg);
+  margin: -18px -20px 12px;
+  padding: 3px 8px;
+  font-size: 13px;
+}
+.modal-box textarea,
+.stats-grid,
+.stop-grid {
+  background: var(--r-hi);
+  box-shadow: var(--bevel-in);
+  border: 0;
+  border-radius: 0;
+}
+.modal-actions button,
+.stats-grid + *,
+.modal-box button {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border: 0;
+  box-shadow: var(--bevel-out);
+}
+.modal-actions button:active,
+.modal-box button:active {
+  box-shadow: var(--bevel-in);
+}
+#hint {
+  background: var(--r-face);
+  color: var(--r-ink);
+  border-radius: 0;
+  box-shadow: var(--bevel-out);
+}
+
+/* The facility "Eval" satisfaction bar (original-style sunken gauge). */
+.evalbar {
+  display: inline-block;
+  width: 54px;
+  height: 9px;
+  vertical-align: middle;
+  background: var(--r-hi);
+  box-shadow: var(--bevel-in);
+  overflow: hidden;
+}
+.evalbar > span {
+  display: block;
+  height: 100%;
+  background: var(--good);
+}
+
+/* ---- Retro skin × mobile reconciliation ----
+ * The retro skin rules above are unscoped and come AFTER the mobile media
+ * query, so they were clobbering the mobile layout (palette stuck at desktop
+ * width, the "Tools" title bar wedged into the bottom strip, the drawer
+ * offset by a margin). Re-assert the mobile layout for the retro theme here,
+ * last, so it wins. */
+@media (max-width: 860px) {
+  /* Bottom palette is a full-width horizontal strip, not a desktop window. */
+  #palette {
+    width: 100%;
+    margin: 0;
+    box-shadow: none;
+    border-top: 2px solid var(--r-shadow);
+  }
+  .palette-scroll::before {
+    display: none; /* no floating "Tools" title bar in the strip */
+  }
+  /* Sidebar is a fixed slide-in drawer; the skin's margin/width must not apply. */
+  #sidebar {
+    width: min(290px, 86vw);
+    margin: 0;
   }
 }
 

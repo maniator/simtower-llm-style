@@ -46,6 +46,7 @@ export class UI {
     pop: document.getElementById("stat-pop")!,
     star: document.getElementById("stat-star")!,
     time: document.getElementById("stat-time")!,
+    date: document.getElementById("stat-date")!,
     palette: document.getElementById("palette-scroll")!,
     toolInfo: document.getElementById("tool-info")!,
     towerStats: document.getElementById("tower-stats")!,
@@ -304,14 +305,17 @@ export class UI {
     this.el.pop.textContent = sim.population.toLocaleString();
     this.el.star.textContent = sim.star >= 6 ? "TOWER" : "★".repeat(sim.star) + "☆".repeat(5 - sim.star);
     this.el.time.textContent = sim.clock.format();
+    this.el.date.textContent = sim.clock.formatRetroDate();
 
     // Palette unlock state.
     document.querySelectorAll<HTMLElement>(".pal-item[data-kind]").forEach((item) => {
       const kind = item.dataset.kind as FacilityKind;
       const locked = !sim.isUnlocked(kind);
-      item.classList.toggle("locked", locked);
       const affordable = sim.money >= FACILITIES[kind].cost;
-      item.style.opacity = locked ? "0.4" : affordable ? "1" : "0.7";
+      // Dimming lives entirely in CSS (.locked / .unaffordable) so there's a
+      // single source of truth for the styling.
+      item.classList.toggle("locked", locked);
+      item.classList.toggle("unaffordable", !locked && !affordable);
     });
 
     this.setTowerName(sim.tower.towerName);
