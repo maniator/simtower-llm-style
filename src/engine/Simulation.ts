@@ -728,34 +728,42 @@ export class Simulation {
 
   /** Transient per-car dwell timers (not serialized; rebuilt on demand). */
   private carDwell = new Map<number, number[]>();
+  /** Waiting passengers per floor — builds up over time, cleared as cars call. */
+  private waiting = new Map<number, number>();
 
   /**
-   * Per-floor travel demand right now: the population on a floor that's apt to
-   * move, plus the ground lobby acting as the building's entrance hub. Scaled
-   * by the time-of-day rush so cars cluster where people actually are.
+   * Accumulate waiting passengers per floor: only people who are actually
+   * present generate trips, and they trickle in faster during the rush. Calls
+   * fade if no car ever comes. Cars therefore sit idle when nobody's about
+   * (an empty tower, the dead of night) and bustle when it's busy.
    */
-  private floorDemandMap(): Map<number, number> {
-    const m = new Map<number, number>();
+  private accumulateWaiting(dt: number): void {
+    const rush = this.rushFactor();
+    for (const [fl, n] of this.waiting) {
+      const v = n - dt * 0.03;
+      if (v <= 0) this.waiting.delete(fl);
+      else this.waiting.set(fl, v);
+    }
     for (const u of this.tower.units) {
-      if (u.state === "occupied" || u.state === "asleep") {
-        m.set(u.floor, (m.get(u.floor) ?? 0) + FACILITIES[u.kind].population);
+      if (u.occupants <= 0 || !this.tower.isFloorServed(u.floor)) continue;
+      this.waiting.set(u.floor, Math.min(25, (this.waiting.get(u.floor) ?? 0) + u.occupants * rush * dt * 0.012));
+    }
+    const pop = this.tower.totalPopulation();
+    if (pop > 0) {
+      for (const fl of this.tower.lobbyFloors()) {
+        this.waiting.set(fl, Math.min(25, (this.waiting.get(fl) ?? 0) + pop * rush * dt * 0.0015));
       }
     }
-    const rush = this.rushFactor();
-    for (const [fl, v] of m) m.set(fl, v * rush);
-    // Ground and sky lobbies are transfer hubs people stream through.
-    for (const fl of this.tower.lobbyFloors()) m.set(fl, (m.get(fl) ?? 0) + 6 * rush);
-    return m;
   }
 
-  /** Nearest stop strictly ahead (in `dir`) that has waiting demand. */
+  /** Nearest stop strictly ahead (in `dir`) that has a real call waiting. */
   private nextDemandStop(stops: number[], pos: number, dir: number, demand: Map<number, number>): number | null {
     let best: number | null = null;
     let bestDist = Infinity;
     for (const fl of stops) {
       if (dir > 0 && fl <= pos + 0.05) continue;
       if (dir < 0 && fl >= pos - 0.05) continue;
-      if ((demand.get(fl) ?? 0) <= 0) continue;
+      if ((demand.get(fl) ?? 0) < 1) continue;
       const dist = Math.abs(fl - pos);
       if (dist < bestDist) {
         bestDist = dist;
@@ -774,7 +782,8 @@ export class Simulation {
    * drawn directly), so they're skipped here.
    */
   private updateElevators(dt: number): void {
-    const demand = this.floorDemandMap();
+    this.accumulateWaiting(dt);
+    const demand = this.waiting;
     for (const t of this.tower.transports) {
       if (!isElevatorKind(t.kind)) continue;
       const stops: number[] = [];
@@ -802,13 +811,20 @@ export class Simulation {
           target = this.nextDemandStop(stops, pos, dir, demand);
         }
         if (target === null) {
-          // Idle tower: drift home to the lowest served floor and wait there.
+          // Nobody waiting: rest at the lowest served floor (the lobby) and
+          // stop dead rather than pacing the shaft.
           target = stops[0];
+          if (Math.abs(pos - target) < 0.05) {
+            t.carDir[i] = 0;
+            continue;
+          }
         }
 
         if (Math.abs(target - pos) <= v) {
           pos = target;
-          dwell[i] = 1.5; // pause to load / unload
+          dwell[i] = 1.2; // pause to load / unload
+          const w = demand.get(target);
+          if (w) demand.set(target, Math.max(0, w - 14)); // picked them up
           if (pos >= t.top) dir = -1;
           else if (pos <= t.bottom) dir = 1;
         } else {

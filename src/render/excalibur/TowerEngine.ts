@@ -94,7 +94,7 @@ export class TowerEngine {
   private transportActors = new Map<number, ex.Actor>();
   private transportSig = new Map<number, string>();
   // Engine-animated actors, regenerated when the layout changes.
-  private carActors: { actor: ex.Actor; t: Transport; i: number }[] = [];
+  private carActors: { actor: ex.Actor; t: Transport; i: number; empty: ex.Canvas; full: ex.Canvas; showFull: boolean }[] = [];
   private trainActors: { actor: ex.Actor; u: Unit; w: number }[] = [];
   private walkers: Walker[] = [];
   private builtRev = -1;
@@ -371,7 +371,12 @@ export class TowerEngine {
     this.engine.add(sidewalk);
   }
 
-  /** Sun/moon on a layer *behind* the tower so a body is occluded by it. */
+  /**
+   * Sun/moon on a screen-space layer placed *below* the world ground and tower
+   * (a z under the dirt). They hang in the open sky, and as you pan, the dirt
+   * and the building slide over them and hide them at the horizon — so it pans
+   * correctly with no manual clipping.
+   */
   private makeSky(): void {
     this.skyCanvas = new ex.Canvas({
       width: this.viewWidth,
@@ -379,7 +384,7 @@ export class TowerEngine {
       cache: false,
       draw: (ctx) => this.drawSky(ctx),
     });
-    this.sky = new ex.ScreenElement({ x: 0, y: 0, z: -40 });
+    this.sky = new ex.ScreenElement({ x: 0, y: 0, z: -60 });
     this.sky.graphics.use(this.skyCanvas);
     this.engine.add(this.sky);
   }
@@ -390,16 +395,7 @@ export class TowerEngine {
       this.skyCanvas.height = this.viewHeight;
     }
     ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
-    // Only paint the sky *above* the street-level horizon, so the sun/moon can
-    // never appear down in the earth when the camera looks at the basements.
-    const horizon = Math.max(0, Math.min(this.viewHeight, this.worldToScreenY(0)));
-    if (horizon <= 1) return;
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(0, 0, this.viewWidth, horizon);
-    ctx.clip();
     this.drawSun(ctx);
-    ctx.restore();
   }
 
   private makeOverlay(): void {
@@ -427,19 +423,16 @@ export class TowerEngine {
 
   private drawSun(ctx: CanvasRenderingContext2D): void {
     const hour = this.sim.clock.hour + this.sim.clock.minute / 60;
-    const night = this.sim.clock.isNight();
-    if (night) {
-      ctx.fillStyle = "#eef";
-      ctx.beginPath();
-      ctx.arc(this.viewWidth * 0.82, this.viewHeight * 0.16, 10, 0, Math.PI * 2);
-      ctx.fill();
-    } else {
-      const arc = ((hour - 6) / 12) * Math.PI;
-      ctx.fillStyle = "#fff7c0";
-      ctx.beginPath();
-      ctx.arc((arc / Math.PI) * this.viewWidth, this.viewHeight * 0.62 - Math.sin(arc) * this.viewHeight * 0.5, 16, 0, Math.PI * 2);
-      ctx.fill();
-    }
+    // The sun arcs across 06:00→18:00; the moon takes the same arc 18:00→06:00,
+    // so both rise in the east, climb, and set in the west.
+    const day = hour >= 6 && hour < 18;
+    const arc = day ? ((hour - 6) / 12) * Math.PI : (((hour - 18 + 24) % 24) / 12) * Math.PI;
+    const cx = (arc / Math.PI) * this.viewWidth;
+    const cy = this.viewHeight * 0.62 - Math.sin(arc) * this.viewHeight * 0.5;
+    ctx.fillStyle = day ? "#fff7c0" : "#eef";
+    ctx.beginPath();
+    ctx.arc(cx, cy, day ? 16 : 11, 0, Math.PI * 2);
+    ctx.fill();
   }
 
   private drawPreview(ctx: CanvasRenderingContext2D): void {
@@ -661,13 +654,13 @@ export class TowerEngine {
       if (!isElevatorKind(t.kind)) continue;
       const w = t.width * TILE;
       for (let i = 0; i < t.cars; i++) {
-        const moving = (t.carDir[i] ?? 0) !== 0;
         const seed = (i * 7 + t.id) | 0;
-        const cv = new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, moving) });
+        const empty = new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, 0) });
+        const full = new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, 2) });
         const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), -t.carPositions[i] * FLOOR), width: w, height: FLOOR, anchor: ex.vec(0, 0), z: 2 });
-        a.graphics.use(cv);
+        a.graphics.use(empty);
         this.engine.add(a);
-        this.carActors.push({ actor: a, t, i });
+        this.carActors.push({ actor: a, t, i, empty, full, showFull: false });
       }
     }
     for (const u of this.sim.tower.units) {
@@ -748,6 +741,12 @@ export class TowerEngine {
     const anim = this.d.anim;
     for (const c of this.carActors) {
       c.actor.pos = ex.vec(this.worldX(c.t.x), -c.t.carPositions[c.i] * FLOOR);
+      // Show passengers only while the car is actually running a trip.
+      const moving = (c.t.carDir[c.i] ?? 0) !== 0;
+      if (moving !== c.showFull) {
+        c.showFull = moving;
+        c.actor.graphics.use(moving ? c.full : c.empty);
+      }
     }
     for (const tr of this.trainActors) {
       const cycle = (anim % 12) / 12;

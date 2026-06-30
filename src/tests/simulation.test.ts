@@ -386,8 +386,9 @@ describe("Simulation events", () => {
     t.carPositions[0] = 1;
     t.carDir[0] = 1;
     let maxPos = 1;
-    for (let i = 0; i < 60; i++) {
-      sim.tick(1); // morning rush in the starter clock
+    // Run through the working day so waiting passengers build on floor 8.
+    for (let i = 0; i < 400; i++) {
+      sim.tick(1);
       maxPos = Math.max(maxPos, t.carPositions[0]);
     }
     // The car climbs to serve the floor-8 office rather than bouncing randomly,

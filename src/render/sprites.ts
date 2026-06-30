@@ -568,16 +568,16 @@ export function drawTransport(
   }
 }
 
-/** A single elevator car graphic, drawn at (0,0) into a w×floorH rect. The car
- *  is its own Excalibur Actor; the engine moves it along the shaft. */
-export function drawCar(ctx: CanvasRenderingContext2D, seed: number, w: number, floorH: number, moving: boolean): void {
+/** A single elevator car graphic, drawn at (0,0) into a w×floorH rect, carrying
+ *  `riders` passengers. The car is its own Excalibur Actor that the engine
+ *  moves along the shaft (and swaps for an empty car when idle). */
+export function drawCar(ctx: CanvasRenderingContext2D, seed: number, w: number, floorH: number, riders: number): void {
   ctx.fillStyle = "#d2d6dc";
   ctx.fillRect(2, 2, w - 4, floorH - 4);
   ctx.fillStyle = "#a7adb6";
   ctx.fillRect(2, 2, w - 4, 1);
   ctx.fillStyle = "rgba(42,46,56,0.5)";
   ctx.fillRect(w / 2 - 0.5, 3, 1, floorH - 6);
-  const riders = moving ? 2 : 1;
   for (let p = 0; p < riders; p++) {
     person(ctx, 3 + p * 3.5, floorH - 3, 1.0, (p * 13 + seed) | 0);
   }

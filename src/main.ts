@@ -10,6 +10,9 @@ import { UI, type Tool } from "./ui/UI";
 /** Game speeds → in-game minutes advanced per real second. */
 const SPEEDS = [0, 10, 30, 120];
 
+/** Tiles laid by a single tap/click of the Floor/Lobby tool (a drag extends). */
+const STRUCTURE_BRUSH = 8;
+
 /**
  * The game controller. Excalibur (via {@link TowerEngine}) owns the render
  * loop, scene, camera, panning, zooming and pointer input; this class supplies
@@ -111,7 +114,11 @@ class GameApp {
       if (!touch) return; // mouse pan-taps with a build/bulldoze tool do nothing
       if (this.tool.type === "bulldoze") this.bulldozePicked(picked);
       else if (this.tool.type === "build" && !this.isTransportTool()) {
-        this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
+        if (this.tool.kind === "floor" || this.tool.kind === "lobby") {
+          this.paintBrush(this.tool.kind, tile, floor); // wider strip per tap
+        } else {
+          this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
+        }
       }
     };
 
@@ -122,12 +129,11 @@ class GameApp {
       } else if (this.tool.type === "build") {
         if (this.isTransportTool()) {
           this.transportStart = { x: this.snapX(this.tool.kind, tile), floor };
+        } else if (this.tool.kind === "floor" || this.tool.kind === "lobby") {
+          // A click lays a wider strip; dragging then extends it.
+          this.paintBrush(this.tool.kind, tile, floor);
         } else {
-          // Structure paints as you drag; rooms place once here.
           this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
-          if (this.tool.kind === "floor" || this.tool.kind === "lobby") {
-            this.paint = { tile, floor };
-          }
         }
       }
     };
@@ -503,6 +509,24 @@ class GameApp {
    * Cells are built outward from the anchor so each is adjacent to existing
    * structure; midair cells simply fail to place, exactly as you'd expect.
    */
+  /** Lay a wider centered run of floor/lobby from a single tap, building in
+   *  passes so each tile is reached once it has a supported neighbor. */
+  private paintBrush(kind: FacilityKind, tile: number, floor: number): void {
+    const clampX = (x: number) => Math.max(0, Math.min(GRID.width - 1, x));
+    const half = Math.floor(STRUCTURE_BRUSH / 2);
+    const tiles: number[] = [];
+    for (let d = -half; d < STRUCTURE_BRUSH - half; d++) tiles.push(clampX(tile + d));
+    let progress = true;
+    while (progress) {
+      progress = false;
+      for (const tx of tiles) {
+        if (this.sim.tower.hasStructure(floor, tx)) continue;
+        if (this.sim.build(kind, floor, tx).ok) progress = true;
+      }
+    }
+    this.paint = { tile, floor };
+  }
+
   private paintFloorRun(kind: FacilityKind, tile: number, floor: number): void {
     const clampX = (x: number) => Math.max(0, Math.min(GRID.width - 1, x));
     if (!this.paint || this.paint.floor !== floor) {
