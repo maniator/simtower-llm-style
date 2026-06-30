@@ -129,6 +129,20 @@ describe("F31 — selling the Wedding Hall cancels a pending VIP inspection", ()
     const unimpressed = sim.log.slice(before).filter((e) => e.text.includes("unimpressed"));
     expect(unimpressed.length).toBe(0);
   });
+
+  it("cancels the inspection even when the hall is removed via tower.removeUnit (UI path)", () => {
+    const sim = structuredTower(10, GRID.maxFloor, 1_000_000_000);
+    sim.star = 5;
+    expect(sim.build("weddingHall", GRID.maxFloor, C).ok).toBe(true);
+    // Simulate the editor/bulldoze tool, which calls tower.removeUnit directly
+    // (NOT sellAt) — the path-independent guard in checkVip must still cancel.
+    const hall = sim.tower.units.find((u) => u.kind === "weddingHall")!;
+    sim.tower.removeUnit(hall.id);
+    const before = sim.log.length;
+    for (let i = 0; i < 20; i++) sim.tick(60 * 24);
+    const unimpressed = sim.log.slice(before).filter((e) => e.text.includes("unimpressed"));
+    expect(unimpressed.length).toBe(0);
+  });
 });
 
 describe("F7 — commercial income never exceeds its headline daily figure", () => {
@@ -196,6 +210,23 @@ describe("F21 — buried treasure is one-time per tile (no build/bulldoze farmin
     }
     const treasure = sim.log.filter((e) => e.text.toLowerCase().includes("treasure"));
     expect(treasure.length).toBeLessThanOrEqual(1);
+  });
+
+  it("persists excavation history across save/reload (no farming after a reload)", () => {
+    const sim = Simulation.newGame(42);
+    sim.star = 2;
+    sim.money = 100_000_000;
+    for (let x = 0; x < 40; x++) sim.tower.place("floor", 0, C - 20 + x);
+    sim.build("parking", 0, C - 20); // marks the footprint excavated
+    const reloaded = Simulation.deserialize(sim.serialize());
+    reloaded.money = 100_000_000;
+    const before = reloaded.log.length;
+    for (let i = 0; i < 40; i++) {
+      reloaded.sellAt(0, C - 20);
+      reloaded.build("parking", 0, C - 20); // same tiles -> already excavated
+    }
+    const treasure = reloaded.log.slice(before).filter((e) => e.text.toLowerCase().includes("treasure"));
+    expect(treasure.length).toBe(0); // excavation history survived the reload
   });
 });
 

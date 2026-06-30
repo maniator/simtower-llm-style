@@ -99,6 +99,7 @@ export class UI {
     item.setAttribute("aria-label", label);
     item.addEventListener("click", onActivate);
     item.addEventListener("keydown", (e) => {
+      if (e.repeat) return; // a held key must not fire repeatedly (native button semantics)
       if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
         e.preventDefault();
         onActivate();

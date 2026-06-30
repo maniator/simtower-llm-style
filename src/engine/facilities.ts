@@ -418,7 +418,7 @@ export const MAX_CARS: Record<string, number> = {
 /**
  * Hard per-tower build limits, mirroring the 1994 original's caps. A kind absent
  * here is uncapped. Elevator shafts (all three kinds) share a single 24-shaft
- * pool; stairs and escalators share a 64-link pool — see {@link kindCapGroup}.
+ * pool; stairs and escalators share a 64-link pool — see {@link POOLED_CAPS}.
  */
 export const BUILD_CAPS: Partial<Record<FacilityKind, number>> = {
   metro: 1,

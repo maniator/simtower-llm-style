@@ -554,6 +554,13 @@ export class Simulation implements SimContext {
 
   private checkVip(): void {
     if (this.evaluatedTower || this.vipVisitDay < 0) return;
+    // If the Wedding Hall is gone before the inspection (sold via ANY path —
+    // the editor and bulldoze tool call tower.removeUnit directly, not sellAt),
+    // cancel the pending visit so it can't keep re-failing and spamming the log.
+    if (!this.tower.builtWeddingHall) {
+      this.vipVisitDay = -1;
+      return;
+    }
     if (this.clock.day < this.vipVisitDay) return;
     this.vipVisitDay = -1;
     const pop = this.tower.totalPopulation();
@@ -678,6 +685,7 @@ export class Simulation implements SimContext {
       evaluatedTower: this.evaluatedTower,
       vipVisitDay: this.vipVisitDay,
       events: this.events.saveState(),
+      excavated: [...this.excavated],
     };
   }
 
@@ -690,6 +698,11 @@ export class Simulation implements SimContext {
     // Restore the pending VIP inspection so saving during the post-Wedding-Hall
     // window doesn't permanently cancel the TOWER evaluation.
     sim.vipVisitDay = data.vipVisitDay ?? -1;
+    // Restore excavation history so buried treasure stays one-time per tile across
+    // a save/reload (otherwise the build/bulldoze exploit reopens on load).
+    if (Array.isArray(data.excavated)) {
+      for (const k of data.excavated) if (typeof k === "string") sim.excavated.add(k);
+    }
     // Reject any unit/transport with an unrecognized kind from untrusted saves,
     // and coerce the numeric fields that drive the loop to finite values so a
     // hand-edited or foreign save can't poison the math with NaN/undefined.
@@ -711,7 +724,9 @@ export class Simulation implements SimContext {
         const maxCars = isElevatorKind(t.kind) ? (MAX_CARS[t.kind] ?? 8) : 0;
         const cars = Math.max(0, Math.min(maxCars, Math.floor(num(t.cars, 0))));
         const bottom = Math.round(num(t.bottom, 1));
-        const top = Math.max(bottom, Math.round(num(t.top, bottom)));
+        // A transport must have height (validateTransport requires top > bottom);
+        // never deserialize a zero-height shaft from a corrupt save.
+        const top = Math.max(bottom + 1, Math.round(num(t.top, bottom + 1)));
         const fixLen = (arr: unknown, fill: number) =>
           Array.from({ length: cars }, (_, i) =>
             Array.isArray(arr) ? num(arr[i], fill) : fill,
