@@ -126,10 +126,11 @@ describe("VIP stay (FAQ): only in a suite, gates the favorable review", () => {
     sim.star = 3;
     const r = sim.tower.place("hotelSuite", 2, 0);
     const suite = sim.tower.units.find((u) => u.id === r.unitId)!;
-    suite.state = "asleep";
-    suite.satisfaction = 1;
     expect(sim.vipFavorable).toBe(false);
-    for (let i = 0; i < 24; i++) sim.tick(60); // a day → a VIP stays
+    for (let i = 0; i < 15; i++) sim.tick(60); // 07:00 → 22:00 (past the 08:00 checkout)
+    suite.state = "asleep"; // a guest checks into the suite for the night
+    suite.satisfaction = 1;
+    for (let i = 0; i < 3; i++) sim.tick(60); // 22:00 → 01:00, crossing midnight (the VIP check)
     expect(sim.vipFavorable).toBe(true);
   });
 });

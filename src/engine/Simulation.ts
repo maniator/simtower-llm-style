@@ -862,12 +862,11 @@ export class Simulation implements SimContext {
    * pleased when that suite is genuinely well-run (served + high satisfaction). */
   private maybeVipStay(): void {
     if (this.vipFavorable || this.star < 3) return;
+    // The VIP must actually STAY: a suite with a guest in it tonight (asleep) on
+    // a served floor, and a happy one. A never-occupied/empty/dirty suite can't
+    // earn the review just by existing.
     const suites = this.tower.units.filter(
-      (u) =>
-        u.kind === "hotelSuite" &&
-        u.state !== "construction" &&
-        u.state !== "fire" &&
-        this.tower.isFloorServed(u.floor),
+      (u) => u.kind === "hotelSuite" && u.state === "asleep" && this.tower.isFloorServed(u.floor),
     );
     if (suites.length === 0) return;
     if (suites.some((s) => s.satisfaction >= 0.7)) {

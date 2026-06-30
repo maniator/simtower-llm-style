@@ -12,6 +12,14 @@ import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facili
 export class EconomySystem {
   constructor(private readonly sim: SimContext) {}
 
+  /** True if a finished, intact unit of `kind` exists (ignores under-construction
+   * / on-fire) — so income effects key off an OPERATIONAL metro/recycling. */
+  private hasOperational(kind: string): boolean {
+    return this.sim.tower.units.some(
+      (u) => u.kind === kind && u.state !== "construction" && u.state !== "fire",
+    );
+  }
+
   /** Quarterly office rent from occupied, reachable offices. */
   collectRent(): void {
     let total = 0;
@@ -46,7 +54,7 @@ export class EconomySystem {
       // (underground visitors) softens the blow. Cosmetic-only on non-rainy days.
       const rainMult =
         this.sim.weather === "rain"
-          ? (this.sim.hasAny("metro") ? 0.7 : 0.5) * (u.kind === "fastFood" ? 0.6 : 1)
+          ? (this.hasOperational("metro") ? 0.7 : 0.5) * (u.kind === "fastFood" ? 0.6 : 1)
           : 1;
       // Spread the headline DAILY take across the venue's actual open hours so a
       // full day earns ≈ `daily * appeal`, not a per-hour multiple of it. (Before,
@@ -71,8 +79,8 @@ export class EconomySystem {
    */
   private trafficAppeal(): number {
     const pop = this.sim.tower.totalPopulation();
-    const metro = this.sim.hasAny("metro") ? 0.25 : 0;
-    const recycling = this.sim.hasAny("recycling") ? 0.1 : 0; // F14: a real effect for the centre
+    const metro = this.hasOperational("metro") ? 0.25 : 0;
+    const recycling = this.hasOperational("recycling") ? 0.1 : 0; // F14: a real effect for the centre
     return Math.min(1, 0.35 + pop / 8000 + metro + recycling);
   }
 

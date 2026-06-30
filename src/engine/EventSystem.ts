@@ -246,8 +246,8 @@ export class EventSystem {
   }
 
   /**
-   * Santa visits a respectable tower (3★+) once a year over the holidays,
-   * leaving a cash gift — the original's seasonal cameo.
+   * Santa visits a respectable tower (3★+) once a year over the holidays — a
+   * cameo only, with no gift, exactly as the original ("No presents, sorry").
    */
   private maybeSanta(): void {
     const year = Math.floor(this.sim.clock.day / 360);
