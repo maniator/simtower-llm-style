@@ -56,6 +56,14 @@ supporting context for downstream architecture/UX work.
   reverses; idles at the ground lobby when there is no demand (`ElevatorDispatch`).
 - **Commuter routing (FR-30):** each person's path is computed by **BFS** over
   the connected transport graph (shafts + lobby transfers), in `Crowd`.
+- **Determinism boundary (review F40):** the *authoritative* state — money,
+  population, satisfaction, ratings, events — is recomputed deterministically from
+  clock-edge snapshots under the seeded RNG, so headless runs and the test suite
+  are reproducible. The *visible crowd* (individually-routed walkers/riders) is a
+  presentation layer: its exact positions depend on frame/step cadence and it is
+  re-seeded on load, so it is intentionally NOT part of the deterministic
+  contract. The v2 hourly clock (Phase 2) makes the authoritative integration
+  match between headless and browser; the crowd remains cosmetic.
 - **Determinism boundary:** gameplay events use the seeded RNG; cosmetic weather
   uses a separate RNG so visuals never perturb gameplay (supports FR-54/FR-57).
 - **Persistence:** `localStorage` autosave + slots; JSON export/import

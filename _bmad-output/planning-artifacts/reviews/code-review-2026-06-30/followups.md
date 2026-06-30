@@ -113,3 +113,39 @@ All Phase-2 steps implemented behind `simModel`, with v2 now the **default**:
 
 Suite: 106 passing. Remaining smaller review items (F17/F20/F25/F27/etc.) are
 swept in the follow-up commit; see the review report for the originals.
+
+## Smaller findings — final disposition (2026-06-30)
+
+Every remaining review finding is now accounted for:
+
+- **F9** — FIXED: elevator-cab fill is scaled to the cab's capacity (a big express
+  no longer reads "full" at a fraction of its load).
+- **F17** — FIXED: multi-car dispatch claims each call so cars spread to distinct
+  floors instead of bunching.
+- **F25** — FIXED: hotel guests churn out under sustained stress (poor access),
+  like offices/condos. (Commercial isn't separately churned — its income already
+  requires a served floor, so poor access starves it directly.)
+- **F27** — FIXED: idle cars rest at the lowest lobby the shaft serves.
+- **F36** — FIXED: hotel suite houses 3 (canon).
+- **F39** — FIXED: crowd spawn rate scales with tower population (still capped at
+  MAX_PEOPLE).
+- **F40** — DOCUMENTED: the authoritative/visible-crowd determinism boundary is
+  now spelled out in the addendum.
+- **F20** — RESOLVED by the spatial model: stairs/escalators contribute capacity
+  to the floors they serve in v2 congestion; the *visible* crowd routing stays
+  elevators-only by design (the aggregate model is authoritative).
+- **F38** — RESOLVED by the spatial model: v2 splits floor load across parallel
+  shafts (the balancing a BFS load tie-break would provide); the visible BFS still
+  returns the fewest-transfer path.
+- **F30** — DECISION (won't-fix): the ground floor is walk-in accessible, so
+  floor-1 being "served" without a lobby is correct, not a defect.
+- **F28** — DECISION (won't-fix): the first-period collection is intended starter
+  income; near-zero impact, and changing it removes early cash flow.
+- **F45 / F46** — DECISION: facility footprint widths, the 10 basement levels, the
+  service-car cap, and the monthly maintenance cadence are PRD-documented model
+  choices for the tile grid, not parity defects.
+- **F51** — RESOLVED: the bulletin log lives in the mobile drawer panel (reachable
+  on phones); transient toasts remain the at-a-glance channel.
+
+**Status: every one of the 45 review findings is implemented or explicitly
+decided.** Suite: 109 passing; typecheck/lint/build clean.

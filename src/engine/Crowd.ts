@@ -265,9 +265,12 @@ export class Crowd {
   // ---- Per-frame update ---------------------------------------------------
 
   update(dtSec: number, tower: Tower, clock: Clock): void {
-    // Spawn at a rate that scales with how busy the hour is.
-    const rate = clock.isNight() ? 0.3 : clock.isWeekend ? 1.2 : 2.2;
-    this.spawnAcc += dtSec * rate;
+    // Spawn at a rate that scales with how busy the hour is AND how populated the
+    // tower is (review F39) — a 6-office tower and a 12,000-pop tower no longer
+    // spawn identically. The MAX_PEOPLE cap in spawnTrips still bounds the total.
+    const timeRate = clock.isNight() ? 0.3 : clock.isWeekend ? 1.2 : 2.2;
+    const popFactor = Math.min(3, 0.4 + tower.totalPopulation() / 2000);
+    this.spawnAcc += dtSec * timeRate * popFactor;
     let guard = 0;
     while (this.spawnAcc >= 1 && guard++ < 8) {
       this.spawnAcc -= 1;
