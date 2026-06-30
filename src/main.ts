@@ -333,7 +333,7 @@ class GameApp {
     const maxCars = MAX_CARS[t.kind] ?? 1;
     const skipped = t.skipFloors?.length ?? 0;
     const rows: string[] = [
-      `<span class="k">Serves floors</span><span class="v">${t.bottom} – ${t.top}</span>`,
+      `<span class="k">Serves floors</span><span class="v">${floorTag(t.bottom)} – ${floorTag(t.top)}</span>`,
       `<span class="k">Height</span><span class="v">${t.top - t.bottom + 1} floors</span>`,
     ];
     if (isEl) {
@@ -582,7 +582,7 @@ class GameApp {
       if (!t) return this.ui.showInspector(null);
       const f = FACILITIES[t.kind];
       this.ui.showInspector(
-        `<h4>${f.name}</h4><div>Serves floors ${t.bottom}–${t.top}</div>` +
+        `<h4>${f.name}</h4><div>Serves floors ${floorTag(t.bottom)}–${floorTag(t.top)}</div>` +
           (isElevatorKind(t.kind) ? `<div>Cars: ${t.cars}</div>` : ""),
       );
     }
@@ -636,6 +636,11 @@ class GameApp {
     this.adoptSim(Simulation.newGame(Date.now() & 0x7fffffff));
     this.ui.toast("New tower founded. Good luck!", "good");
   }
+}
+
+/** Short floor tag: "5" above ground, "B1"/"B2"… below (floor 0 = B1). */
+function floorTag(floor: number): string {
+  return floor >= 1 ? `${floor}` : `B${1 - floor}`;
 }
 
 function escapeAttr(s: string): string {

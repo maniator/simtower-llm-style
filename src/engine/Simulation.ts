@@ -243,7 +243,7 @@ export class Simulation {
         u.state = "empty";
         u.completeAt = undefined;
         this.constructing.delete(id);
-        this.emit(`${FACILITIES[u.kind].name} on floor ${u.floor} is now open for business.`, "good");
+        this.emit(`${FACILITIES[u.kind].name} on ${this.floorLabel(u.floor)} is now open for business.`, "good");
       }
     }
   }
@@ -383,7 +383,7 @@ export class Simulation {
     u.occupants = 0;
     u.everOccupied = u.kind === "condo" ? u.everOccupied : false;
     u.label = FACILITIES[u.kind].name;
-    this.emit(`A tenant left ${FACILITIES[u.kind].name} on floor ${u.floor} (poor access).`, "bad");
+    this.emit(`A tenant left ${FACILITIES[u.kind].name} on ${this.floorLabel(u.floor)} (poor access).`, "bad");
   }
 
   // ---- Move-ins ----------------------------------------------------------
@@ -416,7 +416,7 @@ export class Simulation {
     if (u.kind === "condo" && !u.everOccupied) {
       u.everOccupied = true;
       this.money += ECON.condoSalePrice;
-      this.emit(`Condominium on floor ${u.floor} sold for $${ECON.condoSalePrice.toLocaleString()}.`, "money");
+      this.emit(`Condominium on ${this.floorLabel(u.floor)} sold for $${ECON.condoSalePrice.toLocaleString()}.`, "money");
     }
     if (u.kind === "office") {
       u.everOccupied = true;
@@ -603,8 +603,9 @@ export class Simulation {
     return this.activeFires.size;
   }
 
+  /** Human floor label: "floor 5" above ground, "B1"/"B2"… below (floor 0 = B1). */
   private floorLabel(floor: number): string {
-    return floor >= 1 ? `${floor}` : `B${1 - floor}`;
+    return floor >= 1 ? `floor ${floor}` : `B${1 - floor}`;
   }
 
   private maybeRandomEvent(): void {
@@ -650,7 +651,7 @@ export class Simulation {
     u.state = "fire";
     u.occupants = 0;
     this.activeFires.add(u.id);
-    this.emit(`🔥 Fire broke out in ${FACILITIES[u.kind].name} on floor ${this.floorLabel(u.floor)}!`, "bad");
+    this.emit(`🔥 Fire broke out in ${FACILITIES[u.kind].name} on ${this.floorLabel(u.floor)}!`, "bad");
   }
 
   /** The room immediately left or right of a unit on the same floor. */
@@ -682,14 +683,14 @@ export class Simulation {
         u.everOccupied = false;
         u.label = FACILITIES[u.kind].name;
         this.activeFires.delete(id);
-        this.emit(`Firefighters contained the blaze on floor ${this.floorLabel(u.floor)}. Repairs cost $${repair.toLocaleString()}.`, "money");
+        this.emit(`Firefighters contained the blaze on ${this.floorLabel(u.floor)}. Repairs cost $${repair.toLocaleString()}.`, "money");
       } else {
         const next = this.adjacentRoom(u);
         if (next && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && next.state !== "construction") {
           next.state = "fire";
           next.occupants = 0;
           this.activeFires.add(next.id);
-          this.emit(`The fire spread to ${FACILITIES[next.kind].name} on floor ${this.floorLabel(next.floor)}!`, "bad");
+          this.emit(`The fire spread to ${FACILITIES[next.kind].name} on ${this.floorLabel(next.floor)}!`, "bad");
         }
       }
     }

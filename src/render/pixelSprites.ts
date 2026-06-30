@@ -99,31 +99,48 @@ function wallItem(ctx: CanvasRenderingContext2D, x: number, y: number, w: number
 
 // ---- Public entry -------------------------------------------------------
 
+/** Rooms whose lights track whether anyone is actually inside. */
+const POPULATED = new Set<FacilityKind>(["office", "condo", "hotelSingle", "hotelDouble", "hotelSuite"]);
+
 export function drawRoom(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number): void {
   const { ctx } = d;
   switch (u.kind) {
     case "office":
-      return office(d, u, x, y, w, h);
+      office(d, u, x, y, w, h);
+      break;
     case "condo":
-      return condo(d, u, x, y, w, h);
+      condo(d, u, x, y, w, h);
+      break;
     case "hotelSingle":
-      return hotel(d, u, x, y, w, h, 1);
+      hotel(d, u, x, y, w, h, 1);
+      break;
     case "hotelDouble":
-      return hotel(d, u, x, y, w, h, 2);
+      hotel(d, u, x, y, w, h, 2);
+      break;
     case "hotelSuite":
-      return hotel(d, u, x, y, w, h, 3);
+      hotel(d, u, x, y, w, h, 3);
+      break;
     case "fastFood":
-      return fastFood(d, u, x, y, w, h);
+      fastFood(d, u, x, y, w, h);
+      break;
     case "restaurant":
-      return restaurant(d, u, x, y, w, h);
+      restaurant(d, u, x, y, w, h);
+      break;
     case "shop":
-      return shop(d, u, x, y, w, h);
+      shop(d, u, x, y, w, h);
+      break;
     case "cinema":
-      return cinema(d, x, y, w, h);
+      cinema(d, x, y, w, h);
+      break;
     default:
       // Service / special facilities keep their existing iconographic look.
       ctx.fillStyle = "#3a3f4a";
       ctx.fillRect(x, y, w, h);
+  }
+  // Lights out: at night a home/workplace with nobody in it goes dark.
+  if (d.lit && u.occupants <= 0 && POPULATED.has(u.kind) && u.state !== "empty" && u.state !== "construction") {
+    ctx.fillStyle = "rgba(8,10,22,0.5)";
+    ctx.fillRect(x, y, w, h);
   }
 }
 

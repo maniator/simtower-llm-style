@@ -99,6 +99,7 @@ export class TowerEngine {
   private walkers: Walker[] = [];
   private builtRev = -1;
   private litState = false;
+  private lastSyncHour = -1;
 
   // Shared graphics so thousands of tiles/people cost almost nothing.
   private floorGfx!: ex.Canvas;
@@ -273,11 +274,16 @@ export class TowerEngine {
     this.engine.backgroundColor = ex.Color.fromHex(skyColor(c.hour));
     if (this.onUpdate) this.onUpdate(elapsed);
 
-    // Reconcile only when the model (or day/night lighting) actually changed —
-    // Excalibur owns the per-frame loop, so there is no full rebuild here.
-    if (this.sim.tower.revision !== this.builtRev || this.d.lit !== this.litState) {
+    // Reconcile room/structure actors when the model, lighting, or the hour
+    // changes (occupancy shifts on the hour, so sprites must re-bake then).
+    const structuralChanged = this.sim.tower.revision !== this.builtRev;
+    if (structuralChanged || this.d.lit !== this.litState || this.d.hour !== this.lastSyncHour) {
       this.litState = this.d.lit;
+      this.lastSyncHour = this.d.hour;
       this.syncScene();
+    }
+    // Motion actors only need rebuilding when the layout itself changes.
+    if (structuralChanged) {
       this.syncMotion();
       this.builtRev = this.sim.tower.revision;
     }
