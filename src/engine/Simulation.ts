@@ -310,7 +310,19 @@ export class Simulation {
     }
     const pop = this.tower.totalPopulation();
     if (capacity <= 0) return pop > 0 ? 3 : 0;
-    return pop / (capacity * 12);
+    // Demand swings with the day: a heavy morning/evening commute can overwhelm
+    // shafts that cope fine at midday, and the tower nearly empties overnight —
+    // the rush-hour rhythm the original is built around.
+    return (pop * this.rushFactor()) / (capacity * 12);
+  }
+
+  /** Multiplier on moving demand by time of day (rush hours vs. overnight). */
+  private rushFactor(): number {
+    const c = this.clock;
+    if (c.isMorning() || c.isEvening()) return 1.45; // peak commute
+    if (c.isLunch()) return 1.15; // lunch crowd
+    if (c.isNight()) return 0.35; // tower mostly asleep
+    return 0.8;
   }
 
   /** Capacity of a single transport (riders served per trip). */
