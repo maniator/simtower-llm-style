@@ -31,23 +31,29 @@ shop/parking → 3★, recycling at 3★), double-hotel 50k, service-elevator sh
 Every item above is covered by `src/tests/faqComplete.test.ts` (+ the earlier
 `reviewFixes`/`phase2` suites). Full suite green.
 
-## Deliberately retained / deferred divergences (with rationale)
+## Also now implemented (the previously-deferred set)
 
-These are the only places the clone still differs from the FAQ, each for a stated
-reason rather than an oversight:
+Per the owner's "complete parity" directive, the Tier-3 items first scoped as
+deferred have all been built:
+
+- **Fire rescue ($500k) and terrorist ransom ($300k) — interactive choices.** A
+  pending-choice engine (`Simulation.pendingChoice` / `resolveChoice`) with an
+  in-game modal: accept to pay, or decline (fire burns on / Security searches).
+  Unanswered choices auto-decline at the next daily roll. An undetected bomb
+  levels ~5 floors (canon).
+- **Metro spans 3 deep-basement floors** (B8–B10), per canon.
+- **Parking ramp + spots** — a new `parkingRamp` facility (50k); spaces (3k) only
+  count when chained to a ramp; offices demand parking from 3★.
+- **Escalators are commercial-only** — rejected on floors that hold an office.
+- **Cockroaches** spread from unserviced dirty rooms into adjacent hotel rooms.
+
+## The only remaining divergences (deliberate, not gaps)
 
 | FAQ detail | Decision | Why |
 |---|---|---|
-| Cathedral on floor 100 | Kept as **Wedding Hall** | Clean-room / religion-neutral — a deliberate project value, not a fidelity gap; mechanics (floor 100, wedding→TOWER) match. |
-| TOWER at 15,000 pop | **8,000** | Re-derived from the lot's measured capacity under the spatial model; the metric (occupant census) is faithful, only the number is scaled. |
-| Fire rescue **$500k** choice | **Deferred** | An interactive player decision; needs a UI event-choice layer. Today fire response is automatic via Security/Medical coverage. |
-| Terrorist **$300k ransom** choice | **Deferred** | Same — the *ransom-vs-search* decision needs the UI choice layer. The **damage** is now canon-accurate (≈5 floors) and Security still defuses it. |
-| Metro spans **3 floors** (B8–B10) | **Deferred** | Cosmetic footprint only (it's a whole-floor station either way); changing it cascades basement placement conflicts (metro vs recycling) for ~zero gameplay value. |
-| Parking **ramp + spots** chain | **Deferred** | A large model refactor; the gameplay intent (offices demand parking) is captured by the new 3★ parking-demand rule above. |
-| Several items **non-removable** (Security/Metro/Cathedral/Housekeeping…) | **Kept removable** | The partial-refund bulldoze is a deliberate QoL improvement, and the F31 review fix (cancelling a pending VIP when the hall is sold) depends on removability. |
-| Escalator **commercial-only** | **Deferred** | "Commercial space" has no crisp definition in this engine; low value, high ambiguity. |
-| **Cockroach** infestation in unclean hotels | **Deferred** | Pure flavor; adds per-unit dirty-day state for little gameplay gain. Dirty rooms already can't re-let until cleaned. |
+| Cathedral on floor 100 | Kept as **Wedding Hall** | Clean-room / religion-neutral — a deliberate project value; mechanics (floor 100, wedding→TOWER) match exactly. |
+| TOWER at 15,000 pop | **8,000** | Re-derived from the lot's measured capacity under the spatial model so the game is actually winnable; the metric (occupant census) is faithful, only the number is scaled. |
+| Some items **non-removable** in canon | **Kept removable** (partial-refund bulldoze) | A deliberate QoL improvement, and the F31 review fix (cancelling a pending VIP when the hall is sold) depends on removability. |
 
-These remaining items are tracked here so nothing is silently dropped; the first
-three (fire/terrorist choices) are the natural next step once a UI event-choice
-component exists.
+These two-and-a-half are intentional design/clean-room choices, not fidelity
+oversights. Everything else in the FAQ is now modelled.

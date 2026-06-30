@@ -487,6 +487,21 @@ export class UI {
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
   }
 
+  /** A two-choice emergency modal (fire rescue / bomb ransom). Calls `onResolve`
+   * with the player's pick. */
+  showEventChoice(message: string, costLabel: string, onResolve: (opt: "accept" | "decline") => void): void {
+    const box = this.openModal(`
+      <h2>⚠️ Emergency</h2>
+      <p>${message}</p>
+      <div class="modal-actions">
+        <button class="primary" data-act="accept">Pay ${costLabel}</button>
+        <button data-act="decline">Decline</button>
+      </div>
+    `);
+    box.querySelector('[data-act="accept"]')!.addEventListener("click", () => { this.closeModal(); onResolve("accept"); });
+    box.querySelector('[data-act="decline"]')!.addEventListener("click", () => { this.closeModal(); onResolve("decline"); });
+  }
+
   congratsTower(): void {
     const box = this.openModal(`
       <h2>🏆 TOWER achieved!</h2>

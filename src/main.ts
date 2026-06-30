@@ -32,6 +32,8 @@ class GameApp {
   private accMinutes = 0;
   private lastUiUpdate = 0;
   private shownWin = false;
+  /** Whether the emergency-choice modal is currently open. */
+  private shownChoice = false;
   /** Last star rating we played a promotion jingle for (so 2★–5★ promotions
    * each get the jingle FR-58 promises, not only the final TOWER win). */
   private lastStar = 1;
@@ -292,6 +294,18 @@ class GameApp {
       if (this.sim.star > this.lastStar) {
         this.lastStar = this.sim.star;
         if (this.sim.star < 6) this.audio.sfx("promote");
+      }
+      // Interactive emergency choice (fire rescue / bomb ransom).
+      const pc = this.sim.pendingChoice;
+      if (pc && !this.shownChoice) {
+        this.shownChoice = true;
+        this.audio.sfx("error");
+        this.ui.showEventChoice(pc.message, `$${pc.cost.toLocaleString()}`, (opt) => {
+          this.sim.resolveChoice(opt);
+          this.shownChoice = false;
+        });
+      } else if (!pc && this.shownChoice) {
+        this.shownChoice = false; // engine auto-resolved it (player ignored the modal)
       }
       if (this.sim.evaluatedTower && !this.shownWin) {
         this.shownWin = true;

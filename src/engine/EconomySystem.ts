@@ -117,6 +117,28 @@ export class EconomySystem {
       }
     }
     if (cleaned > 0) this.sim.emit(`Housekeeping cleaned ${cleaned} hotel room(s).`, "info");
+    this.spreadCockroaches();
+  }
+
+  /** Rooms left dirty breed cockroaches that creep into the adjacent room along
+   * the hotel run (canon) — under-provision housekeeping and the infestation
+   * spreads, soiling clean/occupied neighbours until you scale up cleaning. */
+  private spreadCockroaches(): void {
+    const dirty = this.sim.tower.units.filter((u) => isHotelKind(u.kind) && u.state === "dirty");
+    if (dirty.length === 0) return;
+    let spread = 0;
+    for (const u of dirty) {
+      const neighbor =
+        this.sim.tower.roomAt(u.floor, u.x + u.width) ?? this.sim.tower.roomAt(u.floor, u.x - 1);
+      if (neighbor && isHotelKind(neighbor.kind) && (neighbor.state === "asleep" || neighbor.state === "empty")) {
+        neighbor.state = "dirty";
+        neighbor.occupants = 0;
+        spread++;
+      }
+    }
+    if (spread > 0) {
+      this.sim.emit(`🪳 Cockroaches spread from unserviced rooms into ${spread} more — add housekeeping!`, "bad");
+    }
   }
 
   /** Monthly upkeep for elevator cars and staffed service facilities. */

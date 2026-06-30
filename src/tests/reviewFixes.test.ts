@@ -92,9 +92,9 @@ describe("F32 — rating gates ignore facilities that aren't operational yet", (
 describe("F18 — 1994 build caps & wedding-hall accounting", () => {
   it("allows only one metro", () => {
     const sim = structuredTower(3, 6, 1_000_000_000);
-    layFloor(sim, "floor", 0);
-    expect(sim.tower.place("metro", 0, 0).ok).toBe(true);
-    expect(sim.tower.place("metro", 0, 0).ok).toBe(false); // 2nd metro rejected
+    for (let fl = 0; fl >= -2; fl--) layFloor(sim, "floor", fl); // metro spans 3 basement floors
+    expect(sim.tower.place("metro", -2, 0).ok).toBe(true);
+    expect(sim.tower.place("metro", -2, 0).ok).toBe(false); // 2nd metro rejected
   });
 
   it("allows only one wedding hall and derives builtWeddingHall from what stands", () => {

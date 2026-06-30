@@ -40,6 +40,7 @@ export type FacilityKind =
   | "elevatorStandard"
   | "elevatorService"
   | "elevatorExpress"
+  | "parkingRamp"
   | "parking"
   | "security"
   | "medical"

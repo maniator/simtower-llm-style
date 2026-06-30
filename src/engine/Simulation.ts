@@ -687,11 +687,20 @@ export class Simulation implements SimContext {
    * (each parking space serves ~12 workers) — offices then demand parking. */
   private officeParkingShort(): boolean {
     if (this.star < 3) return false;
+    // A parking space only counts if it chains to a ramp (canon) — a ramp on the
+    // same or an adjacent basement floor.
+    const rampFloors = new Set<number>();
+    for (const u of this.tower.units) {
+      if (u.kind === "parkingRamp" && u.state !== "construction" && u.state !== "fire") rampFloors.add(u.floor);
+    }
     let officePop = 0;
     let spots = 0;
     for (const u of this.tower.units) {
-      if (u.kind === "office" && u.state === "occupied") officePop += FACILITIES.office.population;
-      else if (u.kind === "parking" && u.state !== "construction" && u.state !== "fire") spots++;
+      if (u.kind === "office" && u.state === "occupied") {
+        officePop += FACILITIES.office.population;
+      } else if (u.kind === "parking" && u.state !== "construction" && u.state !== "fire") {
+        if (rampFloors.has(u.floor) || rampFloors.has(u.floor + 1) || rampFloors.has(u.floor - 1)) spots++;
+      }
     }
     return spots * 12 < officePop;
   }
@@ -917,6 +926,17 @@ export class Simulation implements SimContext {
   /** A bomb scare (exposed for the debug/event hooks and tests). */
   bombThreat(): void {
     this.events.bombThreat();
+  }
+
+  /** The player decision awaiting an answer (fire rescue / bomb ransom), or null.
+   * The UI renders this and calls {@link resolveChoice}. */
+  get pendingChoice(): { kind: "fireRescue" | "bombThreat"; cost: number; message: string } | null {
+    return this.events.pending;
+  }
+
+  /** Answer the pending event choice: `accept` pays, `decline` takes the default. */
+  resolveChoice(option: "accept" | "decline"): void {
+    this.events.resolveChoice(option);
   }
 
   /** Probability a fire on `floor` is contained per day — spatial in v2 (depends

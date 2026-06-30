@@ -161,7 +161,7 @@ describe("F2 / Step 5 — honest v2 endgame: a served, well-zoned tower wins und
     for (let f = 2; f <= 100; f++) lay("floor", f);
     const sky = [15, 30, 45, 60, 75, 90];
     for (const sf of sky) lay("lobby", sf);
-    lay("floor", 0); // basement for the metro
+    for (let fl = 0; fl >= -2; fl--) lay("floor", fl); // 3 basement floors for the metro
 
     // Zoned transport: 2 express (lobby-to-lobby) + 1 local per 15-floor band.
     let col = W - 4;
@@ -178,7 +178,7 @@ describe("F2 / Step 5 — honest v2 endgame: a served, well-zoned tower wins und
     const right = col; // offices must stop before the shaft columns
 
     // Services distributed up the tower (coverage radius), a metro, and offices.
-    sim.tower.place("metro", 0, 0);
+    sim.tower.place("metro", -2, 0);
     for (let f = 8; f <= 98; f += 15) sim.tower.place("security", f, 0);
     for (let f = 8; f <= 98; f += 24) sim.tower.place("medical", f, 8);
 

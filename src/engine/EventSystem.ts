@@ -18,6 +18,11 @@ export class EventSystem {
   /** Year index of the last Santa visit, so he comes at most once a year. */
   private lastSantaYear = -1;
 
+  /** A player decision awaiting resolution (canon: pay for fire rescue, or pay a
+   * bomb ransom vs. search). The UI surfaces it and calls {@link resolveChoice};
+   * if it's still open at the next daily event roll it auto-declines. */
+  pending: { kind: "fireRescue" | "bombThreat"; cost: number; message: string } | null = null;
+
   /** Coverage radius (floors) for services in the v2 spatial model (review F15):
    * a Security/Medical office only speeds the emergency response within this many
    * floors, so one in a basement corner can't protect a floor-100 fire and a
@@ -56,6 +61,9 @@ export class EventSystem {
 
   /** Roll the daily event: resolve any ongoing fire, then maybe start a new one. */
   maybeRandomEvent(): void {
+    // A choice the player left unanswered defaults (fire keeps burning / the
+    // tower is searched) so the game can't stall waiting on a modal.
+    if (this.pending) this.resolveChoice("decline");
     // An ongoing fire is fought (or spreads) every day until it's out.
     this.processFires();
     // Seasonal / visitor events roll on their own RNG, independent of the
@@ -69,11 +77,27 @@ export class EventSystem {
     const fireChance = this.sim.hasAny("medical") ? 0.04 : 0.09;
     if (this.active.size === 0 && roll < fireChance) {
       this.startFire();
+      // Canon: you're offered fire rescue for $500,000 — accept to put it out at
+      // once, or decline and let Security/Medical fight it over the coming days.
+      if (this.active.size > 0) {
+        this.pending = {
+          kind: "fireRescue",
+          cost: 500_000,
+          message: "🚒 Fire rescue available for $500,000 — extinguish it now, or decline and fight it the slow way.",
+        };
+        this.sim.emit(this.pending.message, "bad");
+      }
       return;
     }
-    // Bomb threats target prestigious towers (4★ and up).
+    // Bomb threats target prestigious towers (4★ and up): pay the ransom or
+    // have Security search (canon).
     if (this.sim.star >= 4 && roll < fireChance + 0.05) {
-      this.bombThreat();
+      this.pending = {
+        kind: "bombThreat",
+        cost: 300_000,
+        message: "💣 A caller demands a $300,000 ransom or a bomb detonates — pay, or have Security search the tower.",
+      };
+      this.sim.emit(this.pending.message, "bad");
       return;
     }
     // Otherwise the occasional flavorful headline.
@@ -81,6 +105,44 @@ export class EventSystem {
       if (this.sim.rng.chance(0.5)) this.sim.emit("A local newspaper praised your tower's design.", "good");
       else this.sim.emit("Tenants are happy with the tower today.", "info");
     }
+  }
+
+  /** Resolve the open player choice. `accept` pays (fire rescue / bomb ransom);
+   * `decline` lets the fire burn on / has Security search for the bomb. */
+  resolveChoice(option: "accept" | "decline"): void {
+    const p = this.pending;
+    if (!p) return;
+    this.pending = null;
+    if (p.kind === "fireRescue") {
+      if (option === "accept" && this.sim.money >= p.cost) {
+        this.sim.money -= p.cost;
+        this.extinguishAll();
+        this.sim.emit(`🚒 Fire-rescue crews put the blaze out for $${p.cost.toLocaleString()}.`, "money");
+      }
+      // decline → the fire keeps burning; processFires fights it each day.
+      return;
+    }
+    // bombThreat
+    if (option === "accept" && this.sim.money >= p.cost) {
+      this.sim.money -= p.cost;
+      this.sim.emit(`💣 You paid the $${p.cost.toLocaleString()} ransom; the threat passed quietly.`, "money");
+    } else {
+      this.bombThreat(); // search: Security defuses it, else it detonates (~5 floors)
+    }
+  }
+
+  /** Put out every active fire (the paid rescue outcome). */
+  private extinguishAll(): void {
+    for (const id of [...this.active]) {
+      const u = this.sim.tower.units.find((x) => x.id === id);
+      if (u && u.state === "fire") {
+        u.state = "empty";
+        u.satisfaction = 1;
+        u.everOccupied = false;
+        u.label = FACILITIES[u.kind].name;
+      }
+    }
+    this.active.clear();
   }
 
   /** Rooms that can catch fire (real, finished rooms — not structure). */

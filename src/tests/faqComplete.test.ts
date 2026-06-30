@@ -66,16 +66,14 @@ describe("Canon star ladder (FAQ)", () => {
     lay(sim, "floor", top);
     sim.tower.place("medical", top, 0);
     sim.tower.place("security", top, 60);
-    lay(sim, "floor", 0);
-    lay(sim, "floor", -1);
-    lay(sim, "floor", -2);
-    sim.tower.place("recycling", -2, 0); // spans -2/-1, leaving floor 0 free for the metro
+    for (let fl = 0; fl >= -5; fl--) lay(sim, "floor", fl);
+    sim.tower.place("recycling", -2, 0); // spans -2/-1
     sim.tower.place("hotelSuite", top, 20);
     sim.tower.place("hotelSuite", top, 40);
     sim.evaluateStar();
     expect(sim.star).toBe(4); // pop is there, but no Metro → capped at 4
 
-    expect(sim.tower.place("metro", 0, 0).ok).toBe(true);
+    expect(sim.tower.place("metro", -5, 0).ok).toBe(true); // 3-floor metro at -5/-4/-3
     sim.evaluateStar();
     expect(sim.star).toBe(5);
   });
@@ -217,12 +215,34 @@ describe("Office parking demand (FAQ): offices want parking from 3★", () => {
     sim.star = 3;
     if (withParking) {
       lay(sim, "floor", 0);
-      for (let x = 0; x + 6 <= W; x += 6) sim.tower.place("parking", 0, x); // ample parking
+      sim.tower.place("parkingRamp", 0, 0); // spots must chain to a ramp
+      for (let x = 6; x + 6 <= W; x += 6) sim.tower.place("parking", 0, x); // ample parking
     }
     for (let i = 0; i < 12; i++) sim.tick(60); // a Monday's working hours
     return sim.tower.units.filter((u) => u.kind === "office" && u.floor >= 3 && u.state === "occupied").length;
   }
   it("ample parking fills new offices faster than none (same seed)", () => {
     expect(occupiedFill(true)).toBeGreaterThan(occupiedFill(false));
+  });
+});
+
+describe("Interactive event choices (FAQ): fire rescue / bomb ransom", () => {
+  it("offers a paid choice the player can accept (pays exactly the quoted cost)", () => {
+    const sim = Simulation.newGame(1);
+    sim.money = 1e9;
+    sim.star = 4; // enables both fire and bomb-threat rolls
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    sim.buildTransport("elevatorStandard", C, 1, 2);
+    for (let x = 0; x + 9 <= 180; x += 9) sim.tower.place("office", 2, x); // flammable rooms
+
+    let guard = 0;
+    while (!sim.pendingChoice && guard++ < 600) sim.tick(60 * 24);
+    expect(sim.pendingChoice).not.toBeNull();
+    const cost = sim.pendingChoice!.cost; // 500k (fire rescue) or 300k (ransom)
+    const before = sim.money;
+    sim.resolveChoice("accept");
+    expect(before - sim.money).toBe(cost);
+    expect(sim.pendingChoice).toBeNull();
   });
 });
