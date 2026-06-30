@@ -28,6 +28,16 @@ describe("Crowd: routing and movement", () => {
     expect(r!.shafts.length).toBe(1);
   });
 
+  it("re-routes after the transport network changes (adjacency cache invalidates)", () => {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let f = 2; f <= 8; f++) for (let x = 0; x < 40; x++) tower.place("floor", f, x);
+    const crowd = new Crowd();
+    expect(crowd.route(tower, 1, 6)).toBeNull(); // no elevator yet — caches an empty graph
+    tower.placeTransport("elevatorStandard", 4, 1, 8); // bumps tower.revision
+    expect(crowd.route(tower, 1, 6)).not.toBeNull(); // cache must have refreshed
+  });
+
   it("returns a trivial route to the same floor and null when unreachable", () => {
     const tower = towerWithElevator(10);
     const crowd = new Crowd();

@@ -73,6 +73,9 @@ export class Crowd {
   private carRiders = new Map<string, number>();
   /** Rolling fraction of recent travellers who waited too long (0..1). */
   private frustration = 0;
+  /** Cached transport stop-graph, rebuilt only when the tower changes. */
+  private adj: Map<number, { f: number; shaft: number }[]> | null = null;
+  private adjRev = -1;
 
   constructor(seed = 1) {
     this.rng = new RNG(seed);
@@ -86,6 +89,8 @@ export class Crowd {
     // doesn't immediately spawn a backlog or grow ids without bound.
     this.spawnAcc = 0;
     this.nextId = 1;
+    this.adj = null;
+    this.adjRev = -1;
   }
 
   /** 0..1 — how stressed the current crowd is by elevator waits. */
@@ -102,10 +107,13 @@ export class Crowd {
     return s;
   }
 
-  /** BFS over the transport network for the fewest-transfer route. */
-  route(tower: Tower, from: number, to: number): Route | null {
-    if (from === to) return { floors: [from], shafts: [] };
-    // floor -> list of {floor, shaftId} reachable in one ride.
+  /**
+   * The floor → one-ride-reachable-floors graph, built from elevator stops.
+   * It only changes when the tower's transports change, so we cache it by
+   * {@link Tower.revision} and rebuild lazily instead of on every spawn.
+   */
+  private adjacency(tower: Tower): Map<number, { f: number; shaft: number }[]> {
+    if (this.adj && this.adjRev === tower.revision) return this.adj;
     const adj = new Map<number, { f: number; shaft: number }[]>();
     for (const t of tower.transports) {
       // Only elevators carry our riders — they board real cars. Stairs and
@@ -120,6 +128,15 @@ export class Crowd {
         for (const b of stops) if (b !== a) list.push({ f: b, shaft: t.id });
       }
     }
+    this.adj = adj;
+    this.adjRev = tower.revision;
+    return adj;
+  }
+
+  /** BFS over the transport network for the fewest-transfer route. */
+  route(tower: Tower, from: number, to: number): Route | null {
+    if (from === to) return { floors: [from], shafts: [] };
+    const adj = this.adjacency(tower);
     const prev = new Map<number, { f: number; shaft: number }>();
     const seen = new Set<number>([from]);
     let frontier = [from];
@@ -166,22 +183,35 @@ export class Crowd {
   /** Decide who travels right now, based on the time of day. */
   private spawnTrips(tower: Tower, clock: Clock): void {
     if (this.people.length >= MAX_PEOPLE) return;
-    const hour = clock.hour;
-    const morning = hour >= 7 && hour < 10;
-    const evening = hour >= 17 && hour < 20;
-    const day = hour >= 10 && hour < 17;
+    // Reuse the Clock's own commute windows so peak hours never drift out of
+    // sync between the simulation and the crowd.
+    const morning = clock.isMorning();
+    const evening = clock.isEvening();
+    const day = !morning && !evening && !clock.isNight();
     const offices = this.occupiedFloors(tower, (k) => k === "office");
     const homes = this.occupiedFloors(tower, (k) => k === "condo" || isHotelKind(k));
     const venues = this.occupiedFloors(tower, (k) => k === "shop" || k === "restaurant" || k === "fastFood" || k === "cinema");
 
     const trip = (from: number, to: number) => this.add(tower, from, to);
-    // Workers commute in and out; visitors come during the day; everyone heads
-    // home in the evening. Origins/destinations are real occupied floors.
-    if (morning && offices.length) trip(1, this.rng.pick(offices));
-    else if (evening && offices.length) trip(this.rng.pick(offices), 1);
-    else if (evening && homes.length) trip(1, this.rng.pick(homes));
-    else if (day && venues.length && this.rng.chance(0.7)) trip(1, this.rng.pick(venues));
-    else if (venues.length && this.rng.chance(0.3)) trip(this.rng.pick(venues), 1);
+    // Each call makes one trip, chosen at random from whatever movements fit
+    // the hour — so the evening rush is a genuine mix of workers leaving,
+    // residents/guests arriving home and diners heading out, rather than only
+    // ever emptying the offices (the old if/else chain starved the others).
+    const options: Array<() => void> = [];
+    if (morning) {
+      if (offices.length) options.push(() => trip(1, this.rng.pick(offices)));
+      if (homes.length) options.push(() => trip(this.rng.pick(homes), 1)); // residents head out
+    } else if (evening) {
+      if (offices.length) options.push(() => trip(this.rng.pick(offices), 1));
+      if (homes.length) options.push(() => trip(1, this.rng.pick(homes)));
+      if (venues.length) options.push(() => trip(1, this.rng.pick(venues)));
+    } else if (day) {
+      if (venues.length) options.push(() => trip(1, this.rng.pick(venues)));
+      if (offices.length && this.rng.chance(0.3)) options.push(() => trip(1, this.rng.pick(offices)));
+    } else if (venues.length) {
+      options.push(() => trip(this.rng.pick(venues), 1)); // late-night stragglers leaving
+    }
+    if (options.length) this.rng.pick(options)();
   }
 
   private add(tower: Tower, from: number, to: number): void {

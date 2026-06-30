@@ -957,10 +957,18 @@ export class Simulation {
     // Restore the pending VIP inspection so saving during the post-Wedding-Hall
     // window doesn't permanently cancel the TOWER evaluation.
     sim.vipVisitDay = data.vipVisitDay ?? -1;
-    // Reject any unit/transport with an unrecognized kind from untrusted saves.
+    // Reject any unit/transport with an unrecognized kind from untrusted saves,
+    // and coerce the numeric fields that drive the loop to finite values so a
+    // hand-edited or foreign save can't poison the math with NaN/undefined.
+    const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
     sim.tower.units = (data.units ?? [])
       .filter((u) => isFacilityKind(u.kind))
-      .map((u) => ({ ...u }));
+      .map((u) => ({
+        ...u,
+        satisfaction: Math.max(0, Math.min(1, num(u.satisfaction, 1))),
+        occupants: Math.max(0, num(u.occupants, 0)),
+        pendingIncome: num(u.pendingIncome, 0),
+      }));
     sim.tower.transports = (data.transports ?? [])
       .filter((t) => isFacilityKind(t.kind))
       .map((t) => ({ ...t }));

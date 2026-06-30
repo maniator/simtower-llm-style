@@ -238,6 +238,8 @@ class GameApp {
 
   private update(dtMs: number): void {
     const minutesPerSecond = SPEEDS[this.speed] ?? 0;
+    // Let the renderer freeze the live crowd while the game is paused.
+    this.engine.paused = minutesPerSecond === 0;
     this.accMinutes += (dtMs / 1000) * minutesPerSecond;
     // Step the simulation in small chunks so hourly/daily boundaries fire.
     let guard = 0;

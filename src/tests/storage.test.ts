@@ -26,6 +26,20 @@ describe("SaveGame", () => {
     expect((loaded as unknown as { vipVisitDay: number }).vipVisitDay).toBe(expected);
   });
 
+  it("coerces non-finite unit fields from a tampered save to safe values", () => {
+    const sim = sampleGame();
+    const data = sim.serialize();
+    // Simulate a hand-edited / foreign save with a poisoned satisfaction field.
+    (data.units[0] as { satisfaction: unknown }).satisfaction = undefined;
+    (data.units[0] as { occupants: unknown }).occupants = NaN;
+    const loaded = Simulation.deserialize(data);
+    const u = loaded.tower.units[0];
+    expect(Number.isFinite(u.satisfaction)).toBe(true);
+    expect(u.satisfaction).toBeGreaterThanOrEqual(0);
+    expect(u.satisfaction).toBeLessThanOrEqual(1);
+    expect(Number.isFinite(u.occupants)).toBe(true);
+  });
+
   it("round-trips through localStorage", () => {
     const sim = sampleGame();
     SaveGame.save(sim);
