@@ -13,3 +13,5 @@ primary_platform: '["unity", "unreal", "godot", "other"]'
 # Core Configuration Values
 user_name: BMad
 output_folder: _bmad-output
+communication_language: English
+document_output_language: English
