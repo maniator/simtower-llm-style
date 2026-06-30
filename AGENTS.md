@@ -51,6 +51,16 @@ CI (`.github/workflows/test.yml`) runs all of the above on every PR.
   `request_copilot_review` via the GitHub MCP tools / `gh pr edit`).
 - Resolve a review thread only once its finding is actually addressed in code.
 
+## Merging PRs
+
+- Default to a standard **merge commit** when merging a PR to `main`. It keeps
+  the branch's individual commits in history and lets the same branch keep
+  building cleanly afterward (a plain fast-forwardable reset, no rewrite).
+- **Don't squash-merge to `main`** unless there's a real reason (e.g. a branch
+  full of throwaway WIP commits not worth keeping). Squashing rewrites the
+  branch into a single commit — it loses granular history and forces awkward
+  force-resets of the branch for any follow-up work.
+
 ## Gameplay model notes
 
 - Facilities are defined in `src/engine/facilities.ts`. Each has a `width` (in
