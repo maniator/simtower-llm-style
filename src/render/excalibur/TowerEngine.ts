@@ -684,7 +684,7 @@ export class TowerEngine {
     ctx.strokeRect(sx - 1, top - 1, sw + 2, bottom - top + 2);
     if (!isElevatorKind(t.kind)) return; // only lifts extend by a tappable arrow
 
-    // Small, subtle tabs centred on the shaft — discoverable without dominating
+    // Small, subtle tabs centered on the shaft — discoverable without dominating
     // the view. The hit rect is a touch larger than the drawn tab for easy use.
     const cx = sx + sw / 2;
     const tabW = Math.min(sw, 18);

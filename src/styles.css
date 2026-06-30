@@ -1,6 +1,6 @@
 :root {
   /* Retro palette — Windows 3.1 / SimTower. The whole stylesheet derives its
-     colours from these tokens, so swapping them here re-themes everything with
+     colors from these tokens, so swapping them here re-themes everything with
      no dark-theme bleed-through. Bevels/title-bars are layered on at EOF. */
   --bg: #008080;          /* teal desktop */
   --panel: #c0c0c0;       /* system gray */
