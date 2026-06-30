@@ -1,4 +1,4 @@
-import { BUILD_CAPS, FACILITIES, GRID, MAX_CARS, POOLED_CAPS, facilityFloors, isElevatorKind } from "./facilities";
+import { BUILD_CAPS, FACILITIES, GRID, MAX_CARS, POOLED_CAPS, facilityFloors, isElevatorKind, maxSpanFor } from "./facilities";
 import type {
   Facility,
   FacilityKind,
@@ -378,9 +378,9 @@ export class Tower {
     if ((kind === "stairs" || kind === "escalator") && span > 1) {
       return { ok: false, reason: `${f.name} spans exactly one floor.` };
     }
-    const maxSpan = kind === "elevatorExpress" ? 60 : 30;
+    const maxSpan = maxSpanFor(kind);
     if (isElevatorKind(kind) && span > maxSpan) {
-      return { ok: false, reason: `This elevator serves at most ${maxSpan} floors.` };
+      return { ok: false, reason: `This elevator can span at most ${maxSpan} floors (${maxSpan + 1} stops).` };
     }
 
     // Transports share the structural column but cannot collide with rooms or
@@ -477,9 +477,9 @@ export class Tower {
     if (newBottom < GRID.minFloor || newTop > GRID.maxFloor) {
       return { ok: false, reason: "Outside the buildable range." };
     }
-    const maxSpan = t.kind === "elevatorExpress" ? 60 : 30;
+    const maxSpan = maxSpanFor(t.kind);
     if (isElevatorKind(t.kind) && newTop - newBottom > maxSpan) {
-      return { ok: false, reason: `This elevator serves at most ${maxSpan} floors.` };
+      return { ok: false, reason: `This elevator can span at most ${maxSpan} floors (${maxSpan + 1} stops).` };
     }
     // Validate only the floors that are being newly added.
     for (let fl = newBottom; fl <= newTop; fl++) {

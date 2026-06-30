@@ -148,7 +148,7 @@ describe("F31 — selling the Wedding Hall cancels a pending VIP inspection", ()
 describe("F7 — commercial income never exceeds its headline daily figure", () => {
   it("a shop earns at most ~its daily figure over a full day, not a multiple", () => {
     const sim = servedTower(7, 3);
-    sim.star = 2; // shops unlock at 2★
+    sim.star = 3; // shops unlock at 3★ (canon)
     expect(sim.build("shop", 2, 0).ok).toBe(true);
     sim.tower.units.find((u) => u.kind === "shop")!.state = "occupied"; // skip construction
     const before = sim.money;
@@ -201,7 +201,7 @@ describe("F14 — the Recycling Centre has a real effect", () => {
 describe("F21 — buried treasure is one-time per tile (no build/bulldoze farming)", () => {
   it("rebuilding on the same basement tiles never yields a second find", () => {
     const sim = Simulation.newGame(42);
-    sim.star = 2;
+    sim.star = 3;
     sim.money = 100_000_000;
     for (let x = 0; x < 40; x++) sim.tower.place("floor", 0, C - 20 + x);
     for (let i = 0; i < 40; i++) {
@@ -214,7 +214,7 @@ describe("F21 — buried treasure is one-time per tile (no build/bulldoze farmin
 
   it("persists excavation history across save/reload (no farming after a reload)", () => {
     const sim = Simulation.newGame(42);
-    sim.star = 2;
+    sim.star = 3;
     sim.money = 100_000_000;
     for (let x = 0; x < 40; x++) sim.tower.place("floor", 0, C - 20 + x);
     sim.build("parking", 0, C - 20); // marks the footprint excavated
