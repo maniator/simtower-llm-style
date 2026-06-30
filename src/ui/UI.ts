@@ -135,6 +135,9 @@ export class UI {
     document.getElementById("panel-toggle")?.addEventListener("click", () => {
       document.body.classList.toggle("panels-open");
     });
+    const closePanels = () => document.body.classList.remove("panels-open");
+    document.getElementById("panel-close")?.addEventListener("click", closePanels);
+    document.getElementById("scrim")?.addEventListener("click", closePanels);
 
     document.getElementById("btn-save")!.addEventListener("click", () => this.cb.onSave());
     document.getElementById("btn-load")!.addEventListener("click", () => this.cb.onShowSaves());

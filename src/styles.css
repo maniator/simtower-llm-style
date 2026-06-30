@@ -273,6 +273,11 @@ body {
   flex-direction: column;
   min-height: 0;
 }
+/* The drawer close button and dimming scrim are mobile-only. */
+#panel-close,
+#scrim {
+  display: none;
+}
 .panel {
   padding: 8px 10px;
   border-bottom: 1px solid #11141d;
@@ -703,9 +708,38 @@ body {
     transition: transform 0.2s ease;
     z-index: 40;
     box-shadow: -8px 0 24px rgba(0, 0, 0, 0.5);
+    padding-top: 4px;
   }
   body.panels-open #sidebar {
     transform: translateX(0);
+  }
+  /* Tap-anywhere scrim behind the drawer. */
+  #scrim {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 35;
+    background: rgba(0, 0, 0, 0.45);
+  }
+  body.panels-open #scrim {
+    display: block;
+  }
+  /* Explicit close button in the drawer (the ☰ toggle also still works). */
+  #panel-close {
+    display: block;
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    z-index: 2;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    font-size: 15px;
+    line-height: 1;
+    border-radius: 6px;
+    background: var(--panel-light);
+    border: 1px solid #11141d;
+    color: var(--ink);
   }
 
   #stage {

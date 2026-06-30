@@ -383,7 +383,16 @@ export class TowerEngine {
       this.skyCanvas.height = this.viewHeight;
     }
     ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
+    // Only paint the sky *above* the street-level horizon, so the sun/moon can
+    // never appear down in the earth when the camera looks at the basements.
+    const horizon = Math.max(0, Math.min(this.viewHeight, this.worldToScreenY(0)));
+    if (horizon <= 1) return;
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(0, 0, this.viewWidth, horizon);
+    ctx.clip();
     this.drawSun(ctx);
+    ctx.restore();
   }
 
   private makeOverlay(): void {

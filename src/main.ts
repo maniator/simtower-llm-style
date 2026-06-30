@@ -30,6 +30,9 @@ class GameApp {
   private shownWin = false;
   /** In-progress transport drag (anchor tile/floor). */
   private transportStart: { x: number; floor: number } | null = null;
+  /** Last cell painted while dragging a floor/lobby, so a fast drag lays one
+   *  continuous run instead of scattered slabs. */
+  private paint: { tile: number; floor: number } | null = null;
   /** Currently selected facility for the edit panel. */
   private selected: { type: "unit" | "transport"; id: number } | null = null;
 
@@ -122,6 +125,9 @@ class GameApp {
         } else {
           // Structure paints as you drag; rooms place once here.
           this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
+          if (this.tool.kind === "floor" || this.tool.kind === "lobby") {
+            this.paint = { tile, floor };
+          }
         }
       }
     };
@@ -141,11 +147,12 @@ class GameApp {
         this.engine.transportPreview = { kind, x, bottom, top, valid };
         this.engine.preview = null;
       } else if (kind === "floor" || kind === "lobby") {
-        this.tryBuild(kind, floor, this.snapX(kind, tile), true);
+        this.paintFloorRun(kind, tile, floor);
       }
     };
 
     this.engine.onActionUp = () => {
+      this.paint = null;
       if (this.tool.type === "build" && this.isTransportTool() && this.engine.transportPreview) {
         const tp = this.engine.transportPreview;
         if (tp.valid) {
@@ -472,6 +479,27 @@ class GameApp {
     }
   }
 
+  /**
+   * Paint a continuous floor/lobby run as the pointer drags, filling every cell
+   * between the last painted tile and this one — so dragging lays one long floor
+   * (as in the original) instead of scattered slabs when the drag moves fast.
+   * Cells are built outward from the anchor so each is adjacent to existing
+   * structure; midair cells simply fail to place, exactly as you'd expect.
+   */
+  private paintFloorRun(kind: FacilityKind, tile: number, floor: number): void {
+    const clampX = (x: number) => Math.max(0, Math.min(GRID.width - 1, x));
+    if (!this.paint || this.paint.floor !== floor) {
+      this.tryBuild(kind, floor, clampX(tile), true);
+      this.paint = { tile, floor };
+      return;
+    }
+    const step = tile >= this.paint.tile ? 1 : -1;
+    for (let x = this.paint.tile + step; x !== tile + step; x += step) {
+      this.tryBuild(kind, floor, clampX(x), true);
+    }
+    this.paint = { tile, floor };
+  }
+
   /** Bulldoze whatever Excalibur reported under the pointer, with a refund. */
   private bulldozePicked(p: Picked | null): void {
     if (!p) return;
@@ -573,12 +601,40 @@ function escapeAttr(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
+/** The renderer needs WebGL; some in-app file viewers don't provide it. */
+function hasWebGL(): boolean {
+  try {
+    const c = document.createElement("canvas");
+    return !!(c.getContext("webgl2") || c.getContext("webgl"));
+  } catch {
+    return false;
+  }
+}
+
+function showBootMessage(msg: string): void {
+  const stage = document.getElementById("stage");
+  if (stage) {
+    stage.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#cdd3da;font:15px/1.5 system-ui,sans-serif">${msg}</div>`;
+  }
+}
+
 // Bootstrap once the DOM is ready.
 if (typeof document !== "undefined") {
   const boot = () => {
-    const app = new GameApp();
-    // Expose for screenshot tooling / debugging.
-    (window as unknown as { game: GameApp }).game = app;
+    if (!hasWebGL()) {
+      showBootMessage(
+        "This viewer can't run WebGL, which Tower Tycoon needs to draw the tower.<br><br>Open this page in <b>Safari</b>, <b>Chrome</b>, or another full web browser to play.",
+      );
+      return;
+    }
+    try {
+      const app = new GameApp();
+      // Expose for screenshot tooling / debugging.
+      (window as unknown as { game: GameApp }).game = app;
+    } catch (err) {
+      showBootMessage("Something went wrong starting the game: " + (err as Error).message);
+      throw err;
+    }
   };
   if (document.readyState === "loading") {
     document.addEventListener("DOMContentLoaded", boot);
