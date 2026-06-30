@@ -44,8 +44,9 @@ abstraction · ⬜ not present.
 
 ## Population, stress & ratings
 - ✅ Population from offices/condos/hotels; weekday/weekend + rush-hour cycle
-- ◑ Tenant stress from elevator congestion (aggregate model) → low satisfaction tenants move out
-- ✅ Crowds tint red when transport is overwhelmed (the original's visual cue)
+- ✅ **Individually-routed commuters** — real people walk to a shaft, wait, board an actual car, transfer at sky lobbies and arrive (BFS over the transport network)
+- ✅ Tenant stress from real elevator waits (visible commuter frustration) on top of an aggregate congestion backstop → low-satisfaction tenants move out
+- ✅ Crowds tint red when they've waited too long / transport is overwhelmed (the original's visual cue)
 - ✅ Star thresholds: 2★ 300 · 3★ 1,000 · 4★ 5,000 · 5★ 10,000
 - ✅ Facility gates: Security required for 3★, Medical for 4★
 - ✅ **TOWER** rating: 5★ + Wedding Hall + metro + VIP inspection (12,000 pop, scaled to our model)
@@ -68,13 +69,14 @@ abstraction · ⬜ not present.
 - ✅ Mobile: responsive layout, touch pan/pinch, drawer panels
 
 ## Deliberate divergences
-- People are simulated as an **aggregate** traffic/stress model rather than thousands of individually-pathfound agents (the simulation stays DOM-free and unit-testable). Visible crowds, elevator load and stress all read from that model.
+- Commuters are **individually pathfound** (walk → wait → ride a real car → transfer → arrive) and their waiting drives stress, but a lightweight **aggregate** congestion model still runs underneath as the deterministic, DOM-free backbone the headless tests assert against. The visible crowd is capped (~140 on screen) for performance rather than rendering the entire population at once.
 - The **Cathedral** is a religion-agnostic **Wedding Hall**.
 - Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **12,000** rather than 15,000 to stay reachable.
 
 ## Verification
-`npm test` runs **58 unit/integration tests** covering placement rules,
+`npm test` runs **72 unit/integration tests** covering placement rules,
 economy, ratings gates, the housekeeping/fire/bomb events, elevator dispatch,
-save/load, the `.TWR` parser, and an **end-to-end run to the TOWER victory**
-(`src/tests/parity.test.ts`). `npm run build:single` produces a one-file
-playable build.
+the individually-routed **crowd's BFS routing and movement**
+(`src/tests/crowd.test.ts`), save/load, the `.TWR` parser, and an
+**end-to-end run to the TOWER victory** (`src/tests/parity.test.ts`).
+`npm run build:single` produces a one-file playable build.

@@ -1,13 +1,23 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, facilityFloors, isElevatorKind } from "../../engine/facilities";
+import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
+import type { Person } from "../../engine/Crowd";
 
 /** World pixels per tile / per floor. */
 export const TILE = 11;
 export const FLOOR = 34;
+
+/**
+ * The crowd advances on *game* time, not real time, so the speed control only
+ * compresses time and never changes gameplay outcomes (tenant stress). One
+ * in-game minute is worth this many of the crowd's internal seconds — small
+ * enough that a commute spans a few game-minutes, so at fast speed people
+ * simply zip through their trips. A single frame's advance is capped so a long
+ * stall (or a freshly loaded save) can't teleport the whole crowd at once.
+ */
 
 export interface ViewFocus {
   centerFloor: number;
@@ -100,6 +110,11 @@ export class TowerEngine {
   private builtRev = -1;
   private litState = false;
   private lastSyncHour = -1;
+
+  // Individually-routed commuters (SimTower's signature) are owned and advanced
+  // by the engine; the renderer only draws each person and removes them as they
+  // despawn — it never mutates the simulation.
+  private crowdActors = new Map<number, { actor: ex.Actor; gfx: ex.Canvas; red: boolean }>();
 
   // Shared graphics so thousands of tiles/people cost almost nothing.
   private floorGfx!: ex.Canvas;
@@ -260,6 +275,7 @@ export class TowerEngine {
 
   setSim(sim: Simulation): void {
     this.disposeScene();
+    this.clearCrowd();
     this.sim = sim;
     this.builtRev = -1;
     this.center();
@@ -288,6 +304,52 @@ export class TowerEngine {
       this.builtRev = this.sim.tower.revision;
     }
     this.updateMotion();
+    this.reconcileCrowd();
+  }
+
+  /** Draw the engine-owned commuters: add/remove/position one actor per live
+   * person, by stable id. Read-only — the engine advances the crowd in tick(). */
+  private reconcileCrowd(): void {
+    const seen = new Set<number>();
+    for (const p of this.sim.crowd.people) {
+      seen.add(p.id);
+      let rec = this.crowdActors.get(p.id);
+      if (!rec) {
+        const gfx = this.personGfx[Math.abs(p.seed) % this.personGfx.length];
+        const a = new ex.Actor({ pos: ex.vec(0, 0), width: 8, height: 14, anchor: ex.vec(0.5, 1), z: 3 });
+        a.graphics.use(gfx);
+        this.engine.add(a);
+        rec = { actor: a, gfx, red: false };
+        this.crowdActors.set(p.id, rec);
+      }
+      this.positionPerson(p, rec);
+    }
+    for (const [id, rec] of this.crowdActors)
+      if (!seen.has(id)) {
+        rec.actor.kill();
+        this.crowdActors.delete(id);
+      }
+  }
+
+  private positionPerson(p: Person, rec: { actor: ex.Actor; gfx: ex.Canvas; red: boolean }): void {
+    // While riding, the person is inside a car — the cab's own rider count shows
+    // them, so we hide the standalone figure to avoid drawing them twice.
+    const riding = p.state === "riding";
+    if (rec.actor.graphics.visible !== !riding) rec.actor.graphics.visible = !riding;
+    if (riding) return;
+    rec.actor.pos = ex.vec(this.worldX(p.x), this.worldYTop(p.floor) + FLOOR - 3);
+    // Long waits redden the figure, the original's "this tenant is fed up" cue.
+    const red = p.wait > 25;
+    if (red !== rec.red) {
+      rec.red = red;
+      rec.actor.graphics.use(red ? this.personGfxRed : rec.gfx);
+    }
+  }
+
+  private clearCrowd(): void {
+    // Only the drawn actors are ours; the crowd model belongs to the sim.
+    for (const rec of this.crowdActors.values()) rec.actor.kill();
+    this.crowdActors.clear();
   }
 
   // ---- Coordinate math ----------------------------------------------------
@@ -539,7 +601,14 @@ export class TowerEngine {
         if (!this.structActors.has(u.id)) this.addStruct(u);
       } else {
         seenR.add(u.id);
-        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}`;
+        // The signature must capture every input the room sprite draws from, so
+        // it re-bakes exactly when its look changes. Crucially that includes the
+        // hour-dependent bits — a commercial unit's open/closed shutter and a
+        // condo's late-night "asleep" look — otherwise a shop baked closed at
+        // dawn would wrongly stay shuttered all day until the next lighting flip.
+        const open = hasBusinessHours(u.kind) ? (isOpenAt(u.kind, this.d.hour) ? "o" : "c") : "";
+        const lateNight = u.kind === "condo" && (this.d.hour >= 23 || this.d.hour < 6) ? "s" : "";
+        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}`;
         const a = this.roomActors.get(u.id);
         if (!a) {
           this.addRoom(u);

@@ -138,6 +138,9 @@ export interface SerializedGame {
   towerName: string;
   builtWeddingHall: boolean;
   evaluatedTower: boolean;
+  /** Scheduled day of the pending VIP inspection (-1 if none). Optional for
+   * backward compatibility with saves written before it was persisted. */
+  vipVisitDay?: number;
 }
 
 /** Result of attempting to place a facility. */

@@ -1,4 +1,5 @@
 import { Clock } from "./Clock";
+import { Crowd } from "./Crowd";
 import { Tower } from "./Tower";
 import { RNG } from "./rng";
 import {
@@ -15,6 +16,15 @@ import {
   isOpenAt,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit } from "./types";
+
+/**
+ * Crowd time-base: one in-game minute is worth this many of the crowd's own
+ * seconds (small, so a commute spans a few game-minutes and people zip through
+ * trips at fast speed), and a single tick advances the crowd by at most this
+ * many crowd-seconds so a day-long catch-up step stays bounded.
+ */
+const CROWD_SECONDS_PER_MINUTE = 2;
+const CROWD_MAX_STEP = 60;
 
 /** Tunable economic constants (dollars). */
 export const ECON = {
@@ -59,6 +69,22 @@ export class Simulation {
   evaluatedTower = false;
   log: LogEntry[] = [];
 
+  /**
+   * Individually-routed commuters. The engine owns and advances them as part of
+   * the deterministic tick (the renderer only reads {@link Crowd.people} to draw
+   * them), so their stress feeds satisfaction identically in headless runs.
+   */
+  readonly crowd: Crowd;
+
+  /**
+   * 0..1 frustration from the {@link Crowd}: the fraction of real people stuck
+   * waiting too long for an elevator. Supplements the aggregate
+   * {@link congestion} signal with what's actually happening to the commuters.
+   */
+  get crowdStress(): number {
+    return this.crowd.stress;
+  }
+
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
   /** Ids of units currently ablaze (a fire emergency in progress). */
@@ -74,6 +100,7 @@ export class Simulation {
 
   constructor(seed = 12345) {
     this.rng = new RNG(seed);
+    this.crowd = new Crowd(seed);
   }
 
   // ---- Logging -----------------------------------------------------------
@@ -216,6 +243,11 @@ export class Simulation {
   tick(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
     this.updateElevators(dtMinutes);
+    // Advance the individually-routed crowd in lock-step with game time (after
+    // the cars move, so people board their fresh positions). They run on the
+    // crowd's own seconds — a few per game-minute — and a single huge tick is
+    // capped so a day-long step can't teleport everyone at once.
+    this.crowd.update(Math.min(CROWD_MAX_STEP, dtMinutes * CROWD_SECONDS_PER_MINUTE), this.tower, this.clock);
     this.finishConstruction();
 
     const hour = this.clock.hour;
@@ -328,6 +360,16 @@ export class Simulation {
         u.satisfaction = Math.max(0, u.satisfaction - 0.04 * Math.min(3, cong - 1));
       } else {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
+      }
+      // The real, individually-routed crowd shaves a little extra satisfaction
+      // when lots of commuters are visibly stuck waiting — but this penalty
+      // alone never empties a unit: it can't push satisfaction below a small
+      // floor, and (crucially) never raises it, so a unit already driven to 0
+      // by the aggregate congestion model still vacates. That keeps the
+      // headless congestion model the authoritative driver tests rely on.
+      if (this.crowdStress > 0.5) {
+        const penalty = 0.01 * Math.min(1, this.crowdStress);
+        u.satisfaction = Math.min(u.satisfaction, Math.max(0.05, u.satisfaction - penalty));
       }
       // Tenants abandon a unit that stays unbearable.
       if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo")) {
@@ -926,6 +968,7 @@ export class Simulation {
       towerName: this.tower.towerName,
       builtWeddingHall: this.tower.builtWeddingHall,
       evaluatedTower: this.evaluatedTower,
+      vipVisitDay: this.vipVisitDay,
     };
   }
 
@@ -935,10 +978,21 @@ export class Simulation {
     sim.star = data.star;
     sim.clock = new Clock(data.minutes);
     sim.evaluatedTower = data.evaluatedTower;
-    // Reject any unit/transport with an unrecognized kind from untrusted saves.
+    // Restore the pending VIP inspection so saving during the post-Wedding-Hall
+    // window doesn't permanently cancel the TOWER evaluation.
+    sim.vipVisitDay = data.vipVisitDay ?? -1;
+    // Reject any unit/transport with an unrecognized kind from untrusted saves,
+    // and coerce the numeric fields that drive the loop to finite values so a
+    // hand-edited or foreign save can't poison the math with NaN/undefined.
+    const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
     sim.tower.units = (data.units ?? [])
       .filter((u) => isFacilityKind(u.kind))
-      .map((u) => ({ ...u }));
+      .map((u) => ({
+        ...u,
+        satisfaction: Math.max(0, Math.min(1, num(u.satisfaction, 1))),
+        occupants: Math.max(0, num(u.occupants, 0)),
+        pendingIncome: num(u.pendingIncome, 0),
+      }));
     sim.tower.transports = (data.transports ?? [])
       .filter((t) => isFacilityKind(t.kind))
       .map((t) => ({ ...t }));
