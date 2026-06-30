@@ -1,370 +1,487 @@
-import type { Game } from "@core/game/Game.ts";
-import type { Renderer } from "@core/render/Renderer.ts";
-import type { AudioSynth } from "@core/audio/AudioSynth.ts";
-import type {
-  RoomType,
-  RoomCategory,
-  IRoom,
-  CellPosition,
-} from "@appTypes/types.ts";
-import {
-  saveGame,
-  clearSave,
-  exportGame,
-  importGame,
-} from "@storage/storage.ts";
+import { ALL_KINDS, FACILITIES } from "../engine/facilities";
+import type { Simulation, LogEntry } from "../engine/Simulation";
+import type { SlotInfo } from "../storage/SaveGame";
+import type { FacilityCategory, FacilityKind } from "../engine/types";
 
-const formatPercent = (value: number): string => `${Math.round(value)}%`;
+export type Tool = { type: "build"; kind: FacilityKind } | { type: "bulldoze" } | { type: "inspect" };
 
+const GROUPS: { title: string; cats: FacilityCategory[] }[] = [
+  { title: "Structure", cats: ["structure"] },
+  { title: "Transport", cats: ["transport"] },
+  { title: "Commercial", cats: ["office", "retail", "food"] },
+  { title: "Living", cats: ["residential", "hotel"] },
+  { title: "Leisure", cats: ["entertainment"] },
+  { title: "Services", cats: ["service"] },
+  { title: "Special", cats: ["special"] },
+];
+
+export interface UICallbacks {
+  onSelectTool(tool: Tool): void;
+  onSpeed(speed: number): void;
+  onSave(): void;
+  onLoad(): void;
+  onExport(): void;
+  onImport(json: string): void;
+  onImportLegacy(buffer: ArrayBuffer, filename: string): void;
+  onNew(): void;
+  onToggleAudio(): boolean; // returns new muted state
+  onEditAction(action: string, root: HTMLElement): void;
+  onRenameTower(name: string): void;
+  onShowStats(): void;
+  onShowSaves(): void;
+  onSaveSlot(slot: number): void;
+  onLoadSlot(slot: number | "auto"): void;
+  onDeleteSlot(slot: number): void;
+}
+
+/** Owns all DOM controls outside the canvas and keeps them in sync. */
 export class UI {
-  private game: Game;
-  private renderer: Renderer;
-  private roomTypes: Readonly<Record<string, RoomType>>;
-  private categoryOrder: readonly RoomCategory[];
-  private audio: AudioSynth;
-  private selectedRoomId: string;
-  private hoverRoom: IRoom | null;
-  private hoverCell: CellPosition | null;
-  private lastPopulation: number;
+  tool: Tool = { type: "inspect" };
+  private cb: UICallbacks;
+  private lastLogLen = 0;
+  private toastTimers: number[] = [];
 
-  private moneyEl: HTMLElement;
-  private populationEl: HTMLElement;
-  private happinessEl: HTMLElement;
-  private ratingEl: HTMLElement;
-  private infoPanel: HTMLElement;
-  private elevatorPanel: HTMLElement;
-  private toolCategories: HTMLElement;
-  private statusText: HTMLElement;
-  private timeIndicator: HTMLElement;
+  private el = {
+    money: document.getElementById("stat-money")!,
+    pop: document.getElementById("stat-pop")!,
+    star: document.getElementById("stat-star")!,
+    time: document.getElementById("stat-time")!,
+    palette: document.getElementById("palette-scroll")!,
+    toolInfo: document.getElementById("tool-info")!,
+    towerStats: document.getElementById("tower-stats")!,
+    log: document.getElementById("log")!,
+    toast: document.getElementById("toast-wrap")!,
+    inspector: document.getElementById("inspector")!,
+    editor: document.getElementById("editor")!,
+    modal: document.getElementById("modal")!,
+    audioToggle: document.getElementById("audio-toggle")!,
+    towerName: document.getElementById("tower-name") as HTMLInputElement,
+  };
 
-  constructor(
-    game: Game,
-    renderer: Renderer,
-    roomTypes: Readonly<Record<string, RoomType>>,
-    categoryOrder: readonly RoomCategory[],
-    audio: AudioSynth,
-  ) {
-    this.game = game;
-    this.renderer = renderer;
-    this.roomTypes = roomTypes;
-    this.categoryOrder = categoryOrder;
-    this.audio = audio;
-    this.selectedRoomId = "lobby";
-    this.hoverRoom = null;
-    this.hoverCell = null;
-    this.lastPopulation = 0;
-
-    this.moneyEl = this.getElement("money");
-    this.populationEl = this.getElement("population");
-    this.happinessEl = this.getElement("happiness");
-    this.ratingEl = this.getElement("rating");
-    this.infoPanel = this.getElement("info-panel");
-    this.elevatorPanel = this.getElement("elevator-panel");
-    this.toolCategories = this.getElement("tool-categories");
-    this.statusText = this.getElement("status-text");
-    this.timeIndicator = this.getElement("time-indicator");
+  constructor(cb: UICallbacks) {
+    this.cb = cb;
+    this.buildPalette();
+    this.wireControls();
+    this.selectTool({ type: "inspect" });
   }
 
-  private getElement(id: string): HTMLElement {
-    const element = document.getElementById(id);
-    if (!element) throw new Error(`Element with id '${id}' not found`);
-    return element;
-  }
+  private buildPalette(): void {
+    const frag = document.createDocumentFragment();
 
-  public init(): void {
-    this.buildToolbar();
-    this.bindTimeControls();
-    this.bindCanvasControls();
-    this.setSelectedTool(this.selectedRoomId);
-    this.updatePanels();
-  }
+    // Tools row (inspect + bulldoze).
+    const toolsTitle = document.createElement("div");
+    toolsTitle.className = "pal-group-title";
+    toolsTitle.textContent = "Tools";
+    frag.appendChild(toolsTitle);
+    frag.appendChild(this.toolButton("inspect", "🔍 Inspect", "#9aa6bd"));
+    frag.appendChild(this.toolButton("bulldoze", "🧨 Bulldoze", "#ff6b6b"));
 
-  private buildToolbar(): void {
-    this.toolCategories.innerHTML = "";
-    for (const category of this.categoryOrder) {
-      const categoryRooms = Object.values(this.roomTypes).filter(
-        (room) => room.category === category,
-      );
-      if (categoryRooms.length === 0) continue;
-
-      const wrapper = document.createElement("div");
-      wrapper.className = "tool-category";
-      const heading = document.createElement("h3");
-      heading.textContent = category;
-      wrapper.appendChild(heading);
-
-      const grid = document.createElement("div");
-      grid.className = "tool-grid";
-      for (const room of categoryRooms) {
-        const button = document.createElement("button");
-        button.className = "tool-btn";
-        button.dataset.room = room.id;
-        button.innerHTML = `${room.name}<small>$${room.cost.toLocaleString("en-US")}</small>`;
-        button.addEventListener("click", () => this.setSelectedTool(room.id));
-        grid.appendChild(button);
+    for (const group of GROUPS) {
+      const title = document.createElement("div");
+      title.className = "pal-group-title";
+      title.textContent = group.title;
+      frag.appendChild(title);
+      for (const kind of ALL_KINDS) {
+        const f = FACILITIES[kind];
+        if (!group.cats.includes(f.category)) continue;
+        frag.appendChild(this.facilityButton(kind));
       }
-      wrapper.appendChild(grid);
-      this.toolCategories.appendChild(wrapper);
     }
+    this.el.palette.appendChild(frag);
   }
 
-  private bindTimeControls(): void {
-    const buttons = document.querySelectorAll<HTMLButtonElement>(".time-btn");
-    buttons.forEach((button) => {
-      button.addEventListener("click", () => {
-        buttons.forEach((btn) => btn.classList.remove("active"));
-        button.classList.add("active");
-        const speed = Number(button.dataset.speed);
-        this.game.speed = speed;
-        this.game.paused = speed === 0;
-      });
-    });
-
-    const resetBtn = document.getElementById("reset-btn");
-    if (resetBtn) {
-      resetBtn.addEventListener("click", () => {
-        if (
-          confirm(
-            "Are you sure you want to start a new game? All progress will be lost.",
-          )
-        ) {
-          clearSave();
-          this.game.reset();
-          this.renderer.camera.y = 0;
-          this.statusText.textContent = "New game started!";
-          this.updatePanels();
-          saveGame(this.game);
-        }
-      });
-    }
-
-    const exportBtn = document.getElementById("export-btn");
-    if (exportBtn) {
-      exportBtn.addEventListener("click", () => {
-        const encoded = exportGame(this.game);
-        navigator.clipboard
-          .writeText(encoded)
-          .then(() => {
-            this.statusText.textContent = "Game exported to clipboard!";
-            this.audio.uiClick();
-          })
-          .catch(() => {
-            prompt("Copy this save code:", encoded);
-          });
-      });
-    }
-
-    const importBtn = document.getElementById("import-btn");
-    if (importBtn) {
-      importBtn.addEventListener("click", () => {
-        const encoded = prompt("Paste your save code:");
-        if (encoded) {
-          const success = importGame(this.game, encoded.trim());
-          if (success) {
-            this.renderer.camera.y = 0;
-            this.statusText.textContent = "Game imported successfully!";
-            this.updatePanels();
-            this.audio.uiClick();
-          } else {
-            this.statusText.textContent =
-              "Failed to import game - invalid code.";
-            this.audio.buildFail();
-          }
-        }
-      });
-    }
+  private toolButton(type: "inspect" | "bulldoze", label: string, color: string): HTMLElement {
+    const item = document.createElement("div");
+    item.className = "pal-item";
+    item.dataset.tool = type;
+    item.innerHTML = `<span class="pal-swatch" style="background:${color}"></span><span class="pal-name">${label}</span>`;
+    item.addEventListener("click", () => this.selectTool({ type } as Tool));
+    return item;
   }
 
-  private bindCanvasControls(): void {
-    const canvas = this.renderer.canvas;
-    canvas.addEventListener("click", (event: MouseEvent) => {
-      const { cellX, floorIndex } = this.renderer.screenToCell(
-        event.clientX,
-        event.clientY,
-      );
-      const room = this.roomTypes[this.selectedRoomId];
-      if (!room) return;
-      if (cellX < 0) return;
-
-      const result = this.game.placeRoom(
-        this.selectedRoomId,
-        floorIndex,
-        cellX,
-        false,
-      );
-      if (result.ok) {
-        this.audio.uiClick();
-        this.statusText.textContent = `${room.name} construction started.`;
-      } else {
-        this.audio.buildFail();
-        this.statusText.textContent = result.reason || "Placement failed.";
-      }
-      this.updateGhostPreview();
-    });
-
-    canvas.addEventListener("contextmenu", (event: MouseEvent) => {
-      event.preventDefault();
-      const { cellX, floorIndex } = this.renderer.screenToCell(
-        event.clientX,
-        event.clientY,
-      );
-      const result = this.game.removeRoom(floorIndex, cellX);
-      if (result.ok) {
-        this.audio.buildFail();
-        this.statusText.textContent = `Room removed. Refund: ${result.refund || 0}`;
-      } else {
-        this.statusText.textContent = result.reason || "Removal failed.";
-      }
-      this.updateGhostPreview();
-    });
-
-    canvas.addEventListener("mousemove", (event: MouseEvent) => {
-      const { cellX, floorIndex } = this.renderer.screenToCell(
-        event.clientX,
-        event.clientY,
-      );
-      this.hoverCell = { cellX, floorIndex };
-      if (cellX < 0 || cellX >= this.game.width) {
-        this.hoverRoom = null;
-        this.renderer.setGhost(null);
+  private facilityButton(kind: FacilityKind): HTMLElement {
+    const f = FACILITIES[kind];
+    const item = document.createElement("div");
+    item.className = "pal-item";
+    item.dataset.kind = kind;
+    item.innerHTML =
+      `<span class="pal-swatch" style="background:${f.color}"></span>` +
+      `<span class="pal-name">${f.name}</span>` +
+      `<span class="pal-cost">$${shortMoney(f.cost)}</span>`;
+    item.addEventListener("click", () => {
+      if (item.classList.contains("locked")) {
+        this.toast(`${f.name} unlocks at ${f.minStar}★.`, "bad");
         return;
       }
-      const floor = this.game.floors.get(floorIndex);
-      this.hoverRoom = floor ? floor.cells[cellX] : null;
-      this.updateGhostPreview();
+      this.selectTool({ type: "build", kind });
+    });
+    return item;
+  }
+
+  private wireControls(): void {
+    document.querySelectorAll<HTMLButtonElement>("#speed button[data-speed]").forEach((b) => {
+      b.addEventListener("click", () => {
+        document.querySelectorAll("#speed button[data-speed]").forEach((x) => x.classList.remove("active"));
+        b.classList.add("active");
+        this.cb.onSpeed(Number(b.dataset.speed));
+      });
     });
 
-    canvas.addEventListener("mouseleave", () => {
-      this.hoverRoom = null;
-      this.hoverCell = null;
-      this.renderer.setGhost(null);
+    this.el.audioToggle.addEventListener("click", () => {
+      const muted = this.cb.onToggleAudio();
+      this.el.audioToggle.textContent = muted ? "🔇" : "🔊";
     });
 
-    canvas.addEventListener(
-      "wheel",
-      (event: WheelEvent) => {
-        event.preventDefault();
-        const delta = Math.sign(event.deltaY) * 0.6;
-        this.renderer.scroll(delta);
-      },
-      { passive: false },
+    document.getElementById("panel-toggle")?.addEventListener("click", () => {
+      document.body.classList.toggle("panels-open");
+    });
+    const closePanels = () => document.body.classList.remove("panels-open");
+    document.getElementById("panel-close")?.addEventListener("click", closePanels);
+    document.getElementById("scrim")?.addEventListener("click", closePanels);
+
+    document.getElementById("btn-save")!.addEventListener("click", () => this.cb.onSave());
+    document.getElementById("btn-load")!.addEventListener("click", () => this.cb.onShowSaves());
+    document.getElementById("btn-new")!.addEventListener("click", () => {
+      this.confirmModal("Start a new tower?", "This abandons your current tower (it is not auto-saved).", () =>
+        this.cb.onNew(),
+      );
+    });
+    document.getElementById("btn-export")!.addEventListener("click", () => this.cb.onExport());
+    document.getElementById("btn-import")!.addEventListener("click", () => this.openImport());
+    document.getElementById("btn-help")!.addEventListener("click", () => this.showHelp());
+    document.getElementById("btn-stats")!.addEventListener("click", () => this.cb.onShowStats());
+
+    this.el.towerName.addEventListener("change", () => {
+      this.cb.onRenameTower(this.el.towerName.value.trim() || "Tower One");
+    });
+  }
+
+  // ---- Selected-facility editor -----------------------------------------
+
+  /** Show the editor card for a selected facility with type-specific actions. */
+  showEditor(html: string): void {
+    this.el.editor.innerHTML = html;
+    this.el.editor.classList.remove("hidden");
+    this.el.editor.querySelectorAll<HTMLElement>("[data-edit]").forEach((b) => {
+      b.addEventListener("click", () => this.cb.onEditAction(b.dataset.edit!, this.el.editor));
+    });
+    this.el.editor.querySelector(".ed-close")?.addEventListener("click", () => this.hideEditor());
+  }
+
+  hideEditor(): void {
+    this.el.editor.classList.add("hidden");
+    this.el.editor.innerHTML = "";
+  }
+
+  isEditorOpen(): boolean {
+    return !this.el.editor.classList.contains("hidden");
+  }
+
+  showStats(html: string): void {
+    const box = this.openModal(`<h2>Tower Statistics</h2>${html}
+      <div class="modal-actions"><button class="primary" data-act="close">Close</button></div>`);
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+  }
+
+  /** Saves manager: auto-save + numbered slots, plus export/import. */
+  showSaves(slots: SlotInfo[]): void {
+    const fmtWhen = (ms?: number) =>
+      ms ? new Date(ms).toLocaleString([], { dateStyle: "short", timeStyle: "short" }) : "";
+    const row = (s: SlotInfo): string => {
+      const name = s.slot === "auto" ? "Auto-save" : `Slot ${s.slot}`;
+      const detail = s.exists
+        ? `<div class="slot-detail">${escapeHtml(s.towerName ?? "Tower")} · ${s.star === 6 ? "TOWER" : (s.star ?? 1) + "★"} · pop ${(s.population ?? 0).toLocaleString()} · $${Math.round(s.funds ?? 0).toLocaleString()}<br><span class="slot-when">${fmtWhen(s.savedAt)}</span></div>`
+        : `<div class="slot-detail slot-empty">empty</div>`;
+      const saveBtn =
+        s.slot === "auto" ? "" : `<button data-save="${s.slot}">Save</button>`;
+      const loadBtn = s.exists ? `<button data-load="${s.slot}">Load</button>` : "";
+      const delBtn =
+        s.exists && s.slot !== "auto" ? `<button class="danger" data-del="${s.slot}">✕</button>` : "";
+      return `<div class="slot"><div class="slot-head"><b>${name}</b>${detail}</div><div class="slot-actions">${saveBtn}${loadBtn}${delBtn}</div></div>`;
+    };
+    const box = this.openModal(`
+      <h2>Saved Towers</h2>
+      <div class="slots">${slots.map(row).join("")}</div>
+      <div class="modal-actions">
+        <button data-act="export">Export JSON</button>
+        <button data-act="import">Import JSON</button>
+        <button class="primary" data-act="close">Close</button>
+      </div>`);
+    box.querySelectorAll<HTMLElement>("[data-save]").forEach((b) =>
+      b.addEventListener("click", () => {
+        this.cb.onSaveSlot(Number(b.dataset.save));
+        this.cb.onShowSaves();
+      }),
     );
-  }
-
-  private setSelectedTool(roomId: string): void {
-    const room = this.roomTypes[roomId];
-    if (!room) return;
-    if (room.unlock > this.game.rating) {
-      this.statusText.textContent = `Unlock ${room.name} at ${room.unlock}-star rating.`;
-      return;
-    }
-    this.selectedRoomId = roomId;
-    const buttons = document.querySelectorAll<HTMLButtonElement>(".tool-btn");
-    buttons.forEach((button) => {
-      button.classList.toggle("active", button.dataset.room === roomId);
-    });
-    this.updateGhostPreview();
-    this.updatePanels();
-  }
-
-  private updateGhostPreview(): void {
-    if (!this.hoverCell) {
-      this.renderer.setGhost(null);
-      return;
-    }
-    const room = this.roomTypes[this.selectedRoomId];
-    if (!room) {
-      this.renderer.setGhost(null);
-      return;
-    }
-    if (this.hoverCell.cellX < 0 || this.hoverCell.cellX >= this.game.width) {
-      this.renderer.setGhost(null);
-      return;
-    }
-    const result = this.game.canPlaceRoom(
-      room.id,
-      this.hoverCell.floorIndex,
-      this.hoverCell.cellX,
+    box.querySelectorAll<HTMLElement>("[data-load]").forEach((b) =>
+      b.addEventListener("click", () => {
+        const v = b.dataset.load!;
+        this.cb.onLoadSlot(v === "auto" ? "auto" : Number(v));
+        this.closeModal();
+      }),
     );
-    this.renderer.setGhost({
-      type: room,
-      floorIndex: this.hoverCell.floorIndex,
-      startX: this.hoverCell.cellX,
-      valid: result.ok,
-    });
+    box.querySelectorAll<HTMLElement>("[data-del]").forEach((b) =>
+      b.addEventListener("click", () => {
+        this.cb.onDeleteSlot(Number(b.dataset.del));
+        this.cb.onShowSaves();
+      }),
+    );
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    box.querySelector('[data-act="export"]')!.addEventListener("click", () => this.cb.onExport());
+    box.querySelector('[data-act="import"]')!.addEventListener("click", () => this.openImport());
   }
 
-  public updateHUD(): void {
-    const prevPopulation = this.lastPopulation;
-    this.lastPopulation = this.game.population;
-
-    this.moneyEl.textContent = this.game.formatMoney();
-    this.populationEl.textContent =
-      this.game.population.toLocaleString("en-US");
-    this.happinessEl.textContent = formatPercent(this.game.happiness);
-    this.ratingEl.textContent = `${this.game.rating} Star${this.game.rating > 1 ? "s" : ""}`;
-    this.timeIndicator.textContent = this.game.getTimeLabel();
-
-    if (this.game.population > prevPopulation && prevPopulation > 0) {
-      this.audio.populationGain();
-    }
-
-    if (this.game.statusMessage) {
-      this.statusText.textContent = this.game.statusMessage;
-      if (this.game.statusMessage.includes("construction started")) {
-        this.audio.buildComplete();
-      }
-      if (this.game.statusMessage.includes("VIP")) {
-        this.audio.vipArrival();
-      }
-      this.game.statusMessage = "";
-    }
-
-    this.updateToolLocks();
-    this.updatePanels();
+  setTowerName(name: string): void {
+    if (document.activeElement !== this.el.towerName) this.el.towerName.value = name;
   }
 
-  private updateToolLocks(): void {
-    const buttons = document.querySelectorAll<HTMLButtonElement>(".tool-btn");
-    buttons.forEach((button) => {
-      const roomId = button.dataset.room;
-      if (!roomId) return;
-      const room = this.roomTypes[roomId];
-      if (!room) return;
-      const locked = room.unlock > this.game.rating;
-      button.disabled = locked;
-      button.title = locked ? `Unlock at ${room.unlock}-star rating.` : "";
-    });
-  }
-
-  private updatePanels(): void {
-    const selected = this.roomTypes[this.selectedRoomId];
-    const infoRoom = this.hoverRoom?.type || selected;
-
-    if (infoRoom) {
-      this.infoPanel.innerHTML = `
-        <h3>${infoRoom.name}</h3>
-        <p>Category: ${infoRoom.category}</p>
-        <p>Cost: $${infoRoom.cost.toLocaleString("en-US")}</p>
-        <p>Maintenance: $${infoRoom.maintenance}/hr</p>
-        <p>Revenue: $${infoRoom.revenue}/hr</p>
-        <p>Noise: ${infoRoom.noise} | Traffic: ${infoRoom.traffic}</p>
-      `;
-    }
-
-    const elevatorRows = this.game.elevators
-      .map((car, index) => {
-        const direction = car.direction > 0 ? "Up" : "Down";
-        return `<p>#${index + 1} ${car.type} | Floor ${car.position.toFixed(1)} | ${direction} | ${car.passengers.length}/${car.capacity}</p>`;
+  /** Per-floor stop configuration for an elevator (express service). */
+  showStopsDialog(
+    title: string,
+    floors: { floor: number; stop: boolean; lobby: boolean }[],
+    onToggle: (floor: number, stop: boolean) => void,
+  ): void {
+    const rowsHtml = floors
+      .map((fl) => {
+        const label = fl.floor > 0 ? `Floor ${fl.floor}` : `B${-fl.floor}`;
+        const tag = fl.lobby ? ' <span class="stop-lobby">lobby</span>' : "";
+        return `<label class="stop-row"><input type="checkbox" data-floor="${fl.floor}" ${fl.stop ? "checked" : ""}/> <span>${label}${tag}</span></label>`;
       })
       .join("");
+    const box = this.openModal(`
+      <h2>${escapeHtml(title)} — Stops</h2>
+      <p style="color:var(--muted);font-size:12px">Untick a floor to make the car skip it (express service). The top and bottom stay connected.</p>
+      <div class="stop-list">${rowsHtml}</div>
+      <div class="modal-actions"><button class="primary" data-act="close">Done</button></div>`);
+    box.querySelectorAll<HTMLInputElement>("input[data-floor]").forEach((cb) => {
+      cb.addEventListener("change", () => onToggle(Number(cb.dataset.floor), cb.checked));
+    });
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+  }
 
-    this.elevatorPanel.innerHTML = `
-      <h3>Elevators</h3>
-      ${elevatorRows || "<p>No elevators yet.</p>"}
-      <p>Avg wait: ${this.game.averageWait()} min</p>
-      <p>Events: ${this.game.events.length}</p>
-    `;
+  selectTool(tool: Tool): void {
+    this.tool = tool;
+    this.cb.onSelectTool(tool);
+    document.querySelectorAll(".pal-item").forEach((x) => x.classList.remove("active"));
+    if (tool.type === "build") {
+      document.querySelector(`.pal-item[data-kind="${tool.kind}"]`)?.classList.add("active");
+      const f = FACILITIES[tool.kind];
+      this.el.toolInfo.innerHTML =
+        `<div class="ti-name">${f.name}</div>` +
+        `<div>Cost: $${f.cost.toLocaleString()}</div>` +
+        (f.population ? `<div>Capacity: ${f.population}</div>` : "") +
+        `<p style="margin-top:6px;color:var(--muted)">${f.description}</p>`;
+    } else {
+      document.querySelector(`.pal-item[data-tool="${tool.type}"]`)?.classList.add("active");
+      this.el.toolInfo.innerHTML =
+        tool.type === "bulldoze"
+          ? "<div class='ti-name'>Bulldoze</div><p style='color:var(--muted)'>Click a room or shaft to sell it for half its cost.</p>"
+          : "<div class='ti-name'>Inspect</div><p style='color:var(--muted)'>Hover the tower to read a facility's status.</p>";
+    }
+  }
+
+  /** Refresh status bar, palette locks, tower stats and the bulletin log. */
+  update(sim: Simulation): void {
+    this.el.money.textContent = `$${Math.round(sim.money).toLocaleString()}`;
+    this.el.money.style.color = sim.money < 0 ? "var(--bad)" : "var(--money)";
+    this.el.pop.textContent = sim.population.toLocaleString();
+    this.el.star.textContent = sim.star >= 6 ? "TOWER" : "★".repeat(sim.star) + "☆".repeat(5 - sim.star);
+    this.el.time.textContent = sim.clock.format();
+
+    // Palette unlock state.
+    document.querySelectorAll<HTMLElement>(".pal-item[data-kind]").forEach((item) => {
+      const kind = item.dataset.kind as FacilityKind;
+      const locked = !sim.isUnlocked(kind);
+      item.classList.toggle("locked", locked);
+      const affordable = sim.money >= FACILITIES[kind].cost;
+      item.style.opacity = locked ? "0.4" : affordable ? "1" : "0.7";
+    });
+
+    this.setTowerName(sim.tower.towerName);
+
+    const s = sim.stats();
+    this.el.towerStats.innerHTML = `
+      <span class="k">Floors</span><span class="v">${s.floors} / B${s.basements}</span>
+      <span class="k">Offices</span><span class="v">${s.occupiedOffices}/${s.offices}</span>
+      <span class="k">Condos sold</span><span class="v">${s.soldCondos}/${s.condos}</span>
+      <span class="k">Hotel (in use)</span><span class="v">${s.occupiedHotel}/${s.hotelRooms}</span>
+      <span class="k">Rooms to clean</span><span class="v" style="color:${s.dirty ? "var(--bad)" : "inherit"}">${s.dirty}</span>
+      <span class="k">Shops / Food</span><span class="v">${s.shops} / ${s.restaurants}</span>
+      <span class="k">Transports</span><span class="v">${s.transports}</span>
+      <span class="k">Vacancies</span><span class="v">${s.vacant}</span>`;
+
+    this.renderLog(sim.log);
+  }
+
+  private renderLog(log: LogEntry[]): void {
+    if (log.length === this.lastLogLen) return;
+    // Newly added entries (and surface important ones as toasts).
+    const fresh = log.slice(this.lastLogLen);
+    for (const e of fresh) {
+      if (e.kind === "good" || e.kind === "bad") this.toast(e.text, e.kind);
+    }
+    this.lastLogLen = log.length;
+    this.el.log.innerHTML = log
+      .slice(-40)
+      .map((e) => `<div class="log-line ${e.kind}">${escapeHtml(e.text)}</div>`)
+      .join("");
+  }
+
+  showInspector(html: string | null): void {
+    if (!html) {
+      this.el.inspector.classList.add("hidden");
+      return;
+    }
+    this.el.inspector.classList.remove("hidden");
+    this.el.inspector.innerHTML = html;
+  }
+
+  toast(text: string, kind: LogEntry["kind"] = "info"): void {
+    const t = document.createElement("div");
+    t.className = `toast ${kind}`;
+    t.textContent = text;
+    this.el.toast.appendChild(t);
+    const timer = window.setTimeout(() => {
+      t.style.transition = "opacity .3s";
+      t.style.opacity = "0";
+      window.setTimeout(() => t.remove(), 300);
+    }, 3600);
+    this.toastTimers.push(timer);
+    while (this.el.toast.children.length > 5) this.el.toast.firstElementChild?.remove();
+  }
+
+  // ---- Modals ------------------------------------------------------------
+
+  private openModal(html: string): HTMLElement {
+    const dialog = this.el.modal as HTMLDialogElement;
+    dialog.innerHTML = `<div class="modal-box">${html}</div>`;
+    if (!dialog.open) dialog.showModal();
+    // Click outside the box (on the backdrop) closes the dialog.
+    dialog.onclick = (e) => {
+      if (e.target === dialog) this.closeModal();
+    };
+    dialog.oncancel = () => this.closeModal(); // Esc key
+    return dialog.querySelector(".modal-box")!;
+  }
+  closeModal(): void {
+    const dialog = this.el.modal as HTMLDialogElement;
+    if (dialog.open) dialog.close();
+    dialog.innerHTML = "";
+  }
+
+  private confirmModal(title: string, body: string, onYes: () => void): void {
+    const box = this.openModal(
+      `<h2>${title}</h2><p>${body}</p>
+       <div class="modal-actions"><button data-act="no">Cancel</button><button class="primary" data-act="yes">Confirm</button></div>`,
+    );
+    box.querySelector('[data-act="no"]')!.addEventListener("click", () => this.closeModal());
+    box.querySelector('[data-act="yes"]')!.addEventListener("click", () => {
+      this.closeModal();
+      onYes();
+    });
+  }
+
+  showExport(json: string): void {
+    const box = this.openModal(
+      `<h2>Export tower</h2><p>Copy this JSON or download it as a file.</p>
+       <textarea readonly>${escapeHtml(json)}</textarea>
+       <div class="modal-actions">
+         <button data-act="download" class="primary">Download .json</button>
+         <button data-act="close">Close</button>
+       </div>`,
+    );
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    box.querySelector('[data-act="download"]')!.addEventListener("click", () => {
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "tower.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+    box.querySelector("textarea")?.addEventListener("focus", (e) => (e.target as HTMLTextAreaElement).select());
+  }
+
+  private openImport(): void {
+    const box = this.openModal(
+      `<h2>Import tower</h2>
+       <p>Paste a Tower Tycoon JSON export, or choose a file. Original SimTower
+       <code>.TWR</code> saves are recognized (full conversion is planned for a future update).</p>
+       <textarea placeholder="Paste save JSON here…"></textarea>
+       <div class="modal-actions">
+         <button data-act="file">Choose file…</button>
+         <button data-act="close">Cancel</button>
+         <button class="primary" data-act="load">Load</button>
+       </div>`,
+    );
+    const ta = box.querySelector("textarea")!;
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    box.querySelector('[data-act="load"]')!.addEventListener("click", () => {
+      this.closeModal();
+      this.cb.onImport(ta.value);
+    });
+    box.querySelector('[data-act="file"]')!.addEventListener("click", () => {
+      const input = document.getElementById("import-file") as HTMLInputElement;
+      input.value = "";
+      input.onchange = () => {
+        const file = input.files?.[0];
+        if (!file) return;
+        // Binary .TWR legacy saves are read as bytes; JSON exports as text.
+        if (/\.twr$/i.test(file.name)) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            this.closeModal();
+            this.cb.onImportLegacy(reader.result as ArrayBuffer, file.name);
+          };
+          reader.readAsArrayBuffer(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => {
+            this.closeModal();
+            this.cb.onImport(String(reader.result));
+          };
+          reader.readAsText(file);
+        }
+      };
+      input.click();
+    });
+  }
+
+  private showHelp(): void {
+    const box = this.openModal(`
+      <h2>How to play</h2>
+      <p>Build a thriving high-rise and earn your way to a coveted <b>TOWER</b> rating.</p>
+      <ul>
+        <li><b>Floors first.</b> Lay <b>Floor</b> tiles, then place rooms on them.</li>
+        <li><b>Move people.</b> Every floor needs an <b>elevator</b> or <b>stairs</b> chain back to the ground lobby, or tenants leave.</li>
+        <li><b>Make money.</b> Offices pay quarterly rent, condos sell once, hotels earn nightly, shops &amp; restaurants earn from foot traffic.</li>
+        <li><b>Grow your rating.</b> 2★ at 300 pop, 3★ at 1,000 (needs Security), 4★ at 5,000 (needs Medical), 5★ at 10,000.</li>
+        <li><b>Win.</b> At 5★ with a Metro station, build the <b>Wedding Hall</b> on floor 100 and pass the VIP inspection.</li>
+        <li><b>Sky lobbies</b> every 15 floors keep tall towers moving.</li>
+      </ul>
+      <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
+      <div class="modal-actions"><button class="primary" data-act="close">Got it</button></div>
+    `);
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+  }
+
+  congratsTower(): void {
+    const box = this.openModal(`
+      <h2>🏆 TOWER achieved!</h2>
+      <p>Your skyscraper has earned the legendary <b>TOWER</b> rating. Wedding bells ring out over the city from the hall on the 100th floor. Congratulations, master builder!</p>
+      <div class="modal-actions"><button class="primary" data-act="close">Continue</button></div>
+    `);
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
   }
 }
 
+function shortMoney(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
+  if (n >= 1000) return `${Math.round(n / 1000)}k`;
+  return `${n}`;
+}
+
+function escapeHtml(s: string): string {
+  return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
+}

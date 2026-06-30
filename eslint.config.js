@@ -4,60 +4,31 @@ import prettier from "eslint-config-prettier";
 
 export default [
   {
-    ignores: [
-      "node_modules",
-      "dist",
-      "coverage",
-      "**/*.config.js",
-      "src/coverage",
-    ],
+    ignores: ["node_modules", "dist", "coverage", "scripts", "**/*.config.js"],
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   prettier,
   {
-    files: ["src/**/*.ts", "src/**/*.tsx"],
+    files: ["src/**/*.ts"],
     languageOptions: {
-      parserOptions: {
-        project: true,
-        tsconfigRootDir: import.meta.dirname,
-      },
+      ecmaVersion: 2020,
+      sourceType: "module",
     },
     rules: {
-      "@typescript-eslint/no-explicit-any": "error",
+      "@typescript-eslint/no-explicit-any": "warn",
       "@typescript-eslint/no-unused-vars": [
         "error",
-        {
-          argsIgnorePattern: "^_",
-          varsIgnorePattern: "^_",
-        },
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
       ],
-      "@typescript-eslint/explicit-function-return-types": "off",
-      "@typescript-eslint/explicit-module-boundary-types": "off",
-      "no-console": [
-        "warn",
-        {
-          allow: ["warn", "error"],
-        },
-      ],
-      "no-debugger": "warn",
       "prefer-const": "error",
       "no-var": "error",
     },
   },
   {
-    files: ["src/tests/**/*.ts", "src/**/*.test.ts"],
-    languageOptions: {
-      parserOptions: {
-        project: false,
-      },
-    },
+    files: ["src/**/*.test.ts"],
     rules: {
       "@typescript-eslint/no-explicit-any": "off",
-      "@typescript-eslint/no-unsafe-assignment": "off",
-      "@typescript-eslint/no-unsafe-member-access": "off",
-      "@typescript-eslint/no-unsafe-call": "off",
-      "@typescript-eslint/no-this-alias": "off",
     },
   },
 ];

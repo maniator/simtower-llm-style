@@ -1,184 +1,175 @@
-# SimTower LLM Style
+# 🏢 Tower Tycoon — a browser SimTower clone
 
-A tower building simulation game built with GitHub Copilot and AI-assisted development. Inspired by the classic SimTower (1994).
+A from-scratch, browser-native homage to the classic **SimTower** (1994). Build a
+high-rise floor by floor, wire it with elevators, attract tenants, keep them
+happy, and climb the star ratings all the way to a coveted **TOWER**.
 
-## 🎮 Game Overview
+Written in **TypeScript** on the **[Excalibur.js](https://excaliburjs.com/)**
+game engine (camera, scene, culling, collision and the render loop), with a
+procedural **WebAudio** soundtrack that changes depending on which part of the
+tower you're looking at. No external art assets — every sprite is drawn in code.
 
-SimTower is a business simulation game where you design and manage a high-rise building tower. Balance construction costs, revenue generation, and tenant satisfaction to maximize your tower's star rating.
+![Sprite gallery](docs/screenshots/06-sprite-gallery.png)
 
-### Core Features
-
-- **Building Management** - Construct apartments, offices, shops, restaurants, hotels, elevators, and more
-- **Economics System** - Manage finances through income from various room types and maintenance costs
-- **Population Simulation** - Watch residents and workers move through your tower
-- **Rating System** - Achieve higher star ratings by meeting tenant needs
-- **Time Controls** - Play, pause, and fast-forward the game simulation
-- **Save/Export** - Save your progress and export/import game states
-
-### Room Types
-
-**Residential:**
-- Condo - Compact housing
-- Apartment - Standard residential
-- Hotel Room - Temporary housing
-
-**Commercial:**
-- Office - Corporate workspace
-- Fast Food - Quick service dining
-- Restaurant - Fine dining
-- Retail Shop - Shopping space
-
-**Infrastructure:**
-- Lobby - Building entrance
-- Stairs - Cost-effective vertical access
-- Standard/Express/Service Elevators - Premium transportation
-- Metro Station - Mass transit access
-
-**Entertainment & Services:**
-- Movie Theater - Entertainment and income
-- Party Room - Event space
-- Security Office - Crime prevention
-- Medical Clinic - Emergency services
-- Janitorial - Cleanliness maintenance
-- Parking - Vehicle storage
-
-## 🚀 Getting Started
-
-### Installation
+## Play
 
 ```bash
 npm install
+npm run dev      # open the printed localhost URL
 ```
 
-### Development
+Other scripts:
 
 ```bash
-npm run dev      # Start dev server with HMR
-npm run build    # Build production bundle
-npm run preview  # Preview production build
+npm run build        # production build to dist/
+npm run preview      # serve the production build
+npm test             # run the Vitest suite
+npm run typecheck    # tsc --noEmit
+npm run lint         # eslint
+npm run screenshots  # build + headless-capture screenshots into docs/screenshots
+npm run build:single # bundle the whole game into one self-contained dist-single/index.html
 ```
 
-### Testing & Quality
+`npm run build:single` produces a single HTML file with all JS/CSS inlined — it
+runs the full game with no server (open it straight from `file://`), handy for
+sharing a playable build.
 
-```bash
-npm run lint           # Run ESLint
-npm run lint:fix       # Auto-fix linting issues
-npm run typecheck      # TypeScript type checking
-npm run test:coverage  # Run tests with coverage report
-```
+## How to play
 
-## 📁 Project Structure
+- **Build floors first.** Lay `Floor` tiles, then place rooms on top of them.
+  The ground floor and every 15th floor want a `Lobby`.
+- **Move people.** Every floor needs an `Elevator` or `Stairs` chain back to the
+  ground lobby — unreachable tenants get unhappy and leave.
+- **Make money.** Offices pay quarterly rent, condos sell once for a lump sum,
+  hotels earn nightly (and must be cleaned by `Housekeeping`), and shops,
+  restaurants and cinemas earn from foot traffic.
+- **Grow your rating.** ⭐ thresholds: 2★ at 300 population, 3★ at 1,000 (needs
+  Security), 4★ at 5,000 (needs a Medical Center), 5★ at 10,000.
+- **Win.** At 5★ with a Metro Station, build the `Wedding Hall` on floor 100 and
+  pass the VIP inspection to become a **TOWER**.
+
+### Controls
+
+| Action | How |
+| --- | --- |
+| Pan | Drag with the Inspect tool, middle/right mouse, or hold Space |
+| Zoom | Mouse wheel |
+| Build a room | Pick it from the left palette, click on a floor |
+| Build/paint floors | Pick `Floor`/`Lobby`, click-drag |
+| Build an elevator/stairs | Pick it, drag vertically to set the span |
+| Edit a facility | Inspect tool, click a room or shaft → edit panel |
+| Bulldoze | Bulldoze tool, click (or drag) |
+| Game speed | Top-right buttons, or number keys `0`–`3` |
+
+## Features
+
+- **Facilities:** lobby, floors, offices, condominiums, three hotel room grades,
+  fast food, restaurants, shops, cinema, party hall, parking, security, medical,
+  housekeeping, recycling, metro station and the wedding hall.
+- **Transport:** stairs, escalators, and **standard / service / express**
+  elevators — each with adjustable car counts and served-floor ranges, edited
+  in-game just like the original.
+- **Living tower:** people walk the lobbies, elevator cars carry passengers up
+  and down, window lights switch on and off, the cinema screen plays, and the
+  metro train pulls in and departs. All of it runs off a single global game
+  clock — no per-room timers.
+- **Economy & time:** weekday/weekend rhythms, morning/lunch/evening rushes,
+  quarterly rent, monthly maintenance, nightly hotel revenue, and a daily
+  housekeeping cycle (rooms get dirty after checkout and need cleaning).
+- **Star ratings** with population thresholds and facility gates, ending in the
+  VIP TOWER evaluation.
+- **Location-aware soundtrack:** a procedural WebAudio synth crossfades between
+  musical "scenes" (lobby muzak, office hum, hotel calm, food-court bustle,
+  cinema score, subway rumble…) based on what the camera is centered on, plus
+  build/sell/promotion jingles.
+- **Save anywhere:** autosave to `localStorage`, multiple save slots, plus JSON
+  export/import.
+
+## 1994 SimTower parity
+
+How the clone maps to the original's mechanics. Items marked ✅ are implemented
+and covered by the Vitest suite and/or the captured screenshots.
+
+| Original mechanic | Status |
+| --- | --- |
+| Build floors, then rooms on top; ground + sky lobbies | ✅ |
+| Lobby floors are transit-only (no rooms) | ✅ |
+| ~100 floors up, basements below, continuous numbering (B1 = floor 0) | ✅ |
+| Offices (quarterly rent) | ✅ |
+| Condos / apartments (one-time sale) | ✅ |
+| Hotel single / double / suite (nightly, need housekeeping) | ✅ |
+| Fast food, restaurant, shop (foot-traffic income, business hours) | ✅ |
+| Multi-floor cinema, party hall | ✅ |
+| Parking, security, medical, housekeeping, recycling | ✅ |
+| Whole-floor basement metro that brings visitors & eases the commute | ✅ |
+| Cathedral → **religion-agnostic Wedding Hall** on floor 100 | ✅ |
+| Stairs, escalators, standard / service / express elevators | ✅ |
+| Adjustable elevator cars + per-floor (express) stop config | ✅ |
+| **Demand-driven elevator cars** (SCAN dispatch toward waiting floors) | ✅ |
+| Star ratings 1–5 → TOWER, population thresholds + facility gates | ✅ |
+| VIP inspection for the final TOWER rating | ✅ |
+| Elevator overcrowding stresses tenants; the unhappy leave | ✅ |
+| Rush-hour demand (morning/lunch/evening) vs. quiet nights | ✅ |
+| Stressed crowds turn red when transport is overwhelmed | ✅ |
+| Construction time with scaffolding; destruction/sell refunds | ✅ |
+| **Fire** that spreads unless security/medical contain it | ✅ |
+| **Bomb threats** (defused by security) on prestige towers | ✅ |
+| **Buried treasure** found while excavating basements | ✅ |
+| Living tower: walking people, riding cars, the metro train, day/night | ✅ |
+| Save/load, multiple slots, JSON export/import | ✅ |
+| `.TWR` original-save import | ⏳ foundation in place (v2) |
+| Per-person stress/routing simulation | ◻︎ abstracted as an aggregate model |
+
+**Desktop vs. mobile:** the desktop layout mirrors the original's dollhouse
+cross-section; mobile gets a responsive portrait layout with an icon toolbar and
+touch pan/pinch (see `docs/screenshots/09-mobile.png`).
+
+## Architecture
 
 ```
 src/
-├── app/
-│   └── main.ts          # Application entry point
-├── core/
-│   ├── audio/
-│   │   └── AudioSynth.ts      # Web Audio API integration
-│   ├── game/
-│   │   ├── Game.ts            # Game simulation engine
-│   │   ├── Room.ts            # Room/building logic
-│   │   ├── Person.ts          # NPC simulation
-│   │   └── ElevatorCar.ts     # Elevator movement
-│   └── render/
-│       └── Renderer.ts        # Canvas rendering system
-├── ui/
-│   └── UI.ts            # User interface and controls
-├── data/
-│   └── roomTypes.ts     # Game data definitions
-├── storage/
-│   └── storage.ts       # Save/load/export functionality
-├── types/
-│   └── types.ts         # TypeScript type definitions
-└── tests/
-    └── *.test.ts        # Unit tests
+  engine/      # pure simulation — no DOM
+    types.ts        shared types
+    facilities.ts   facility catalog, costs, star thresholds, grid constants
+    Clock.ts        game time (days, weekdays, day phases, quarters)
+    rng.ts          deterministic PRNG (mulberry32)
+    Tower.ts        spatial model: two-layer grid, placement rules, reachability
+    Simulation.ts   economy, population, satisfaction, ratings, events, save
+  render/      # presentation
+    excalibur/TowerEngine.ts  Excalibur.js scene: actors, camera, pan/zoom, input
+    sprites.ts      procedural per-facility drawing (drawn into Excalibur canvases)
+    pixelSprites.ts dollhouse room interiors + walking/seated people
+  ui/UI.ts     # palette, status bar, editor panel, modals, toasts
+  audio/Audio.ts  # location-based procedural soundtrack + SFX
+  storage/SaveGame.ts  # localStorage + JSON import/export
+  main.ts      # GameApp: tool semantics, sim tick, glue (input/camera via Excalibur)
+  gallery.ts   # standalone sprite-catalog page (docs/screenshots)
+  tests/       # Vitest unit tests for the engine
 ```
 
-## 🛠️ Tech Stack
+The **engine** is deliberately DOM-free and deterministic so it can be unit
+tested in isolation (`npm test`). Rendering, the camera, panning, zooming and
+pointer input all run on **[Excalibur.js](https://excaliburjs.com/)**:
+`TowerEngine` owns the game loop and scene, drawing each facility, transport and
+merged structural "run" as an Excalibur actor whose graphic reuses our pixel-art
+sprite code. `main.ts` only supplies tool semantics through the engine's
+controller hooks and advances the simulation each frame — it never touches the
+camera or raw pointer math directly.
 
-- **Language**: TypeScript 5.6 (strict mode)
-- **Bundler**: Vite 7.3
-- **Testing**: Vitest 4.0 with v8 coverage
-- **Linting**: ESLint 9.39 with TypeScript/Prettier support
-- **Rendering**: HTML5 Canvas 2D
-- **Audio**: Web Audio API
+## Screenshots
 
-## 📝 Development Notes
+| Day | Night |
+| --- | --- |
+| ![day](docs/screenshots/03-tower-day.png) | ![night](docs/screenshots/04-tower-night.png) |
 
-### Code Quality
-- TypeScript strict mode enabled
-- ESLint with TypeScript support
-- Prettier code formatting
-- 70 unit tests with 67% coverage
+## Tests
 
-### Performance Optimization
-- Vite with native ES modules
-- Minified production build ~34KB gzipped
-- Canvas-based rendering for smooth performance
-- Path aliases for clean imports (@core, @data, @types, etc.)
-
-### Build Output
-- Production bundle: 33.93 kB (gzipped)
-- CSS: 5.35 kB
-- JavaScript: 33.93 kB
-
-## 🔄 Continuous Integration
-
-GitHub Actions workflow runs on every push and PR:
-- Linting (ESLint)
-- Type checking (TypeScript)
-- Unit tests with coverage
-- Production build verification
-
-## 🎯 Game Mechanics
-
-### Simulation Loop
-- Time advances in 1-minute intervals (base 220ms)
-- Rooms generate income every hour
-- NPCs spawn and travel throughout the tower
-- Elevators transport people between floors
-- Player rating updates based on metrics
-
-### Economic Balance
-- Construction costs range from 4K (stairs) to 90K (metro)
-- Daily income scales with traffic and room capacity
-- Maintenance costs for all active rooms
-- Strategic placement affects profitability
-
-### NPC Simulation
-- Workers travel to offices during work hours
-- Residents move in/out based on capacity
-- Hotel guests stay temporarily
-- Entertainment seekers during evening hours
-- Optional staff service elevator preference
-
-## 📈 Achievements & Ratings
-
-Increase your tower's star rating by:
-1. **Star 1** - Base rating
-2. **Star 2** - Population ≥ 60
-3. **Star 3** - Population ≥ 140, wait time ≤ 18 min
-4. **Star 4** - Population ≥ 240, wait time ≤ 14 min, clean
-5. **Star 5** - Population ≥ 320, wait time ≤ 10 min, happiness ≥ 80%, successful VIP visit
-
-## 🎨 Visual Design
-
-- Hand-crafted color palette for room categories
-- Real-time person movement visualization
-- Elevator car capacity indicators
-- Construction progress feedback
-- Day/night lighting cycle
-
-## 📚 Additional Information
-
-- Installed with clean npm dependencies
-- No external game frameworks or engines
-- Raw Canvas 2D API for rendering
-- Game state managed through TypeScript classes
-- Pure functions for game logic testing
+33 Vitest unit tests cover placement rules, transport reachability, the economy
+(rent, condo sales, maintenance), star promotion and its facility gates, the
+hotel housekeeping cycle, elevator editing, save/load round-trips, and the
+clock. Run with `npm test`.
 
 ---
 
-Built with GitHub Copilot AI-assisted development for learning and demonstration purposes.
-
+Built fresh as a clean-room clone — none of the original game's code or assets
+are used.

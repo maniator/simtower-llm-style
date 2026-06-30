@@ -6,6 +6,11 @@ on:
   pull_request:
     branches: [main]
 
+# CI runs lint/typecheck/tests/build only — it never takes screenshots, so skip
+# downloading Playwright browsers during `npm ci`.
+env:
+  PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+
 jobs:
   test:
     runs-on: ubuntu-latest

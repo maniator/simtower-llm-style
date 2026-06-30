@@ -1,44 +1,38 @@
 import { defineConfig } from "vite";
-import path from "path";
+import { resolve } from "node:path";
 
 export default defineConfig({
   root: "src",
-  publicDir: "public",
-  resolve: {
-    alias: {
-      "@": path.resolve(__dirname, "./src"),
-      "@core": path.resolve(__dirname, "./src/core"),
-      "@ui": path.resolve(__dirname, "./src/ui"),
-      "@data": path.resolve(__dirname, "./src/data"),
-      "@storage": path.resolve(__dirname, "./src/storage"),
-      "@appTypes": path.resolve(__dirname, "./src/types"),
-      "@tests": path.resolve(__dirname, "./src/tests"),
-    },
-  },
+  base: "./",
   server: {
     port: 5173,
-    open: true,
+    open: false,
+    host: true,
   },
   build: {
     target: "esnext",
     outDir: "../dist",
     emptyOutDir: true,
     sourcemap: true,
+    rollupOptions: {
+      input: {
+        main: resolve(__dirname, "src/index.html"),
+        gallery: resolve(__dirname, "src/gallery.html"),
+        preview: resolve(__dirname, "src/preview.html"),
+        excalibur: resolve(__dirname, "src/excalibur.html"),
+      },
+    },
   },
   test: {
     globals: true,
     environment: "jsdom",
+    root: ".",
+    include: ["src/**/*.test.ts"],
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
-      exclude: [
-        "node_modules/",
-        "dist/",
-        "**/*.d.ts",
-        "**/*.config.*",
-        "**/types.ts",
-        "vite-env.d.ts",
-      ],
+      include: ["src/engine/**/*.ts", "src/storage/**/*.ts"],
+      exclude: ["**/*.d.ts", "**/*.config.*", "**/types.ts"],
     },
   },
 });

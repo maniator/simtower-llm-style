@@ -1,0 +1,80 @@
+# SimTower (1994) — Gameplay Parity Checklist
+
+This is a clean-room clone of Maxis/OPeNBooK's **SimTower** (1994), built from
+scratch in TypeScript on the Excalibur.js engine. The goal is **1:1 gameplay**
+on desktop with a modernized layout on mobile. Below is the feature inventory
+and where each item stands. Status: ✅ implemented · ◑ implemented as a faithful
+abstraction · ⬜ not present.
+
+## Building & structure
+- ✅ Two-layer grid: structural floor/corridor layer + room layer
+- ✅ Ground lobby; **sky lobbies only on the ground floor and every 15th floor** (15, 30, 45…)
+- ✅ Lobbies are transit-only — rooms can't be placed on a lobby concourse
+- ✅ Floors auto-created under a room when placed (no pre-laying bare floor)
+- ✅ No floating overhangs — a room must sit on the floor directly below (or the ground)
+- ✅ Basements (B1…B10) with continuous numbering (floor 0 = B1)
+- ✅ Multi-story facilities (cinema spans 2 floors; recycling 2; metro a whole basement floor)
+- ✅ Build/sell with construction time and a partial-refund bulldoze
+- ✅ Buildable bounds: 100 floors above, 9 below
+
+## Facilities (all original tenant/room types)
+- ✅ Office (quarterly rent; staffed 8–18 on weekdays)
+- ✅ Condominium (one-time sale; residents live in)
+- ✅ Hotel — Single / Double / Suite (nightly revenue, guests check in/out)
+- ✅ Fast Food, Restaurant, Retail Shop (daily traffic income, business hours)
+- ✅ Cinema (multi-floor, evening crowds), Party Hall
+- ✅ Services — Security, Medical Center, Housekeeping, Recycling Center, Parking
+- ✅ Metro Station (whole-floor deep basement; brings visitors)
+- ✅ Wedding Hall on floor 100 (religion-agnostic stand-in for the Cathedral)
+
+## Transport
+- ✅ Stairs, Escalators (single-floor links, animated climbers)
+- ✅ Standard / Service / Express elevators with multiple cars
+- ✅ Per-elevator car count and **per-floor stop configuration** (express / skip)
+- ✅ Demand-driven car dispatch (SCAN): cars serve waiting passengers, idle at the lobby when empty
+- ✅ Riders board to capacity and alight; cab shows its real load
+- ✅ Elevator-network reachability gates whether a floor is "served"
+
+## Economy
+- ✅ Start with $2,000,000
+- ✅ Office rent (quarterly), condo sale (once), hotel nightly revenue
+- ✅ Food / retail / cinema / party-hall traffic income, scaled by foot traffic + open hours
+- ✅ Per-car and per-service monthly maintenance
+- ✅ Buried treasure when excavating basement rooms
+
+## Population, stress & ratings
+- ✅ Population from offices/condos/hotels; weekday/weekend + rush-hour cycle
+- ◑ Tenant stress from elevator congestion (aggregate model) → low satisfaction tenants move out
+- ✅ Crowds tint red when transport is overwhelmed (the original's visual cue)
+- ✅ Star thresholds: 2★ 300 · 3★ 1,000 · 4★ 5,000 · 5★ 10,000
+- ✅ Facility gates: Security required for 3★, Medical for 4★
+- ✅ **TOWER** rating: 5★ + Wedding Hall + metro + VIP inspection (12,000 pop, scaled to our model)
+
+## Events & disasters
+- ✅ Fire — spreads to the neighbor unless Security/Medical contain it; costs repairs
+- ✅ Bomb threat (4★+) — Security defuses it; otherwise damage + fine
+- ✅ VIP inspection → TOWER win/lose
+- ✅ Treasure discovery; flavorful headlines
+
+## Time, audio, presentation
+- ✅ Day/night sky with the sun and moon both arcing across; lit interiors at night, lights-out when empty/asleep, shops show CLOSED off-hours
+- ✅ Location-aware procedural soundtrack + SFX
+- ✅ Pan / zoom / pinch and collision-based picking, all via Excalibur
+- ✅ Animated people: lobby/corridor walkers, stair/escalator climbers, elevator riders, the metro train
+
+## Save / platform
+- ✅ Autosave + multiple save slots, JSON export/import (`localStorage`)
+- ◑ Import of original `.TWR` saves — decoder is a documented v2 stub
+- ✅ Mobile: responsive layout, touch pan/pinch, drawer panels
+
+## Deliberate divergences
+- People are simulated as an **aggregate** traffic/stress model rather than thousands of individually-pathfound agents (the simulation stays DOM-free and unit-testable). Visible crowds, elevator load and stress all read from that model.
+- The **Cathedral** is a religion-agnostic **Wedding Hall**.
+- Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **12,000** rather than 15,000 to stay reachable.
+
+## Verification
+`npm test` runs **58 unit/integration tests** covering placement rules,
+economy, ratings gates, the housekeeping/fire/bomb events, elevator dispatch,
+save/load, the `.TWR` parser, and an **end-to-end run to the TOWER victory**
+(`src/tests/parity.test.ts`). `npm run build:single` produces a one-file
+playable build.
