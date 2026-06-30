@@ -443,9 +443,13 @@ export const POOLED_CAPS: { kinds: FacilityKind[]; cap: number; label: string }[
   { kinds: ["stairs", "escalator"], cap: 64, label: "stairs/escalators" },
 ];
 
-/** Maximum floors a transport may span. */
+/** Maximum floors a transport may span (a span is the gap between bottom and top,
+ * so floors served is span + 1). Stairs/escalators link one floor; standard and
+ * service elevators cap at 30; express has **no effective limit** in the original,
+ * so it may span the entire buildable height of the tower (derived from GRID, not
+ * a magic number). */
 export function maxSpanFor(kind: FacilityKind): number {
   if (kind === "stairs" || kind === "escalator") return 1;
-  if (kind === "elevatorExpress") return 99; // canon: express has no length limit
+  if (kind === "elevatorExpress") return GRID.maxFloor - GRID.minFloor; // whole tower height
   return 30;
 }

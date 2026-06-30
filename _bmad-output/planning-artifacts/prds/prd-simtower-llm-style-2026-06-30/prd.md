@@ -286,7 +286,8 @@ transport network. Realizes **UJ-2**, **UJ-4**.
   [`maxSpanFor`, `TRANSPORT_CAPACITY`].
 - **FR-23** — The player can build **Standard** (1★, ≤30 floors, ≤8 cars, cap
   21/car), **Service** (2★, ≤30 floors, ≤4 cars, cap 16/car), and **Express**
-  (3★, ≤99 floors / effectively unlimited, ≤8 cars, cap 33/car) elevators by dragging vertically to set
+  (3★, **no effective length limit** — may span the full tower height, ≤8 cars,
+  cap 33/car) elevators by dragging vertically to set
   the served span [`maxSpanFor`, `MAX_CARS`, `TRANSPORT_CAPACITY`].
 - **FR-24** — The player can edit a placed elevator in-game: adjust its **car
   count** and its **per-floor stop configuration** (which floors a car serves /
