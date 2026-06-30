@@ -61,7 +61,7 @@ abstraction · ⬜ not present.
 
 ## Time, audio, presentation
 - ✅ Day/night sky with the sun and moon both arcing across; lit interiors at night, lights-out when empty/asleep, shops show CLOSED off-hours
-- ✅ Weather: deterministic per-day clear / overcast / rain — drifting clouds and rain streaks (purely cosmetic; off the gameplay RNG)
+- ✅ Weather: deterministic per-day clear / cloudy / rain (the `WeatherKind` states) — drifting clouds and rain streaks (purely cosmetic; off the gameplay RNG)
 - ✅ Location-aware procedural soundtrack + SFX
 - ✅ Pan / zoom / pinch and collision-based picking, all via Excalibur
 - ✅ Animated people: lobby/corridor walkers, stair/escalator climbers, elevator riders, the metro train

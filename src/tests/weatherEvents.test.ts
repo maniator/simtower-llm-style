@@ -94,4 +94,23 @@ describe("Seasonal & visitor events", () => {
     runYears(events, ctx, 360);
     expect(ctx.log.some((m) => m.includes("Santa"))).toBe(false);
   });
+
+  it("persists Santa's once-a-year guard across save/load", () => {
+    const ctx = makeCtx(new Tower(), 3);
+    const events = new EventSystem(ctx, 7);
+    runYears(events, ctx, 360); // Santa visits once this year
+    expect(ctx.log.filter((m) => m.includes("Santa")).length).toBe(1);
+
+    // Save → load into a fresh system (different seed), replay the same year's
+    // holidays: the restored guard must keep Santa from visiting again.
+    const saved = events.saveState();
+    const ctx2 = makeCtx(new Tower(), 3);
+    const events2 = new EventSystem(ctx2, 999);
+    events2.loadState(saved);
+    for (let d = 340; d < 360; d++) {
+      ctx2.clock = new Clock(d * 1440);
+      events2.maybeRandomEvent();
+    }
+    expect(ctx2.log.some((m) => m.includes("Santa"))).toBe(false);
+  });
 });

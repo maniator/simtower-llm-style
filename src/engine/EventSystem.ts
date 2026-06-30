@@ -14,12 +14,24 @@ export class EventSystem {
   private active = new Set<number>();
   /** Dedicated RNG for the seasonal/visitor events, so adding them never
    * disturbs the gameplay RNG stream the rest of the sim depends on. */
-  private readonly extra: RNG;
+  private extra: RNG;
   /** Year index of the last Santa visit, so he comes at most once a year. */
   private lastSantaYear = -1;
 
   constructor(private readonly sim: SimContext, seed = 1) {
     this.extra = new RNG((seed ^ 0x5a17a) >>> 0);
+  }
+
+  /** Persist the seasonal-event state (RNG position + Santa guard) for saves. */
+  saveState(): { lastSantaYear: number; rngState: number } {
+    return { lastSantaYear: this.lastSantaYear, rngState: this.extra.seed };
+  }
+
+  /** Restore seasonal-event state from a save (no-op for older saves). */
+  loadState(state?: { lastSantaYear: number; rngState: number }): void {
+    if (!state) return;
+    this.lastSantaYear = state.lastSantaYear;
+    this.extra = new RNG(state.rngState);
   }
 
   /** Number of units currently on fire (for the UI / stats). */

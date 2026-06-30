@@ -638,6 +638,7 @@ export class Simulation implements SimContext {
       builtWeddingHall: this.tower.builtWeddingHall,
       evaluatedTower: this.evaluatedTower,
       vipVisitDay: this.vipVisitDay,
+      events: this.events.saveState(),
     };
   }
 
@@ -674,6 +675,12 @@ export class Simulation implements SimContext {
       if (u.state === "construction") sim.constructing.add(u.id);
     }
     sim.events.restore(sim.tower.units.filter((u) => u.state === "fire").map((u) => u.id));
+    // Resume the seasonal-event RNG and Santa's once-a-year guard so a save can't
+    // make Santa re-visit (or thieves replay) the same in-game year.
+    sim.events.loadState(data.events);
+    // Recompute today's sky so a freshly loaded game doesn't show stale weather
+    // until the next day boundary.
+    sim.weather = Simulation.weatherFor(sim.clock.day);
     sim.lastDay = sim.clock.day;
     sim.lastQuarter = sim.clock.quarter;
     sim.lastMonth = Math.floor(sim.clock.day / 30);

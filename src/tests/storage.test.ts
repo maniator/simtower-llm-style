@@ -40,6 +40,14 @@ describe("SaveGame", () => {
     expect(Number.isFinite(u.occupants)).toBe(true);
   });
 
+  it("recomputes the sky weather on load (not left stale)", () => {
+    const sim = sampleGame();
+    sim.tick(60 * 24 * 5); // advance a few days
+    const loaded = Simulation.deserialize(sim.serialize());
+    expect(loaded.weather).toBe(Simulation.weatherFor(loaded.clock.day));
+    expect(loaded.weather).toBe(sim.weather);
+  });
+
   it("round-trips through localStorage", () => {
     const sim = sampleGame();
     SaveGame.save(sim);

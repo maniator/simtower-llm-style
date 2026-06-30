@@ -38,6 +38,12 @@ CI (`.github/workflows/test.yml`) runs all of the above on every PR.
 
 ## Code review
 
+- **Self-review before pushing.** Read your own diff end-to-end with a
+  reviewer's eye — correctness (wrong conditions, off-by-one, null/undefined,
+  missing `await`, broken call sites) and cleanup (duplication, dead code,
+  needless complexity) — and fix what you find before opening or updating a PR.
+  Treat it as running `/code-review` on yourself; don't outsource the first
+  pass to the bots.
 - Codex re-reviews automatically on every push. **Copilot does not** — its
   review is a one-shot snapshot, so after pushing new commits to a PR you must
   **re-request a review from Copilot** to get it to look at the latest changes
