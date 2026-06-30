@@ -309,6 +309,13 @@ export const STAR_THRESHOLDS: Record<number, number> = {
   5: 10000,
 };
 
+/**
+ * Population needed for the final TOWER rating (above 5 stars). The original
+ * asks for 15,000; our population model is smaller-scale (retail/food add no
+ * residents), so the equivalent "fill a tall tower" goal sits at 12,000.
+ */
+export const TOWER_POPULATION = 12000;
+
 /** Tower geometry constants. */
 export const GRID = {
   /** Highest above-ground floor. */

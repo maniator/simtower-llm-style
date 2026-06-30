@@ -5,6 +5,7 @@ import {
   FACILITIES,
   GRID,
   STAR_THRESHOLDS,
+  TOWER_POPULATION,
   TRANSPORT_CAPACITY,
   buildMinutes,
   facilityFloors,
@@ -584,7 +585,7 @@ export class Simulation {
     const ok =
       this.tower.builtWeddingHall &&
       this.star >= 5 &&
-      pop >= STAR_THRESHOLDS[5] &&
+      pop >= TOWER_POPULATION &&
       this.hasAny("metro");
     if (ok) {
       this.star = 6;

@@ -1,4 +1,5 @@
 import type { FacilityKind, Unit, UnitState } from "../engine/types";
+import { FACILITIES, hasBusinessHours, isOpenAt } from "../engine/facilities";
 
 /**
  * Faithful "dollhouse cross-section" room art, following the SimTower design
@@ -104,6 +105,16 @@ const POPULATED = new Set<FacilityKind>(["office", "condo", "hotelSingle", "hote
 
 export function drawRoom(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number): void {
   const { ctx } = d;
+  // Commercial shows its shutter whenever it's outside business hours.
+  if (
+    hasBusinessHours(u.kind) &&
+    u.state !== "empty" &&
+    u.state !== "construction" &&
+    !isOpenAt(u.kind, d.hour)
+  ) {
+    closedShutter(d, x, y, w, h, FACILITIES[u.kind].color);
+    return;
+  }
   switch (u.kind) {
     case "office":
       office(d, u, x, y, w, h);
@@ -137,8 +148,12 @@ export function drawRoom(d: RoomCtx, u: Unit, x: number, y: number, w: number, h
       ctx.fillStyle = "#3a3f4a";
       ctx.fillRect(x, y, w, h);
   }
-  // Lights out: at night a home/workplace with nobody in it goes dark.
-  if (d.lit && u.occupants <= 0 && POPULATED.has(u.kind) && u.state !== "empty" && u.state !== "construction") {
+  // Lights out at night: an empty home/workplace, or a condo whose residents
+  // are asleep in the small hours.
+  const lateNight = d.hour >= 23 || d.hour < 6;
+  const emptyAtNight = d.lit && u.occupants <= 0 && POPULATED.has(u.kind);
+  const asleepHome = u.kind === "condo" && u.occupants > 0 && lateNight;
+  if ((emptyAtNight || asleepHome) && u.state !== "empty" && u.state !== "construction") {
     ctx.fillStyle = "rgba(8,10,22,0.5)";
     ctx.fillRect(x, y, w, h);
   }
@@ -224,7 +239,8 @@ function office(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number)
 function condo(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number): void {
   const { ctx } = d;
   if (u.state === "empty") return vacancy(ctx, x, y, w, h, "SALE");
-  const home = u.occupants > 0;
+  // Residents are "up" only when home and not asleep in the small hours.
+  const home = u.occupants > 0 && !(d.hour >= 23 || d.hour < 6);
   const wall = hash(u.id) > 0.5 ? "#C8A88C" : "#B89CAE";
   const floorY = shell(ctx, x, y, w, h, wall, "#9A7A54");
   wallItem(ctx, x, y, w, "#7a5a44"); // framed picture
@@ -243,7 +259,7 @@ function condo(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number):
   // Standing lamp.
   ctx.fillStyle = "#7A6A50";
   ctx.fillRect(base + sofaW + 6, floorY - 12, 2, 12);
-  ctx.fillStyle = home || d.lit ? "#F0D890" : "#9a8f70";
+  ctx.fillStyle = home ? "#F0D890" : "#9a8f70";
   ctx.beginPath();
   ctx.moveTo(base + sofaW + 7, floorY - 16);
   ctx.lineTo(base + sofaW + 3, floorY - 11);
@@ -313,7 +329,6 @@ function hotel(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number, 
 
 function fastFood(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number): void {
   const { ctx } = d;
-  if (u.state === "occupied" && d.hour >= 22) return closedShutter(d, x, y, w, h, "#e87b6e");
   const floorY = shell(ctx, x, y, w, h, "#F0D8B0", "#B5742E");
   // Bold sign band — the fast-food signature.
   const band = Math.max(4, h * 0.16);
@@ -342,9 +357,6 @@ function fastFood(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: numbe
 
 function restaurant(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number): void {
   const { ctx } = d;
-  if (u.state === "occupied" && !(((d.hour >= 11 && d.hour < 14) || (d.hour >= 17 && d.hour < 23)))) {
-    return closedShutter(d, x, y, w, h, "#d4564a");
-  }
   const floorY = shell(ctx, x, y, w, h, "#3A2230", "#2B2238");
   // Chandelier.
   ctx.fillStyle = "#6a5040";
