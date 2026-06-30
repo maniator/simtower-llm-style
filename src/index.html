@@ -48,7 +48,7 @@
           <div id="hint">Drag to pan · Scroll to zoom · Click to build · Inspect tool to edit a room</div>
           <div id="inspector" class="hidden"></div>
           <div id="editor" class="hidden"></div>
-          <div id="toast-wrap"></div>
+          <div id="toast-wrap" role="status" aria-live="assertive" aria-atomic="false"></div>
         </section>
 
         <aside id="sidebar">
@@ -65,7 +65,7 @@
           </div>
           <div class="panel grow">
             <h3>Bulletin</h3>
-            <div id="log"></div>
+            <div id="log" role="log" aria-live="polite" aria-label="Tower bulletin"></div>
           </div>
           <div class="panel">
             <h3>Game</h3>

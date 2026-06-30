@@ -90,12 +90,28 @@ export class UI {
     this.el.palette.appendChild(frag);
   }
 
+  /** Make a palette div behave like a button for mouse AND keyboard users:
+   * focusable, role=button, and activatable with Enter/Space (F48 — a
+   * keyboard-only play path). */
+  private makeActivatable(item: HTMLElement, label: string, onActivate: () => void): void {
+    item.tabIndex = 0;
+    item.setAttribute("role", "button");
+    item.setAttribute("aria-label", label);
+    item.addEventListener("click", onActivate);
+    item.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+        e.preventDefault();
+        onActivate();
+      }
+    });
+  }
+
   private toolButton(type: "inspect" | "bulldoze", label: string, color: string): HTMLElement {
     const item = document.createElement("div");
     item.className = "pal-item";
     item.dataset.tool = type;
     item.innerHTML = `<span class="pal-swatch" style="background:${color}"></span><span class="pal-name">${label}</span>`;
-    item.addEventListener("click", () => this.selectTool({ type } as Tool));
+    this.makeActivatable(item, label, () => this.selectTool({ type } as Tool));
     return item;
   }
 
@@ -108,7 +124,7 @@ export class UI {
       `<span class="pal-swatch" style="background:${f.color}"></span>` +
       `<span class="pal-name">${f.name}</span>` +
       `<span class="pal-cost">$${shortMoney(f.cost)}</span>`;
-    item.addEventListener("click", () => {
+    this.makeActivatable(item, `${f.name}, $${shortMoney(f.cost)}`, () => {
       if (item.classList.contains("locked")) {
         this.toast(`${f.name} unlocks at ${f.minStar}★.`, "bad");
         return;
