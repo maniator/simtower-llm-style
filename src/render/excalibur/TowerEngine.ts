@@ -185,6 +185,8 @@ export class TowerEngine {
     this.d.anim = (globalThis.performance ? performance.now() : 0) / 1000;
     this.d.hour = c.hour;
     this.d.lit = c.isNight() || c.isEvening();
+    // Overcrowded transport (congestion > 1) tints the walking crowds red.
+    this.d.stress = Math.max(0, Math.min(1, this.sim.congestion() - 1));
     this.engine.backgroundColor = ex.Color.fromHex(skyColor(c.hour));
     if (this.onUpdate) this.onUpdate(elapsed);
     if (this.sim.tower.revision !== this.cacheRev) this.rebuild();
@@ -432,13 +434,16 @@ export class TowerEngine {
     const footY = FLOOR - 3;
     const density = r.kind === "lobby" ? (busy ? 0.5 : 0.28) : 0.16;
     const count = Math.min(40, Math.floor((w / 10) * density));
+    const stress = this.d.stress ?? 0;
     for (let i = 0; i < count; i++) {
       const seed = (r.floor * 131 + r.x0 * 7 + i * 53) | 0;
       const dir = seed % 2 === 0 ? 1 : -1;
       const speed = 8 + (seed % 7);
       let px = ((i / count) * w + dir * this.d.anim * speed) % w;
       if (px < 0) px += w;
-      person(ctx, px, footY, 1.1, seed);
+      // The most impatient fraction of the crowd turns red as waits grow.
+      const angry = (((seed >>> 8) & 0xff) / 255) < stress;
+      person(ctx, px, footY, 1.1, seed, false, angry ? "#C24A3A" : undefined);
     }
   }
 

@@ -52,6 +52,8 @@ export interface DrawCtx {
   anim: number;
   /** In-game hour 0..23, for time-of-day behavior. */
   hour: number;
+  /** 0..1 transport overcrowding; tints walking crowds "angry" when high. */
+  stress?: number;
 }
 
 /** Draw a placed room/structure unit into the given screen rectangle. */

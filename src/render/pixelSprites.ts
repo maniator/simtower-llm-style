@@ -55,12 +55,14 @@ export { SHIRTS, SKIN };
  * The iconic SimTower sim: a solid silhouette. `s` is the unit pixel size
  * (figure is ~3*s wide head, ~6*s tall). Seated drops the legs.
  */
-export function person(ctx: CanvasRenderingContext2D, x: number, footY: number, s: number, seed: number, seated = false): void {
+export function person(ctx: CanvasRenderingContext2D, x: number, footY: number, s: number, seed: number, seated = false, tint?: string): void {
   const head = Math.max(2, Math.round(2 * s));
   const bodyW = Math.max(2, Math.round(2.4 * s));
   const bodyH = Math.max(2, Math.round((seated ? 3 : 4) * s));
   const top = footY - bodyH - head;
-  ctx.fillStyle = SHIRTS[Math.abs(seed) % SHIRTS.length];
+  // A `tint` (e.g. a stress color) overrides the usual shirt color so crowds
+  // can visibly turn "angry" when the tower's transport is overwhelmed.
+  ctx.fillStyle = tint ?? SHIRTS[Math.abs(seed) % SHIRTS.length];
   ctx.fillRect(x, top + head, bodyW, bodyH);
   ctx.fillStyle = SKIN[Math.abs(seed >> 4) % SKIN.length];
   ctx.fillRect(x, top, head, head);
