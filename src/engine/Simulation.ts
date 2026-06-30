@@ -795,6 +795,8 @@ export class Simulation {
         dwell = new Array(t.cars).fill(0);
         this.carDwell.set(t.id, dwell);
       }
+      if (!t.carLoad || t.carLoad.length !== t.cars) t.carLoad = new Array(t.cars).fill(0);
+      const cap = TRANSPORT_CAPACITY[t.kind] ?? 12;
 
       const v = dt * 0.4; // floors travelled this step
       for (let i = 0; i < t.cars; i++) {
@@ -816,6 +818,7 @@ export class Simulation {
           target = stops[0];
           if (Math.abs(pos - target) < 0.05) {
             t.carDir[i] = 0;
+            t.carLoad[i] = 0; // everyone's stepped off
             continue;
           }
         }
@@ -823,8 +826,14 @@ export class Simulation {
         if (Math.abs(target - pos) <= v) {
           pos = target;
           dwell[i] = 1.2; // pause to load / unload
-          const w = demand.get(target);
-          if (w) demand.set(target, Math.max(0, w - 14)); // picked them up
+          // Some riders alight, then waiting passengers board up to capacity.
+          t.carLoad[i] = Math.max(0, t.carLoad[i] - Math.ceil(t.carLoad[i] * 0.45));
+          const w = demand.get(target) ?? 0;
+          const board = Math.max(0, Math.min(cap - t.carLoad[i], w));
+          if (board > 0) {
+            t.carLoad[i] += board;
+            demand.set(target, Math.max(0, w - board));
+          }
           if (pos >= t.top) dir = -1;
           else if (pos <= t.bottom) dir = 1;
         } else {

@@ -118,6 +118,8 @@ export interface Transport {
   carPositions: number[];
   /** Direction of each car: -1 down, 0 idle, 1 up. */
   carDir: number[];
+  /** Passengers currently aboard each car (for rendering riders). */
+  carLoad?: number[];
   /** Number of riders currently in transit through this transport. */
   load: number;
   /** Floors this transport is configured NOT to stop at (express service). */

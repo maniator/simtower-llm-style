@@ -183,7 +183,8 @@ function office(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number)
   const slot = 22;
   const start = x + 6;
   const count = Math.max(1, Math.floor((w - 10) / slot));
-  const filled = Math.max(1, Math.min(count, u.occupants || Math.round(count * 0.7)));
+  // Show exactly as many workers as are actually present (none on a weekend).
+  const filled = Math.max(0, Math.min(count, u.occupants));
   for (let i = 0; i < count; i++) {
     const dx = start + i * slot;
     // Desk.

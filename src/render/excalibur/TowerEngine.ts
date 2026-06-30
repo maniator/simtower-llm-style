@@ -94,7 +94,7 @@ export class TowerEngine {
   private transportActors = new Map<number, ex.Actor>();
   private transportSig = new Map<number, string>();
   // Engine-animated actors, regenerated when the layout changes.
-  private carActors: { actor: ex.Actor; t: Transport; i: number; empty: ex.Canvas; full: ex.Canvas; showFull: boolean }[] = [];
+  private carActors: { actor: ex.Actor; t: Transport; i: number; gfx: ex.Canvas[]; shown: number }[] = [];
   private trainActors: { actor: ex.Actor; u: Unit; w: number }[] = [];
   private walkers: Walker[] = [];
   private builtRev = -1;
@@ -533,7 +533,7 @@ export class TowerEngine {
         if (!this.structActors.has(u.id)) this.addStruct(u);
       } else {
         seenR.add(u.id);
-        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}`;
+        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}`;
         const a = this.roomActors.get(u.id);
         if (!a) {
           this.addRoom(u);
@@ -655,12 +655,14 @@ export class TowerEngine {
       const w = t.width * TILE;
       for (let i = 0; i < t.cars; i++) {
         const seed = (i * 7 + t.id) | 0;
-        const empty = new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, 0) });
-        const full = new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, 2) });
+        // One graphic per rider count 0..4, so the cab fills as it loads up.
+        const gfx = Array.from({ length: 5 }, (_, r) =>
+          new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, r) }),
+        );
         const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), -t.carPositions[i] * FLOOR), width: w, height: FLOOR, anchor: ex.vec(0, 0), z: 2 });
-        a.graphics.use(empty);
+        a.graphics.use(gfx[0]);
         this.engine.add(a);
-        this.carActors.push({ actor: a, t, i, empty, full, showFull: false });
+        this.carActors.push({ actor: a, t, i, gfx, shown: 0 });
       }
     }
     for (const u of this.sim.tower.units) {
@@ -741,11 +743,12 @@ export class TowerEngine {
     const anim = this.d.anim;
     for (const c of this.carActors) {
       c.actor.pos = ex.vec(this.worldX(c.t.x), -c.t.carPositions[c.i] * FLOOR);
-      // Show passengers only while the car is actually running a trip.
-      const moving = (c.t.carDir[c.i] ?? 0) !== 0;
-      if (moving !== c.showFull) {
-        c.showFull = moving;
-        c.actor.graphics.use(moving ? c.full : c.empty);
+      // Show the actual number of riders aboard (0..4 buckets).
+      const load = c.t.carLoad?.[c.i] ?? 0;
+      const riders = Math.max(0, Math.min(4, Math.ceil(load / 4)));
+      if (riders !== c.shown) {
+        c.shown = riders;
+        c.actor.graphics.use(c.gfx[riders]);
       }
     }
     for (const tr of this.trainActors) {
