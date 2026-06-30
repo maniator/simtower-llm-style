@@ -1,0 +1,27 @@
+import type { Clock } from "./Clock";
+import type { RNG } from "./rng";
+import type { Tower } from "./Tower";
+import type { FacilityKind } from "./types";
+
+/** Severity tag for a log/headline entry. */
+export type LogKind = "info" | "good" | "bad" | "money";
+
+/**
+ * The slice of {@link Simulation} that extracted subsystems (events, economy)
+ * read and mutate. Depending on this narrow interface — rather than the whole
+ * Simulation — keeps each subsystem independently testable: a test can drive
+ * one with a tiny hand-rolled context instead of standing up the entire game.
+ */
+export interface SimContext {
+  readonly tower: Tower;
+  readonly clock: Clock;
+  readonly rng: RNG;
+  /** Mutable cash balance; subsystems add income / subtract costs directly. */
+  money: number;
+  readonly star: number;
+  emit(text: string, kind?: LogKind): void;
+  /** True if the tower contains at least one unit of this kind. */
+  hasAny(kind: FacilityKind): boolean;
+  /** Human floor label: "floor 5" above ground, "B1"/"B2"… below. */
+  floorLabel(floor: number): string;
+}

@@ -15,6 +15,9 @@ Conventions for anyone (human or AI agent) working in this repository.
 ## Architecture
 
 - `src/engine/` — pure game simulation (no DOM). Deterministic; covered by tests.
+  `Simulation` is the orchestrator; cohesive subsystems live in their own
+  modules (`ElevatorDispatch`, `EventSystem`, `EconomySystem`, `Crowd`) and
+  depend on the narrow `SimContext` interface so each is testable on its own.
 - `src/render/` — canvas rendering and pixel-art sprites. Reads engine state,
   never mutates it.
 - `src/ui/` — DOM controls (palette, status bar, dialogs). Uses native

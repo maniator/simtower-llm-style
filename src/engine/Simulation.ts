@@ -1,7 +1,14 @@
 import { Clock } from "./Clock";
 import { Crowd } from "./Crowd";
+import { EconomySystem } from "./EconomySystem";
+import { ECON } from "./econConfig";
+import { ElevatorDispatch } from "./ElevatorDispatch";
+import { EventSystem } from "./EventSystem";
+import type { SimContext } from "./SimContext";
 import { Tower } from "./Tower";
 import { RNG } from "./rng";
+
+export { ECON } from "./econConfig";
 import {
   FACILITIES,
   GRID,
@@ -13,7 +20,6 @@ import {
   isElevatorKind,
   isFacilityKind,
   isHotelKind,
-  isOpenAt,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit } from "./types";
 
@@ -26,29 +32,6 @@ import type { FacilityKind, SerializedGame, Unit } from "./types";
 const CROWD_SECONDS_PER_MINUTE = 2;
 const CROWD_MAX_STEP = 60;
 
-/** Tunable economic constants (dollars). */
-export const ECON = {
-  startingMoney: 2_000_000,
-  officeRentQuarterly: 10_000,
-  condoSalePrice: 120_000,
-  hotel: { hotelSingle: 90, hotelDouble: 180, hotelSuite: 500 } as Record<string, number>,
-  dailyTrafficIncome: {
-    fastFood: 2_000,
-    restaurant: 4_000,
-    shop: 2_500,
-    cinema: 8_000,
-    partyHall: 3_000,
-  } as Record<string, number>,
-  maintenancePerCarMonthly: 600,
-  serviceMaintenanceMonthly: {
-    security: 2_000,
-    medical: 5_000,
-    housekeeping: 1_000,
-    recycling: 4_000,
-    metro: 8_000,
-  } as Record<string, number>,
-} as const;
-
 export interface LogEntry {
   minute: number;
   text: string;
@@ -59,7 +42,7 @@ export interface LogEntry {
  * Simulation drives time, money, population and ratings. The renderer and UI
  * read its state; they never mutate the model directly except via build/sell.
  */
-export class Simulation {
+export class Simulation implements SimContext {
   tower = new Tower();
   clock = new Clock();
   rng: RNG;
@@ -85,10 +68,15 @@ export class Simulation {
     return this.crowd.stress;
   }
 
+  /** Demand-driven elevator dispatch (owns its own waiting/dwell state). */
+  private elevators = new ElevatorDispatch();
+  /** Fire / bomb-threat emergencies (owns the set of burning units). */
+  private events: EventSystem;
+  /** Rent, traffic income, hotel revenue, housekeeping and maintenance. */
+  private economy: EconomySystem;
+
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
-  /** Ids of units currently ablaze (a fire emergency in progress). */
-  private activeFires = new Set<number>();
 
   /** Bookkeeping for period boundaries. */
   private lastDay = 0;
@@ -101,6 +89,8 @@ export class Simulation {
   constructor(seed = 12345) {
     this.rng = new RNG(seed);
     this.crowd = new Crowd(seed);
+    this.events = new EventSystem(this);
+    this.economy = new EconomySystem(this);
   }
 
   // ---- Logging -----------------------------------------------------------
@@ -242,7 +232,7 @@ export class Simulation {
   /** Advance the world by `dtMinutes` of game time. */
   tick(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
-    this.updateElevators(dtMinutes);
+    this.elevators.update(this.tower, dtMinutes, this.rushFactor());
     // Advance the individually-routed crowd in lock-step with game time (after
     // the cars move, so people board their fresh positions). They run on the
     // crowd's own seconds — a few per game-minute — and a single huge tick is
@@ -286,27 +276,27 @@ export class Simulation {
     this.updatePresence();
     this.updateSatisfaction();
     this.attemptMoveIns();
-    this.collectTrafficIncome();
+    this.economy.collectTrafficIncome();
     this.evaluateStar();
   }
 
   /** Daily: hotel checkout, housekeeping, rent, maintenance, events. */
   private onDay(): void {
-    this.hotelCheckout();
+    this.economy.hotelCheckout();
 
     const month = Math.floor(this.clock.day / 30);
     if (month !== this.lastMonth) {
       this.lastMonth = month;
-      this.payMaintenance();
+      this.economy.payMaintenance();
     }
 
     const q = this.clock.quarter;
     if (q !== this.lastQuarter) {
       this.lastQuarter = q;
-      this.collectRent();
+      this.economy.collectRent();
     }
 
-    this.maybeRandomEvent();
+    this.events.maybeRandomEvent();
     this.checkVip();
   }
 
@@ -473,122 +463,11 @@ export class Simulation {
     return `${this.rng.pick(a)} ${this.rng.pick(b)}`;
   }
 
-  // ---- Income ------------------------------------------------------------
-
-  private collectRent(): void {
-    let total = 0;
-    let count = 0;
-    for (const u of this.tower.units) {
-      if (u.kind === "office" && u.state === "occupied" && this.tower.isFloorServed(u.floor)) {
-        total += ECON.officeRentQuarterly;
-        count++;
-      }
-    }
-    if (total > 0) {
-      this.money += total;
-      this.emit(`Quarterly office rent collected: $${total.toLocaleString()} (${count} offices).`, "money");
-    }
-  }
-
-  private collectTrafficIncome(): void {
-    // Food/retail/entertainment earn a slice of their daily potential each
-    // hour they're open and reachable, scaled by nearby population.
-    const appeal = this.trafficAppeal();
-    for (const u of this.tower.units) {
-      const daily = ECON.dailyTrafficIncome[u.kind];
-      if (daily === undefined) continue;
-      if (u.state === "construction" || u.state === "fire") continue;
-      if (!this.tower.isFloorServed(u.floor)) continue;
-      if (!isOpenAt(u.kind, this.clock.hour)) {
-        // Closed for the night — no patrons.
-        if (u.state === "occupied") u.occupants = 0;
-        continue;
-      }
-      u.state = "occupied";
-      const hourly = (daily / 8) * appeal * (0.6 + this.rng.next() * 0.4);
-      u.pendingIncome += hourly;
-      if (u.pendingIncome >= 1) {
-        const earned = Math.floor(u.pendingIncome);
-        u.pendingIncome -= earned;
-        this.money += earned;
-      }
-    }
-  }
-
-
-  /** 0..~1.8 multiplier from how busy the tower is. A metro station pulls in
-   *  crowds of outside visitors, lifting trade for every shop and eatery —
-   *  the classic reason to dig down to the subway in the original. */
-  private trafficAppeal(): number {
-    const pop = this.tower.totalPopulation();
-    const metro = this.hasAny("metro") ? 0.4 : 0;
-    return Math.min(1.8, 0.3 + pop / 4000 + metro);
-  }
-
-  // ---- Hotels ------------------------------------------------------------
-
-  private hotelCheckout(): void {
-    let revenue = 0;
-    for (const u of this.tower.units) {
-      if (!isHotelKind(u.kind)) continue;
-      if (u.state === "asleep") {
-        revenue += ECON.hotel[u.kind] ?? 0;
-        // Guest leaves; the room is now DIRTY and cannot be re-let until
-        // housekeeping services it.
-        u.state = "dirty";
-        u.occupants = 0;
-      }
-    }
-    if (revenue > 0) {
-      this.money += revenue;
-      this.emit(`Hotel guests checked out: $${revenue.toLocaleString()} earned overnight.`, "money");
-    }
-    this.runHousekeeping();
-  }
-
-  /**
-   * Each housekeeping facility services a fixed number of dirty rooms per day.
-   * Without enough housekeeping, dirty rooms pile up and cannot earn — exactly
-   * as in the original, where you scale housekeeping with your hotel.
-   */
-  private runHousekeeping(): void {
-    const capacityPerUnit = 20;
-    let capacity =
-      this.tower.units.filter((u) => u.kind === "housekeeping").length * capacityPerUnit;
-    if (capacity <= 0) return;
-    let cleaned = 0;
-    for (const u of this.tower.units) {
-      if (capacity <= 0) break;
-      if (isHotelKind(u.kind) && u.state === "dirty" && this.tower.isFloorServed(u.floor)) {
-        u.state = "empty";
-        u.satisfaction = 1;
-        capacity--;
-        cleaned++;
-      }
-    }
-    if (cleaned > 0) this.emit(`Housekeeping cleaned ${cleaned} hotel room(s).`, "info");
-  }
+  // ---- Income (delegated to EconomySystem) -------------------------------
 
   /** Count of hotel rooms still awaiting cleaning. */
   dirtyRooms(): number {
     return this.tower.units.filter((u) => isHotelKind(u.kind) && u.state === "dirty").length;
-  }
-
-  // ---- Maintenance -------------------------------------------------------
-
-  private payMaintenance(): void {
-    let cost = 0;
-    for (const t of this.tower.transports) {
-      if (isElevatorKind(t.kind)) cost += t.cars * ECON.maintenancePerCarMonthly;
-    }
-    for (const u of this.tower.units) {
-      const m = ECON.serviceMaintenanceMonthly[u.kind];
-      if (m) cost += m;
-    }
-    if (cost > 0) {
-      this.money -= cost;
-      this.emit(`Monthly maintenance paid: $${cost.toLocaleString()}.`, "money");
-    }
   }
 
   // ---- Star rating -------------------------------------------------------
@@ -613,7 +492,7 @@ export class Simulation {
     }
   }
 
-  private hasAny(kind: FacilityKind): boolean {
+  hasAny(kind: FacilityKind): boolean {
     return this.tower.units.some((u) => u.kind === kind);
   }
 
@@ -639,255 +518,26 @@ export class Simulation {
     }
   }
 
-  // ---- Random events -----------------------------------------------------
+  // ---- Random events (delegated to EventSystem) --------------------------
 
   /** Number of units currently on fire (for the UI / stats). */
   get fires(): number {
-    return this.activeFires.size;
+    return this.events.count;
   }
 
   /** Human floor label: "floor 5" above ground, "B1"/"B2"… below (floor 0 = B1). */
-  private floorLabel(floor: number): string {
+  floorLabel(floor: number): string {
     return floor >= 1 ? `floor ${floor}` : `B${1 - floor}`;
   }
 
-  private maybeRandomEvent(): void {
-    // An ongoing fire is fought (or spreads) every day until it's out.
-    this.processFires();
-    if (this.star < 2) return;
-
-    const roll = this.rng.next();
-    // A medical center's fast emergency response makes fires far less likely.
-    const fireChance = this.hasAny("medical") ? 0.04 : 0.09;
-    if (this.activeFires.size === 0 && roll < fireChance) {
-      this.startFire();
-      return;
-    }
-    // Bomb threats target prestigious towers (4★ and up).
-    if (this.star >= 4 && roll < fireChance + 0.05) {
-      this.bombThreat();
-      return;
-    }
-    // Otherwise the occasional flavorful headline.
-    if (this.rng.chance(0.15)) {
-      if (this.rng.chance(0.5)) this.emit("A local newspaper praised your tower's design.", "good");
-      else this.emit("Tenants are happy with the tower today.", "info");
-    }
-  }
-
-  /** Rooms that can catch fire (real, finished rooms — not structure). */
-  private flammableUnits(): Unit[] {
-    return this.tower.units.filter(
-      (u) =>
-        u.kind !== "floor" &&
-        u.kind !== "lobby" &&
-        u.state !== "construction" &&
-        u.state !== "fire",
-    );
-  }
-
-  /** Ignite a random room. */
+  /** Ignite a random room (exposed for the debug/event hooks and tests). */
   startFire(): void {
-    const candidates = this.flammableUnits();
-    if (candidates.length === 0) return;
-    const u = this.rng.pick(candidates);
-    u.state = "fire";
-    u.occupants = 0;
-    this.activeFires.add(u.id);
-    this.emit(`🔥 Fire broke out in ${FACILITIES[u.kind].name} on ${this.floorLabel(u.floor)}!`, "bad");
+    this.events.startFire();
   }
 
-  /** The room immediately left or right of a unit on the same floor. */
-  private adjacentRoom(u: Unit): Unit | undefined {
-    return this.tower.roomAt(u.floor, u.x - 1) ?? this.tower.roomAt(u.floor, u.x + u.width);
-  }
-
-  /**
-   * Resolve active fires. Security and especially a medical center speed the
-   * emergency response; without them a blaze is more likely to spread to the
-   * neighboring room before it's contained — the core reason to staff your
-   * tower in the original game.
-   */
-  private processFires(): void {
-    if (this.activeFires.size === 0) return;
-    const control = 0.35 + (this.hasAny("security") ? 0.2 : 0) + (this.hasAny("medical") ? 0.3 : 0);
-    for (const id of [...this.activeFires]) {
-      const u = this.tower.units.find((x) => x.id === id);
-      if (!u || u.state !== "fire") {
-        this.activeFires.delete(id);
-        continue;
-      }
-      if (this.rng.chance(control)) {
-        // Contained: pay to repair the gutted unit, then it reopens vacant.
-        const repair = Math.floor(FACILITIES[u.kind].cost * 0.3);
-        this.money -= repair;
-        u.state = "empty";
-        u.satisfaction = 1;
-        u.everOccupied = false;
-        u.label = FACILITIES[u.kind].name;
-        this.activeFires.delete(id);
-        this.emit(`Firefighters contained the blaze on ${this.floorLabel(u.floor)}. Repairs cost $${repair.toLocaleString()}.`, "money");
-      } else {
-        const next = this.adjacentRoom(u);
-        if (next && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && next.state !== "construction") {
-          next.state = "fire";
-          next.occupants = 0;
-          this.activeFires.add(next.id);
-          this.emit(`The fire spread to ${FACILITIES[next.kind].name} on ${this.floorLabel(next.floor)}!`, "bad");
-        }
-      }
-    }
-    // An active emergency rattles everyone still in the building.
-    if (this.activeFires.size > 0) {
-      for (const u of this.tower.units) {
-        if (u.state === "occupied" || u.state === "asleep") {
-          u.satisfaction = Math.max(0, u.satisfaction - 0.05);
-        }
-      }
-    }
-  }
-
-  /** A bomb scare. Security defuses it; without guards it does real damage. */
+  /** A bomb scare (exposed for the debug/event hooks and tests). */
   bombThreat(): void {
-    if (this.hasAny("security")) {
-      const cost = 2_000 + this.rng.int(0, 3_000);
-      this.money -= cost;
-      this.emit(`💣 A bomb threat was called in — security swept the tower and found nothing. The evacuation cost $${cost.toLocaleString()}.`, "info");
-      return;
-    }
-    const fine = 15_000 + this.rng.int(0, 15_000);
-    this.money -= fine;
-    const targets = this.flammableUnits();
-    if (targets.length > 0) {
-      const u = this.rng.pick(targets);
-      u.state = "empty";
-      u.occupants = 0;
-      u.everOccupied = false;
-      u.label = FACILITIES[u.kind].name;
-    }
-    this.emit(`💣 A bomb threat caused chaos! With no security office the panic and damage cost $${fine.toLocaleString()} — build Security.`, "bad");
-  }
-
-  // ---- Elevator dispatch -------------------------------------------------
-
-  /** Transient per-car dwell timers (not serialized; rebuilt on demand). */
-  private carDwell = new Map<number, number[]>();
-  /** Waiting passengers per floor — builds up over time, cleared as cars call. */
-  private waiting = new Map<number, number>();
-
-  /**
-   * Accumulate waiting passengers per floor: only people who are actually
-   * present generate trips, and they trickle in faster during the rush. Calls
-   * fade if no car ever comes. Cars therefore sit idle when nobody's about
-   * (an empty tower, the dead of night) and bustle when it's busy.
-   */
-  private accumulateWaiting(dt: number): void {
-    const rush = this.rushFactor();
-    for (const [fl, n] of this.waiting) {
-      const v = n - dt * 0.03;
-      if (v <= 0) this.waiting.delete(fl);
-      else this.waiting.set(fl, v);
-    }
-    for (const u of this.tower.units) {
-      if (u.occupants <= 0 || !this.tower.isFloorServed(u.floor)) continue;
-      this.waiting.set(u.floor, Math.min(25, (this.waiting.get(u.floor) ?? 0) + u.occupants * rush * dt * 0.012));
-    }
-    const pop = this.tower.totalPopulation();
-    if (pop > 0) {
-      for (const fl of this.tower.lobbyFloors()) {
-        this.waiting.set(fl, Math.min(25, (this.waiting.get(fl) ?? 0) + pop * rush * dt * 0.0015));
-      }
-    }
-  }
-
-  /** Nearest stop strictly ahead (in `dir`) that has a real call waiting. */
-  private nextDemandStop(stops: number[], pos: number, dir: number, demand: Map<number, number>): number | null {
-    let best: number | null = null;
-    let bestDist = Infinity;
-    for (const fl of stops) {
-      if (dir > 0 && fl <= pos + 0.05) continue;
-      if (dir < 0 && fl >= pos - 0.05) continue;
-      if ((demand.get(fl) ?? 0) < 1) continue;
-      const dist = Math.abs(fl - pos);
-      if (dist < bestDist) {
-        bestDist = dist;
-        best = fl;
-      }
-    }
-    return best;
-  }
-
-  /**
-   * Move each elevator car like a real lift (a simplified SCAN algorithm):
-   * it continues in its current direction to the next floor that has waiting
-   * passengers, dwells briefly to load, then carries on — reversing when there
-   * is nothing more ahead. Cars therefore congregate where demand is, instead
-   * of bouncing at random. Stairs/escalators have no cars (their walkers are
-   * drawn directly), so they're skipped here.
-   */
-  private updateElevators(dt: number): void {
-    this.accumulateWaiting(dt);
-    const demand = this.waiting;
-    for (const t of this.tower.transports) {
-      if (!isElevatorKind(t.kind)) continue;
-      const stops: number[] = [];
-      for (let fl = t.bottom; fl <= t.top; fl++) if (this.tower.stopsAt(t, fl)) stops.push(fl);
-      if (stops.length === 0) continue;
-
-      let dwell = this.carDwell.get(t.id);
-      if (!dwell || dwell.length !== t.cars) {
-        dwell = new Array(t.cars).fill(0);
-        this.carDwell.set(t.id, dwell);
-      }
-      if (!t.carLoad || t.carLoad.length !== t.cars) t.carLoad = new Array(t.cars).fill(0);
-      const cap = TRANSPORT_CAPACITY[t.kind] ?? 12;
-
-      const v = dt * 0.4; // floors travelled this step
-      for (let i = 0; i < t.cars; i++) {
-        if (dwell[i] > 0) {
-          dwell[i] = Math.max(0, dwell[i] - dt);
-          continue;
-        }
-        let pos = t.carPositions[i];
-        let dir = t.carDir[i] || 1;
-
-        let target = this.nextDemandStop(stops, pos, dir, demand);
-        if (target === null) {
-          dir = -dir; // nothing ahead — turn around
-          target = this.nextDemandStop(stops, pos, dir, demand);
-        }
-        if (target === null) {
-          // Nobody waiting: rest at the lowest served floor (the lobby) and
-          // stop dead rather than pacing the shaft.
-          target = stops[0];
-          if (Math.abs(pos - target) < 0.05) {
-            t.carDir[i] = 0;
-            t.carLoad[i] = 0; // everyone's stepped off
-            continue;
-          }
-        }
-
-        if (Math.abs(target - pos) <= v) {
-          pos = target;
-          dwell[i] = 1.2; // pause to load / unload
-          // Some riders alight, then waiting passengers board up to capacity.
-          t.carLoad[i] = Math.max(0, t.carLoad[i] - Math.ceil(t.carLoad[i] * 0.45));
-          const w = demand.get(target) ?? 0;
-          const board = Math.max(0, Math.min(cap - t.carLoad[i], w));
-          if (board > 0) {
-            t.carLoad[i] += board;
-            demand.set(target, Math.max(0, w - board));
-          }
-          if (pos >= t.top) dir = -1;
-          else if (pos <= t.bottom) dir = 1;
-        } else {
-          dir = target > pos ? 1 : -1;
-          pos += dir * v;
-        }
-        t.carPositions[i] = Math.max(t.bottom, Math.min(t.top, pos));
-        t.carDir[i] = dir;
-      }
-    }
+    this.events.bombThreat();
   }
 
   // ---- Derived stats for UI ---------------------------------------------
@@ -945,7 +595,7 @@ export class Simulation {
       basements: Math.max(0, 1 - this.tower.lowestFloor),
       elevators: this.tower.transports.filter((t) => isElevatorKind(t.kind)).length,
       transports: this.tower.transports.length,
-      fires: this.activeFires.size,
+      fires: this.events.count,
     };
   }
 
@@ -1003,8 +653,8 @@ export class Simulation {
     // Resume any in-progress construction and ongoing fires.
     for (const u of sim.tower.units) {
       if (u.state === "construction") sim.constructing.add(u.id);
-      if (u.state === "fire") sim.activeFires.add(u.id);
     }
+    sim.events.restore(sim.tower.units.filter((u) => u.state === "fire").map((u) => u.id));
     sim.lastDay = sim.clock.day;
     sim.lastQuarter = sim.clock.quarter;
     sim.lastMonth = Math.floor(sim.clock.day / 30);
