@@ -1,7 +1,7 @@
 import { Simulation } from "./engine/Simulation";
 import { FACILITIES, GRID, MAX_CARS, isElevatorKind } from "./engine/facilities";
 import type { FacilityKind } from "./engine/types";
-import { TowerEngine } from "./render/excalibur/TowerEngine";
+import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
 import { parseTWR } from "./storage/twrImport";
@@ -97,24 +97,25 @@ class GameApp {
       return "action";
     };
 
-    // A press-without-drag: select (inspect) or, on touch, run the tool.
-    this.engine.onTap = (tile, floor, touch) => {
+    // A press-without-drag: select (inspect) or, on touch, run the tool. The
+    // picked entity comes from Excalibur's collider hit-testing.
+    this.engine.onTap = (tile, floor, touch, picked) => {
       this.audio.start();
       if (this.tool.type === "inspect") {
-        this.selectAt(floor, tile);
+        this.selectPicked(picked);
         return;
       }
       if (!touch) return; // mouse pan-taps with a build/bulldoze tool do nothing
-      if (this.tool.type === "bulldoze") this.doBulldoze(floor, tile);
+      if (this.tool.type === "bulldoze") this.bulldozePicked(picked);
       else if (this.tool.type === "build" && !this.isTransportTool()) {
         this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
       }
     };
 
-    this.engine.onActionDown = (tile, floor) => {
+    this.engine.onActionDown = (tile, floor, _touch, picked) => {
       this.audio.start();
       if (this.tool.type === "bulldoze") {
-        this.doBulldoze(floor, tile);
+        this.bulldozePicked(picked);
       } else if (this.tool.type === "build") {
         if (this.isTransportTool()) {
           this.transportStart = { x: this.snapX(this.tool.kind, tile), floor };
@@ -125,9 +126,9 @@ class GameApp {
       }
     };
 
-    this.engine.onActionMove = (tile, floor) => {
+    this.engine.onActionMove = (tile, floor, picked) => {
       if (this.tool.type === "bulldoze") {
-        this.doBulldoze(floor, tile);
+        this.bulldozePicked(picked);
         return;
       }
       if (this.tool.type !== "build") return;
@@ -157,13 +158,13 @@ class GameApp {
       this.transportStart = null;
     };
 
-    this.engine.onHover = (tile, floor) => {
+    this.engine.onHover = (tile, floor, picked) => {
       if (this.tool.type === "build") {
         this.updateBuildPreview(tile, floor);
       } else {
         this.engine.preview = null;
         this.engine.transportPreview = null;
-        if (this.tool.type === "inspect") this.updateInspector(floor, tile);
+        if (this.tool.type === "inspect") this.inspectPicked(picked);
       }
     };
 
@@ -247,17 +248,13 @@ class GameApp {
 
   // ---- Selection & per-facility editing ---------------------------------
 
-  private selectAt(floor: number, tile: number): void {
-    const room = this.sim.tower.roomAt(floor, tile);
-    const transport = this.sim.tower.transportAt(floor, tile);
-    if (room && room.kind !== "floor" && room.kind !== "lobby") {
-      this.selected = { type: "unit", id: room.id };
-    } else if (transport) {
-      this.selected = { type: "transport", id: transport.id };
-    } else {
+  /** Select whatever Excalibur reported under the pointer (rooms/transports). */
+  private selectPicked(p: Picked | null): void {
+    if (!p || p.kind === "floor" || p.kind === "lobby") {
       this.clearSelection();
       return;
     }
+    this.selected = { type: p.type, id: p.id };
     this.refreshEditor();
   }
 
@@ -475,32 +472,50 @@ class GameApp {
     }
   }
 
-  private doBulldoze(floor: number, tile: number): void {
-    if (this.sim.sellAt(floor, tile)) this.audio.sfx("sell");
+  /** Bulldoze whatever Excalibur reported under the pointer, with a refund. */
+  private bulldozePicked(p: Picked | null): void {
+    if (!p) return;
+    if (p.type === "unit") {
+      const u = this.sim.tower.units.find((x) => x.id === p.id);
+      if (!u) return;
+      this.sim.tower.removeUnit(u.id);
+      this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+    } else {
+      const t = this.sim.tower.transports.find((x) => x.id === p.id);
+      if (!t) return;
+      this.sim.tower.removeTransport(t.id);
+      this.sim.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+    }
+    this.audio.sfx("sell");
+    if (this.selected && this.selected.id === p.id) this.clearSelection();
   }
 
-  private updateInspector(floor: number, tile: number): void {
-    const u = this.sim.tower.unitAt(floor, tile);
-    const t = this.sim.tower.transportAt(floor, tile);
-    if (u && u.kind !== "floor") {
+  private inspectPicked(p: Picked | null): void {
+    if (!p || p.kind === "floor" || p.kind === "lobby") {
+      this.ui.showInspector(null);
+      return;
+    }
+    if (p.type === "unit") {
+      const u = this.sim.tower.units.find((x) => x.id === p.id);
+      if (!u) return this.ui.showInspector(null);
       const f = FACILITIES[u.kind];
       const served = this.sim.tower.isFloorServed(u.floor) ? "Yes" : "No";
       this.ui.showInspector(
         `<h4>${f.name}</h4>` +
-          `<div>${u.label !== f.name ? u.label + "<br>" : ""}${floor >= 1 ? "Floor " + floor : "B" + (1 - floor)}</div>` +
+          `<div>${u.label !== f.name ? u.label + "<br>" : ""}${u.floor >= 1 ? "Floor " + u.floor : "B" + (1 - u.floor)}</div>` +
           `<div>Status: ${u.state}</div>` +
           (f.population ? `<div>Occupants: ${u.occupants}/${f.population}</div>` : "") +
           `<div>Served by elevator: ${served}</div>` +
           `<div>Satisfaction: ${Math.round(u.satisfaction * 100)}%</div>`,
       );
-    } else if (t) {
+    } else {
+      const t = this.sim.tower.transports.find((x) => x.id === p.id);
+      if (!t) return this.ui.showInspector(null);
       const f = FACILITIES[t.kind];
       this.ui.showInspector(
         `<h4>${f.name}</h4><div>Serves floors ${t.bottom}–${t.top}</div>` +
           (isElevatorKind(t.kind) ? `<div>Cars: ${t.cars}</div>` : ""),
       );
-    } else {
-      this.ui.showInspector(null);
     }
   }
 

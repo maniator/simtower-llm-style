@@ -71,7 +71,7 @@ function transportEntry(label: string, kind: FacilityKind, span = 3): Entry {
       for (let i = 0; i <= span; i++) {
         drawUnit(d, makeUnit("floor", "occupied", 0, 500 + i), x - 8, topY + i * floorH, w + 16, floorH);
       }
-      drawTransport(d.ctx, t, x, topY, w, floorH, d.anim);
+      drawTransport(d.ctx, t, x, topY, w, floorH);
     },
   };
 }

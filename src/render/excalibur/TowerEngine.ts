@@ -1,9 +1,9 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, facilityFloors } from "../../engine/facilities";
+import { GRID, facilityFloors, isElevatorKind } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../../engine/types";
-import { drawTransport, drawUnit, type DrawCtx } from "../sprites";
-import { person } from "../pixelSprites";
+import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
+import { person, SHIRTS } from "../pixelSprites";
 
 /** World pixels per tile / per floor. */
 export const TILE = 11;
@@ -15,6 +15,13 @@ export interface ViewFocus {
   night: boolean;
 }
 
+/** What the pointer is over, resolved by Excalibur's collider hit-testing. */
+export interface Picked {
+  type: "unit" | "transport";
+  id: number;
+  kind: FacilityKind;
+}
+
 interface Run {
   kind: "floor" | "lobby";
   floor: number;
@@ -22,19 +29,35 @@ interface Run {
   x1: number;
 }
 
+/** A single engine-driven walking figure (lobby/corridor walker or climber). */
+interface Walker {
+  actor: ex.Actor;
+  gfx: ex.Canvas;
+  x0w: number;
+  x1w: number;
+  y0w: number;
+  y1w: number;
+  speed: number;
+  dir: number;
+  phase: number;
+  impatient: boolean;
+  red: boolean;
+}
+
 /**
  * The Excalibur-powered tower renderer. Excalibur owns the game loop, scene,
- * camera, off-screen culling and rendering; each facility / transport / merged
- * structural run is an Actor whose graphic is an `ex.Canvas` reusing our
- * pixel-art drawing. The controller (main.ts) drives input, tools, the sim
- * tick and the DOM UI, using this class for coordinate math and camera control.
+ * camera, off-screen culling, collision/hit-testing and drawing. Every visible
+ * piece is a retained `ex.Actor`: structural tiles, rooms and transport shafts
+ * are reconciled incrementally (added/removed/refreshed only when the model
+ * actually changes — never a full teardown), while everything that *moves*
+ * (elevator cars, the metro train, walking people) is its own actor the engine
+ * repositions each frame. The controller (main.ts) drives tools, the sim tick
+ * and the DOM UI through the hooks below.
  */
 export class TowerEngine {
   engine: ex.Engine;
   sim: Simulation;
   private d: DrawCtx;
-  private cacheRev = -1;
-  private actors: ex.Actor[] = [];
 
   // Set by the controller each frame; rendered by the overlay.
   preview: { kind: FacilityKind; floor: number; x: number; valid: boolean } | null = null;
@@ -44,13 +67,14 @@ export class TowerEngine {
   /** Called every frame with elapsed milliseconds (sim ticking lives here). */
   onUpdate: ((ms: number) => void) | null = null;
 
-  // Controller-supplied input hooks (the controller owns tool semantics).
+  // Controller-supplied input hooks (the controller owns tool semantics). The
+  // `picked` argument is the entity Excalibur found under the pointer, or null.
   classifyDown: ((button: number, touch: boolean, space: boolean) => "pan" | "action") | null = null;
-  onTap: ((tile: number, floor: number, touch: boolean) => void) | null = null;
-  onActionDown: ((tile: number, floor: number, touch: boolean) => void) | null = null;
-  onActionMove: ((tile: number, floor: number) => void) | null = null;
-  onActionUp: ((tile: number, floor: number) => void) | null = null;
-  onHover: ((tile: number, floor: number) => void) | null = null;
+  onTap: ((tile: number, floor: number, touch: boolean, picked: Picked | null) => void) | null = null;
+  onActionDown: ((tile: number, floor: number, touch: boolean, picked: Picked | null) => void) | null = null;
+  onActionMove: ((tile: number, floor: number, picked: Picked | null) => void) | null = null;
+  onActionUp: ((tile: number, floor: number, picked: Picked | null) => void) | null = null;
+  onHover: ((tile: number, floor: number, picked: Picked | null) => void) | null = null;
 
   // Excalibur pointer gesture state.
   private pointers = new Map<number, { sx: number; sy: number }>();
@@ -59,6 +83,25 @@ export class TowerEngine {
   private moved = 0;
   private lastSx = 0;
   private lastSy = 0;
+
+  // Retained scene graph, reconciled by stable id.
+  private structActors = new Map<number, ex.Actor>();
+  private roomActors = new Map<number, ex.Actor>();
+  private roomSig = new Map<number, string>();
+  private transportActors = new Map<number, ex.Actor>();
+  private transportSig = new Map<number, string>();
+  // Engine-animated actors, regenerated when the layout changes.
+  private carActors: { actor: ex.Actor; t: Transport; i: number }[] = [];
+  private trainActors: { actor: ex.Actor; u: Unit; w: number }[] = [];
+  private walkers: Walker[] = [];
+  private builtRev = -1;
+  private litState = false;
+
+  // Shared graphics so thousands of tiles/people cost almost nothing.
+  private floorGfx!: ex.Canvas;
+  private lobbyGfx!: ex.Canvas;
+  private personGfx: ex.Canvas[] = [];
+  private personGfxRed!: ex.Canvas;
 
   private overlay!: ex.ScreenElement;
   private overlayCanvas!: ex.Canvas;
@@ -77,18 +120,22 @@ export class TowerEngine {
       suppressConsoleBootMessage: true,
       backgroundColor: ex.Color.fromHex("#7fb0e0"),
     });
-    this.d = { ctx: null as unknown as CanvasRenderingContext2D, lit: false, anim: 0, hour: 9 };
+    this.d = { ctx: null as unknown as CanvasRenderingContext2D, lit: false, anim: 0, hour: 9, stress: 0 };
     this.engine.currentScene.onPostUpdate = (_e: ex.Engine, elapsed: number) => this.tick(elapsed);
   }
 
   async start(): Promise<void> {
     await this.engine.start();
     this.engine.currentScene.camera.zoom = 0.9;
+    this.bakeSharedGraphics();
     this.makeGround();
     this.makeSky();
     this.makeOverlay();
     this.center();
-    this.rebuild();
+    this.litState = this.d.lit;
+    this.syncScene();
+    this.syncMotion();
+    this.builtRev = this.sim.tower.revision;
     this.bindInput();
   }
 
@@ -110,6 +157,33 @@ export class TowerEngine {
     });
   }
 
+  /** Top-most unit/transport whose Excalibur collider contains the point. */
+  pickEntityAt(world: ex.Vector): Picked | null {
+    let best: Picked | null = null;
+    let bestZ = -Infinity;
+    for (const [id, a] of this.transportActors) {
+      if (a.z >= bestZ && a.contains(world.x, world.y)) {
+        const t = this.sim.tower.transports.find((x) => x.id === id);
+        if (t) {
+          best = { type: "transport", id, kind: t.kind };
+          bestZ = a.z;
+        }
+      }
+    }
+    for (const map of [this.roomActors, this.structActors]) {
+      for (const [id, a] of map) {
+        if (a.z >= bestZ && a.contains(world.x, world.y)) {
+          const u = this.sim.tower.units.find((x) => x.id === id);
+          if (u) {
+            best = { type: "unit", id, kind: u.kind };
+            bestZ = a.z;
+          }
+        }
+      }
+    }
+    return best;
+  }
+
   private pointerDown(ev: ex.PointerEvent): void {
     this.pointers.set(ev.pointerId, { sx: ev.screenPos.x, sy: ev.screenPos.y });
     if (this.pointers.size === 2) {
@@ -129,7 +203,7 @@ export class TowerEngine {
     this.gesture = this.classifyDown ? this.classifyDown(buttonNum(ev), touch, space) : "pan";
     if (this.gesture === "action") {
       const { tile, floor } = this.tf(ev);
-      this.onActionDown?.(tile, floor, touch);
+      this.onActionDown?.(tile, floor, touch, this.pickEntityAt(ev.worldPos));
     }
   }
 
@@ -154,9 +228,9 @@ export class TowerEngine {
       this.lastSx = ev.screenPos.x;
       this.lastSy = ev.screenPos.y;
     } else if (this.gesture === "action") {
-      this.onActionMove?.(tile, floor);
+      this.onActionMove?.(tile, floor, this.pickEntityAt(ev.worldPos));
     } else {
-      this.onHover?.(tile, floor);
+      this.onHover?.(tile, floor, this.pickEntityAt(ev.worldPos));
     }
   }
 
@@ -169,18 +243,18 @@ export class TowerEngine {
     }
     const { tile, floor } = this.tf(ev);
     if (this.gesture === "pan") {
-      if (this.moved < 5) this.onTap?.(tile, floor, ev.pointerType === "Touch");
+      if (this.moved < 5) this.onTap?.(tile, floor, ev.pointerType === "Touch", this.pickEntityAt(ev.worldPos));
     } else if (this.gesture === "action") {
-      this.onActionUp?.(tile, floor);
+      this.onActionUp?.(tile, floor, this.pickEntityAt(ev.worldPos));
     }
     this.gesture = null;
   }
 
   setSim(sim: Simulation): void {
+    this.disposeScene();
     this.sim = sim;
-    this.cacheRev = -1;
+    this.builtRev = -1;
     this.center();
-    this.rebuild();
   }
 
   private tick(elapsed: number): void {
@@ -188,11 +262,19 @@ export class TowerEngine {
     this.d.anim = (globalThis.performance ? performance.now() : 0) / 1000;
     this.d.hour = c.hour;
     this.d.lit = c.isNight() || c.isEvening();
-    // Overcrowded transport (congestion > 1) tints the walking crowds red.
     this.d.stress = Math.max(0, Math.min(1, this.sim.congestion() - 1));
     this.engine.backgroundColor = ex.Color.fromHex(skyColor(c.hour));
     if (this.onUpdate) this.onUpdate(elapsed);
-    if (this.sim.tower.revision !== this.cacheRev) this.rebuild();
+
+    // Reconcile only when the model (or day/night lighting) actually changed —
+    // Excalibur owns the per-frame loop, so there is no full rebuild here.
+    if (this.sim.tower.revision !== this.builtRev || this.d.lit !== this.litState) {
+      this.litState = this.d.lit;
+      this.syncScene();
+      this.syncMotion();
+      this.builtRev = this.sim.tower.revision;
+    }
+    this.updateMotion();
   }
 
   // ---- Coordinate math ----------------------------------------------------
@@ -213,7 +295,6 @@ export class TowerEngine {
   worldYTop(floor: number, h = 1): number {
     return -(floor + h - 1) * FLOOR;
   }
-  /** Screen (CSS px) → world, using Excalibur's own camera transform. */
   private screenToWorld(sx: number, sy: number): ex.Vector {
     return this.engine.screenToWorldCoordinates(ex.vec(sx, sy));
   }
@@ -232,12 +313,10 @@ export class TowerEngine {
 
   // ---- Camera control (Excalibur camera) ----------------------------------
 
-  /** Pan the Excalibur camera by a screen-space delta. */
   pan(dxScreen: number, dyScreen: number): void {
     this.cam.pos = ex.vec(this.cam.pos.x - dxScreen / this.cam.zoom, this.cam.pos.y - dyScreen / this.cam.zoom);
     this.clamp();
   }
-  /** Zoom the Excalibur camera, keeping the screen point fixed in world space. */
   zoomAt(factor: number, sx: number, sy: number): void {
     const before = this.screenToWorld(sx, sy);
     this.cam.zoom = Math.max(0.3, Math.min(3, this.cam.zoom * factor));
@@ -259,17 +338,12 @@ export class TowerEngine {
     this.cam.zoom = zoom;
   }
 
-  // ---- Scene construction -------------------------------------------------
+  // ---- Static scene elements ----------------------------------------------
 
   private makeGround(): void {
-    // Street level is world y = 0 (the foot of the ground floor). Everything at
-    // or below it is earth; the sky background shows above. This gives a clear
-    // horizon so the tower reads as planted in the ground, not floating.
     const wide = GRID.width * TILE * 3;
     const cx = (GRID.width / 2) * TILE;
-    const depth = (2 - GRID.minFloor + 14) * FLOOR; // covers every basement + margin
-
-    // Earth fill below the street.
+    const depth = (2 - GRID.minFloor + 14) * FLOOR;
     this.ground = new ex.Actor({
       pos: ex.vec(cx, 0),
       width: wide,
@@ -279,8 +353,6 @@ export class TowerEngine {
       color: ex.Color.fromHex("#3a3326"),
     });
     this.engine.add(this.ground);
-
-    // A paved sidewalk band sitting right on the street line for a crisp horizon.
     const sidewalk = new ex.Actor({
       pos: ex.vec(cx, 0),
       width: wide,
@@ -292,11 +364,7 @@ export class TowerEngine {
     this.engine.add(sidewalk);
   }
 
-  /**
-   * The sun/moon live on a screen-space layer drawn *behind* the tower (a low
-   * z-index), so a celestial body is occluded by the building instead of
-   * floating in front of it — it sits in the sky where it belongs.
-   */
+  /** Sun/moon on a layer *behind* the tower so a body is occluded by it. */
   private makeSky(): void {
     this.skyCanvas = new ex.Canvas({
       width: this.viewWidth,
@@ -331,7 +399,6 @@ export class TowerEngine {
   }
 
   private drawOverlay(ctx: CanvasRenderingContext2D): void {
-    // Keep the overlay canvas matched to the viewport.
     if (this.overlayCanvas.width !== this.viewWidth || this.overlayCanvas.height !== this.viewHeight) {
       this.overlayCanvas.width = this.viewWidth;
       this.overlayCanvas.height = this.viewHeight;
@@ -365,7 +432,7 @@ export class TowerEngine {
       const hgt = facilityFloors(p.kind);
       const w = this.sim.tower.facilityOf({ kind: p.kind } as Unit).width;
       const sx = this.worldToScreenX(p.x);
-      const sy = this.worldToScreenY(p.floor + hgt - 1) - FLOOR * this.cam.zoom * 0; // top
+      const sy = this.worldToScreenY(p.floor + hgt - 1);
       const sw = w * TILE * this.cam.zoom;
       const sh = hgt * FLOOR * this.cam.zoom;
       ctx.globalAlpha = 0.5;
@@ -421,89 +488,279 @@ export class TowerEngine {
     ctx.textBaseline = "alphabetic";
   }
 
-  // ---- Actor sync ---------------------------------------------------------
+  // ---- Shared graphics ----------------------------------------------------
 
-  private clearActors(): void {
-    for (const a of this.actors) a.kill();
-    this.actors = [];
+  private bakeSharedGraphics(): void {
+    const mk = (kind: "floor" | "lobby") =>
+      new ex.Canvas({
+        width: TILE,
+        height: FLOOR,
+        cache: true,
+        draw: (ctx) => {
+          this.d.ctx = ctx;
+          drawUnit(this.d, fakeStruct(kind), 0, 0, TILE, FLOOR);
+        },
+      });
+    this.floorGfx = mk("floor");
+    this.lobbyGfx = mk("lobby");
+
+    for (const color of SHIRTS) {
+      this.personGfx.push(
+        new ex.Canvas({ width: 8, height: 14, cache: true, draw: (ctx) => person(ctx, 2.5, 13, 1.1, 7, false, color) }),
+      );
+    }
+    this.personGfxRed = new ex.Canvas({ width: 8, height: 14, cache: true, draw: (ctx) => person(ctx, 2.5, 13, 1.1, 7, false, "#C24A3A") });
   }
 
-  private addCanvasActor(px: number, py: number, w: number, h: number, draw: (ctx: CanvasRenderingContext2D) => void, z = 0): void {
-    const cv = new ex.Canvas({
-      width: Math.max(1, Math.round(w)),
-      height: Math.max(1, Math.round(h)),
-      cache: false,
-      draw: (ctx) => {
-        this.d.ctx = ctx;
-        draw(ctx);
-      },
-    });
-    const actor = new ex.Actor({ pos: ex.vec(px, py), width: w, height: h, anchor: ex.vec(0, 0), z });
-    actor.graphics.use(cv);
-    this.engine.add(actor);
-    this.actors.push(actor);
-  }
+  // ---- Retained-scene reconciliation (no full rebuild) --------------------
 
-  private rebuild(): void {
-    this.clearActors();
+  private syncScene(): void {
     const tower = this.sim.tower;
-    const structTiles = new Map<number, Map<number, "floor" | "lobby">>();
+    const seenS = new Set<number>();
+    const seenR = new Set<number>();
     for (const u of tower.units) {
       if (u.kind === "floor" || u.kind === "lobby") {
-        let row = structTiles.get(u.floor);
-        if (!row) structTiles.set(u.floor, (row = new Map()));
-        for (let i = 0; i < u.width; i++) row.set(u.x + i, u.kind);
+        seenS.add(u.id);
+        if (!this.structActors.has(u.id)) this.addStruct(u);
+      } else {
+        seenR.add(u.id);
+        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}`;
+        const a = this.roomActors.get(u.id);
+        if (!a) {
+          this.addRoom(u);
+          this.roomSig.set(u.id, sig);
+        } else if (this.roomSig.get(u.id) !== sig) {
+          a.kill();
+          this.roomActors.delete(u.id);
+          this.addRoom(u);
+          this.roomSig.set(u.id, sig);
+        }
       }
     }
-    for (const [floor, row] of structTiles) for (const run of mergeRuns(floor, row)) this.addRun(run);
-    for (const u of tower.units) {
-      if (u.kind === "floor" || u.kind === "lobby") continue;
-      this.addUnit(u);
+    for (const [id, a] of this.structActors)
+      if (!seenS.has(id)) {
+        a.kill();
+        this.structActors.delete(id);
+      }
+    for (const [id, a] of this.roomActors)
+      if (!seenR.has(id)) {
+        a.kill();
+        this.roomActors.delete(id);
+        this.roomSig.delete(id);
+      }
+
+    const seenT = new Set<number>();
+    for (const t of tower.transports) {
+      seenT.add(t.id);
+      const sig = `${t.bottom}:${t.top}:${t.cars}:${t.kind}:${(t.skipFloors ?? []).join(",")}`;
+      const a = this.transportActors.get(t.id);
+      if (!a) {
+        this.addTransport(t);
+        this.transportSig.set(t.id, sig);
+      } else if (this.transportSig.get(t.id) !== sig) {
+        a.kill();
+        this.transportActors.delete(t.id);
+        this.addTransport(t);
+        this.transportSig.set(t.id, sig);
+      }
     }
-    for (const t of tower.transports) this.addTransport(t);
-    this.cacheRev = tower.revision;
+    for (const [id, a] of this.transportActors)
+      if (!seenT.has(id)) {
+        a.kill();
+        this.transportActors.delete(id);
+        this.transportSig.delete(id);
+      }
   }
 
-  private addRun(r: Run): void {
-    const w = (r.x1 - r.x0 + 1) * TILE;
-    const fake = fakeUnit(r);
-    this.addCanvasActor(this.worldX(r.x0), this.worldYTop(r.floor), w, FLOOR, (ctx) => {
-      drawUnit(this.d, fake, 0, 0, w, FLOOR);
-      this.drawRunWalkers(ctx, r, w);
-    }, -1);
+  private addStruct(u: Unit): void {
+    const a = new ex.Actor({
+      pos: ex.vec(this.worldX(u.x), this.worldYTop(u.floor)),
+      width: TILE,
+      height: FLOOR,
+      anchor: ex.vec(0, 0),
+      z: -1,
+    });
+    a.graphics.use(u.kind === "lobby" ? this.lobbyGfx : this.floorGfx);
+    this.engine.add(a);
+    this.structActors.set(u.id, a);
   }
 
-  private drawRunWalkers(ctx: CanvasRenderingContext2D, r: Run, w: number): void {
-    const c = this.sim.clock;
-    const busy = c.isMorning() || c.isEvening() || c.isLunch();
-    if (r.kind !== "lobby" && !busy) return;
-    const footY = FLOOR - 3;
-    const density = r.kind === "lobby" ? (busy ? 0.5 : 0.28) : 0.16;
-    const count = Math.min(40, Math.floor((w / 10) * density));
-    const stress = this.d.stress ?? 0;
-    for (let i = 0; i < count; i++) {
-      const seed = (r.floor * 131 + r.x0 * 7 + i * 53) | 0;
-      const dir = seed % 2 === 0 ? 1 : -1;
-      const speed = 8 + (seed % 7);
-      let px = ((i / count) * w + dir * this.d.anim * speed) % w;
-      if (px < 0) px += w;
-      // The most impatient fraction of the crowd turns red as waits grow.
-      const angry = (((seed >>> 8) & 0xff) / 255) < stress;
-      person(ctx, px, footY, 1.1, seed, false, angry ? "#C24A3A" : undefined);
-    }
-  }
-
-  private addUnit(u: Unit): void {
+  private addRoom(u: Unit): void {
     const hgt = facilityFloors(u.kind);
     const w = u.width * TILE;
     const h = hgt * FLOOR;
-    this.addCanvasActor(this.worldX(u.x), this.worldYTop(u.floor, hgt), w, h, () => drawUnit(this.d, u, 0, 0, w, h));
+    // Burning / under-construction rooms animate, so they redraw; the rest are
+    // baked once and only re-baked when their state or the lighting changes.
+    const animated = u.state === "fire" || u.state === "construction";
+    const cv = new ex.Canvas({
+      width: w,
+      height: h,
+      cache: !animated,
+      draw: (ctx) => {
+        this.d.ctx = ctx;
+        drawUnit(this.d, u, 0, 0, w, h);
+      },
+    });
+    const a = new ex.Actor({ pos: ex.vec(this.worldX(u.x), this.worldYTop(u.floor, hgt)), width: w, height: h, anchor: ex.vec(0, 0), z: 0 });
+    a.graphics.use(cv);
+    this.engine.add(a);
+    this.roomActors.set(u.id, a);
   }
 
   private addTransport(t: Transport): void {
     const w = t.width * TILE;
     const h = (t.top - t.bottom + 1) * FLOOR;
-    this.addCanvasActor(this.worldX(t.x), this.worldYTop(t.top), w, h, (ctx) => drawTransport(ctx, t, 0, 0, w, FLOOR, this.d.anim), 1);
+    const cv = new ex.Canvas({
+      width: w,
+      height: h,
+      cache: true,
+      draw: (ctx) => {
+        this.d.ctx = ctx;
+        drawTransport(ctx, t, 0, 0, w, FLOOR);
+      },
+    });
+    const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), this.worldYTop(t.top)), width: w, height: h, anchor: ex.vec(0, 0), z: 1 });
+    a.graphics.use(cv);
+    this.engine.add(a);
+    this.transportActors.set(t.id, a);
+  }
+
+  // ---- Engine-driven motion (cars, train, walkers) ------------------------
+
+  private clearMotion(): void {
+    for (const c of this.carActors) c.actor.kill();
+    for (const t of this.trainActors) t.actor.kill();
+    for (const w of this.walkers) w.actor.kill();
+    this.carActors = [];
+    this.trainActors = [];
+    this.walkers = [];
+  }
+
+  private syncMotion(): void {
+    this.clearMotion();
+    for (const t of this.sim.tower.transports) {
+      if (!isElevatorKind(t.kind)) continue;
+      const w = t.width * TILE;
+      for (let i = 0; i < t.cars; i++) {
+        const moving = (t.carDir[i] ?? 0) !== 0;
+        const seed = (i * 7 + t.id) | 0;
+        const cv = new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, moving) });
+        const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), -t.carPositions[i] * FLOOR), width: w, height: FLOOR, anchor: ex.vec(0, 0), z: 2 });
+        a.graphics.use(cv);
+        this.engine.add(a);
+        this.carActors.push({ actor: a, t, i });
+      }
+    }
+    for (const u of this.sim.tower.units) {
+      if (u.kind !== "metro") continue;
+      const w = u.width * TILE - 6;
+      const cv = new ex.Canvas({ width: w, height: 9, cache: true, draw: (ctx) => drawMetroTrain(ctx, w, true) });
+      const a = new ex.Actor({ pos: ex.vec(this.worldX(u.x) + 3, this.worldYTop(u.floor) + FLOOR - 15), width: w, height: 9, anchor: ex.vec(0, 0), z: 0.6 });
+      a.graphics.use(cv);
+      this.engine.add(a);
+      this.trainActors.push({ actor: a, u, w });
+    }
+    this.buildWalkers();
+  }
+
+  private buildWalkers(): void {
+    const byFloor = new Map<number, Map<number, "floor" | "lobby">>();
+    for (const u of this.sim.tower.units) {
+      if (u.kind === "floor" || u.kind === "lobby") {
+        let row = byFloor.get(u.floor);
+        if (!row) byFloor.set(u.floor, (row = new Map()));
+        row.set(u.x, u.kind);
+      }
+    }
+    let budget = 400;
+    for (const [floor, row] of byFloor) {
+      for (const run of mergeRuns(floor, row)) {
+        if (budget <= 0) break;
+        const wTiles = run.x1 - run.x0 + 1;
+        const density = run.kind === "lobby" ? 0.5 : 0.14;
+        const count = Math.min(run.kind === "lobby" ? 20 : 8, Math.floor(wTiles * density));
+        const foot = this.worldYTop(floor) + FLOOR - 3;
+        const x0w = this.worldX(run.x0) + 3;
+        const x1w = this.worldX(run.x1 + 1) - 3;
+        for (let i = 0; i < count && budget > 0; i++, budget--) {
+          const seed = (floor * 131 + run.x0 * 7 + i * 53) | 0;
+          this.spawnWalker(x0w, x1w, foot, foot, seed, 7 + (Math.abs(seed) % 6));
+        }
+      }
+    }
+    for (const t of this.sim.tower.transports) {
+      if (t.kind !== "stairs" && t.kind !== "escalator") continue;
+      const x0w = this.worldX(t.x) + 2;
+      const x1w = this.worldX(t.x + t.width) - 3;
+      const yb = this.worldYTop(t.bottom) + FLOOR - 2;
+      const yt = yb - (FLOOR - 4);
+      const n = t.kind === "escalator" ? 3 : 2;
+      for (let i = 0; i < n; i++) {
+        const seed = (t.id * 17 + i * 29) | 0;
+        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7);
+      }
+    }
+  }
+
+  private spawnWalker(x0w: number, x1w: number, y0w: number, y1w: number, seed: number, speed: number): void {
+    const gfx = this.personGfx[Math.abs(seed) % this.personGfx.length];
+    const a = new ex.Actor({ pos: ex.vec(x0w, y0w), width: 8, height: 14, anchor: ex.vec(0.5, 1), z: 0.4 });
+    a.graphics.use(gfx);
+    this.engine.add(a);
+    this.walkers.push({
+      actor: a,
+      gfx,
+      x0w,
+      x1w,
+      y0w,
+      y1w,
+      speed,
+      dir: seed % 2 === 0 ? 1 : -1,
+      phase: (Math.abs(seed) % 100) / 100,
+      impatient: (((seed >>> 8) & 0xff) / 255) < 0.5,
+      red: false,
+    });
+  }
+
+  /** Repositions every moving actor each frame (the engine then draws them). */
+  private updateMotion(): void {
+    const anim = this.d.anim;
+    for (const c of this.carActors) {
+      c.actor.pos = ex.vec(this.worldX(c.t.x), -c.t.carPositions[c.i] * FLOOR);
+    }
+    for (const tr of this.trainActors) {
+      const cycle = (anim % 12) / 12;
+      const span = tr.w + 12;
+      let offset: number;
+      if (cycle < 0.25) offset = (1 - cycle / 0.25) * -span;
+      else if (cycle < 0.75) offset = 0;
+      else offset = ((cycle - 0.75) / 0.25) * span;
+      tr.actor.pos = ex.vec(this.worldX(tr.u.x) + 3 + offset, this.worldYTop(tr.u.floor) + FLOOR - 15);
+    }
+    const stress = this.d.stress ?? 0;
+    for (const w of this.walkers) {
+      let p = w.phase + anim * w.speed * 0.03;
+      p -= Math.floor(p);
+      const tt = w.dir > 0 ? p : 1 - p;
+      w.actor.pos = ex.vec(w.x0w + tt * (w.x1w - w.x0w), w.y0w + tt * (w.y1w - w.y0w));
+      const red = w.impatient && stress > 0.25;
+      if (red !== w.red) {
+        w.red = red;
+        w.actor.graphics.use(red ? this.personGfxRed : w.gfx);
+      }
+    }
+  }
+
+  private disposeScene(): void {
+    for (const a of this.structActors.values()) a.kill();
+    for (const a of this.roomActors.values()) a.kill();
+    for (const a of this.transportActors.values()) a.kill();
+    this.structActors.clear();
+    this.roomActors.clear();
+    this.roomSig.clear();
+    this.transportActors.clear();
+    this.transportSig.clear();
+    this.clearMotion();
   }
 
   // ---- Audio focus --------------------------------------------------------
@@ -545,13 +802,13 @@ function buttonNum(ev: ex.PointerEvent): number {
   return 0;
 }
 
-function fakeUnit(r: Run): Unit {
+function fakeStruct(kind: "floor" | "lobby"): Unit {
   return {
-    id: r.floor * 10000 + r.x0,
-    kind: r.kind,
-    floor: r.floor,
-    x: r.x0,
-    width: r.x1 - r.x0 + 1,
+    id: -1,
+    kind,
+    floor: 1,
+    x: 0,
+    width: 1,
     state: "occupied",
     satisfaction: 1,
     occupants: 0,

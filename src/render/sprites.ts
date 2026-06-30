@@ -384,7 +384,8 @@ function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, 
 
 function drawMetro(d: DrawCtx, x: number, y: number, w: number, h: number) {
   const ctx = d.ctx;
-  // Tiled station wall + tunnel.
+  // Static station only — the train is a separate Excalibur Actor that the
+  // engine slides along the platform (see drawMetroTrain / TowerEngine).
   ctx.fillStyle = "#2c3a44";
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = "#33434f";
@@ -397,27 +398,9 @@ function drawMetro(d: DrawCtx, x: number, y: number, w: number, h: number) {
   ctx.fillRect(x, platY, w, 6);
   ctx.fillStyle = "#caa84a"; // safety line
   ctx.fillRect(x, platY, w, 1);
-  // The subway train slides in, waits, then leaves — a ~12s cycle.
-  const cycle = (d.anim % 12) / 12;
-  let offset: number;
-  if (cycle < 0.25) offset = (1 - cycle / 0.25) * -(w + 10);
-  else if (cycle < 0.75) offset = 0;
-  else offset = ((cycle - 0.75) / 0.25) * (w + 10);
-  const tx = x + 3 + offset;
-  const trainY = platY - 9;
-  ctx.fillStyle = "#cdd3da"; // silver carriage
-  ctx.fillRect(tx, trainY, w - 6, 9);
-  ctx.fillStyle = "#e0454a"; // livery stripe
-  ctx.fillRect(tx, trainY + 6, w - 6, 2);
-  ctx.fillStyle = "#3a4250"; // window band
-  for (let wx = tx + 4; wx + 5 < tx + w - 6; wx += 9) ctx.fillRect(wx, trainY + 2, 5, 3);
-  ctx.fillStyle = d.anim % 1 < 0.5 ? "#ffe27a" : "#9fc0ff"; // headlight blink
-  ctx.fillRect(tx + 1, trainY + 3, 2, 2);
-  // Waiting commuters when the train is away.
-  if (offset !== 0) {
-    for (let px = x + 8; px < x + w - 6; px += 12) {
-      if (rand((px + Math.floor(d.anim)) | 0) > 0.45) person(ctx, px, platY, 1.2, px | 0);
-    }
+  // A few commuters waiting on the platform.
+  for (let px = x + 8; px < x + w - 6; px += 13) {
+    if (rand(px | 0) > 0.4) person(ctx, px, platY, 1.2, px | 0);
   }
   // Roundel "M" sign.
   ctx.fillStyle = "#d6342f";
@@ -430,6 +413,19 @@ function drawMetro(d: DrawCtx, x: number, y: number, w: number, h: number) {
   ctx.fillStyle = "#ffd24a";
   ctx.font = "8px system-ui, sans-serif";
   ctx.fillText("METRO", x + 18, y + 10);
+}
+
+/** The subway carriage graphic, drawn at (0,0) into a w×9 rect. It is its own
+ *  Excalibur Actor; the engine slides it in and out along the platform. */
+export function drawMetroTrain(ctx: CanvasRenderingContext2D, w: number, headlightOn: boolean): void {
+  ctx.fillStyle = "#cdd3da"; // silver carriage
+  ctx.fillRect(0, 0, w, 9);
+  ctx.fillStyle = "#e0454a"; // livery stripe
+  ctx.fillRect(0, 6, w, 2);
+  ctx.fillStyle = "#3a4250"; // window band
+  for (let wx = 4; wx + 5 < w; wx += 9) ctx.fillRect(wx, 2, 5, 3);
+  ctx.fillStyle = headlightOn ? "#ffe27a" : "#9fc0ff"; // headlight blink
+  ctx.fillRect(1, 3, 2, 2);
 }
 
 function drawParking(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: number, w: number, h: number) {
@@ -509,10 +505,13 @@ export function drawTransport(
   topY: number,
   w: number,
   floorH: number,
-  anim = 0,
 ): void {
   const f = FACILITIES[t.kind];
   const height = (t.top - t.bottom + 1) * floorH;
+
+  // NOTE: this draws only the *static* structure. Everything that moves
+  // (elevator cars, stair/escalator climbers) is a separate Excalibur Actor
+  // positioned by the engine — see TowerEngine's dynamic layer.
 
   if (t.kind === "stairs") {
     ctx.fillStyle = "#c2bcaa"; // concrete stairwell
@@ -530,11 +529,6 @@ export function drawTransport(
         ctx.fillStyle = "rgba(0,0,0,0.18)";
         ctx.fillRect(sxS, syS, stepW + 1, 1);
       }
-      // A climber on the global clock.
-      const prog = (anim * 0.22 + fl * 0.37) % 1;
-      const px = sx + 1 + prog * (w - 5);
-      const py = fy + floorH - 2 - prog * (floorH - 4);
-      person(ctx, px, py, 1.1, (fl * 37 + t.id) | 0);
     }
     return;
   }
@@ -542,7 +536,7 @@ export function drawTransport(
   if (t.kind === "escalator") {
     ctx.fillStyle = "#5f6470";
     ctx.fillRect(sx, topY, w, floorH);
-    ctx.strokeStyle = "#cfd4dc"; // moving belt
+    ctx.strokeStyle = "#cfd4dc"; // belt
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(sx + 1, topY + floorH - 1);
@@ -556,12 +550,6 @@ export function drawTransport(
       ctx.moveTo(sx + s, yy);
       ctx.lineTo(sx + s + 1, yy);
       ctx.stroke();
-    }
-    for (let p = 0; p < 3; p++) {
-      const prog = (anim * 0.4 + p / 3) % 1;
-      const px = sx + 1 + prog * (w - 5);
-      const py = topY + floorH - 1 - prog * (floorH - 3);
-      person(ctx, px, py, 1.0, (p * 13 + t.id) | 0);
     }
     return;
   }
@@ -577,21 +565,20 @@ export function drawTransport(
       ctx.fillStyle = "rgba(255,255,255,0.05)";
       ctx.fillRect(sx + 1, topY + fl * floorH, w - 2, 1);
     }
-    for (let i = 0; i < t.cars; i++) {
-      const pos = t.carPositions[i];
-      const carY = topY + (t.top - pos) * floorH;
-      // Bright metal car with a center-door seam.
-      ctx.fillStyle = "#d2d6dc";
-      ctx.fillRect(sx + 2, carY + 2, w - 4, floorH - 4);
-      ctx.fillStyle = "#a7adb6";
-      ctx.fillRect(sx + 2, carY + 2, w - 4, 1);
-      ctx.fillStyle = "rgba(42,46,56,0.5)";
-      ctx.fillRect(sx + w / 2 - 0.5, carY + 3, 1, floorH - 6);
-      // Riders as silhouettes; more when the car is moving.
-      const riders = t.carDir[i] !== 0 ? 2 : 1;
-      for (let p = 0; p < riders; p++) {
-        person(ctx, sx + 3 + p * 3.5, carY + floorH - 3, 1.0, (i * 7 + p * 13 + t.id) | 0);
-      }
-    }
+  }
+}
+
+/** A single elevator car graphic, drawn at (0,0) into a w×floorH rect. The car
+ *  is its own Excalibur Actor; the engine moves it along the shaft. */
+export function drawCar(ctx: CanvasRenderingContext2D, seed: number, w: number, floorH: number, moving: boolean): void {
+  ctx.fillStyle = "#d2d6dc";
+  ctx.fillRect(2, 2, w - 4, floorH - 4);
+  ctx.fillStyle = "#a7adb6";
+  ctx.fillRect(2, 2, w - 4, 1);
+  ctx.fillStyle = "rgba(42,46,56,0.5)";
+  ctx.fillRect(w / 2 - 0.5, 3, 1, floorH - 6);
+  const riders = moving ? 2 : 1;
+  for (let p = 0; p < riders; p++) {
+    person(ctx, 3 + p * 3.5, floorH - 3, 1.0, (p * 13 + seed) | 0);
   }
 }
