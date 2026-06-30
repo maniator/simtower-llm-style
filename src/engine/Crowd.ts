@@ -40,6 +40,8 @@ export interface Person {
   destX: number;
   /** Seconds spent waiting on the current call (drives stress). */
   wait: number;
+  /** Total seconds in transit (origin → destination), for the give-up valve. */
+  age: number;
   /** Idle timer once arrived, before despawning. */
   linger: number;
 }
@@ -54,6 +56,13 @@ const WALK_SPEED = 6; // tiles per second
 const CAR_CAPACITY = 6; // visible riders per car
 const MAX_PEOPLE = 140;
 const STRESS_WAIT = 25; // seconds of waiting that counts as "fed up"
+/**
+ * A commuter who hasn't reached their floor within this many real seconds gives
+ * up and leaves — a safety valve so nobody is ever stranded forever (a car the
+ * aggregate scheduler never sends to their floor, an elevator removed from
+ * under them) silently consuming the on-screen population cap.
+ */
+const GIVE_UP = 90;
 
 export class Crowd {
   people: Person[] = [];
@@ -192,6 +201,7 @@ export class Crowd {
       shaftId: r.shafts[0],
       carIndex: null,
       wait: 0,
+      age: 0,
       linger: 0,
       destX: this.pickX(tower, to, seed),
     });
@@ -227,6 +237,15 @@ export class Crowd {
     let frustrated = 0;
     let travelling = 0;
     for (const p of this.people) {
+      p.age += dtSec;
+      // Give up if the journey drags on too long — a fed-up traveller who
+      // leaves rather than riding forever toward a floor no car will serve.
+      if (p.age > GIVE_UP && p.state !== "toDest" && p.state !== "done") {
+        frustrated++;
+        travelling++;
+        this.finish(p);
+        continue;
+      }
       this.step(p, dtSec, tower);
       if (p.state === "waiting" || p.state === "riding" || p.state === "toShaft") {
         travelling++;
@@ -275,7 +294,12 @@ export class Crowd {
       }
       case "riding": {
         const shaft = this.shaftOf(tower, p.shaftId);
-        if (!shaft || p.carIndex == null) return this.finish(p);
+        // The car can vanish from under a rider — the shaft bulldozed, or the
+        // player trimming the car count (Tower.setCars shrinks carPositions).
+        // Either way, step off and move on rather than riding a phantom car.
+        if (!shaft || p.carIndex == null || p.carIndex >= shaft.carPositions.length) {
+          return this.finish(p);
+        }
         const pos = shaft.carPositions[p.carIndex];
         p.fy = pos;
         p.x = shaft.x + shaft.width / 2;

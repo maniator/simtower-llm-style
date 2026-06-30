@@ -944,6 +944,7 @@ export class Simulation {
       towerName: this.tower.towerName,
       builtWeddingHall: this.tower.builtWeddingHall,
       evaluatedTower: this.evaluatedTower,
+      vipVisitDay: this.vipVisitDay,
     };
   }
 
@@ -953,6 +954,9 @@ export class Simulation {
     sim.star = data.star;
     sim.clock = new Clock(data.minutes);
     sim.evaluatedTower = data.evaluatedTower;
+    // Restore the pending VIP inspection so saving during the post-Wedding-Hall
+    // window doesn't permanently cancel the TOWER evaluation.
+    sim.vipVisitDay = data.vipVisitDay ?? -1;
     // Reject any unit/transport with an unrecognized kind from untrusted saves.
     sim.tower.units = (data.units ?? [])
       .filter((u) => isFacilityKind(u.kind))

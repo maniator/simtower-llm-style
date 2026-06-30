@@ -84,6 +84,35 @@ describe("Crowd: routing and movement", () => {
     }
   });
 
+  it("never strands a rider when their car is removed", () => {
+    const tower = towerWithElevator(8);
+    const r = tower.place("office", 5, 0);
+    tower.units.find((uu) => uu.id === r.unitId)!.state = "occupied";
+    const crowd = new Crowd();
+    const clock = new Clock(8 * 60);
+    // Advance until at least one commuter is aboard a car.
+    let rider;
+    for (let i = 0; i < 4000 && !rider; i++) {
+      crowd.update(0.05, tower, clock);
+      rider = crowd.people.find((p) => p.state === "riding" && p.carIndex != null);
+    }
+    expect(rider).toBeTruthy();
+    const elevator = tower.transports[0];
+    // Force the rider onto a high car index, then trim the elevator to one car
+    // (Tower.setCars shrinks carPositions out from under them).
+    rider!.shaftId = elevator.id;
+    rider!.carIndex = elevator.carPositions.length; // now out of range after the trim
+    rider!.state = "riding";
+    tower.setCars(elevator.id, 1);
+    crowd.update(0.05, tower, clock);
+    // The guard must have stepped them off rather than riding a phantom car.
+    expect(rider!.state).toBe("done");
+    // And no surviving rider references a car index that no longer exists.
+    for (const p of crowd.people) {
+      if (p.state === "riding") expect(p.carIndex!).toBeLessThan(elevator.carPositions.length);
+    }
+  });
+
   it("fully resets — no carried spawn backlog after switching sims", () => {
     const tower = towerWithElevator(8);
     const r = tower.place("office", 5, 0);

@@ -17,6 +17,15 @@ describe("SaveGame", () => {
     return sim;
   }
 
+  it("persists the pending VIP inspection day across save/load", () => {
+    const sim = sampleGame();
+    // Simulate a Wedding Hall having scheduled the VIP a few days out.
+    (sim as unknown as { vipVisitDay: number }).vipVisitDay = sim.clock.day + 3;
+    const expected = (sim as unknown as { vipVisitDay: number }).vipVisitDay;
+    const loaded = Simulation.deserialize(sim.serialize());
+    expect((loaded as unknown as { vipVisitDay: number }).vipVisitDay).toBe(expected);
+  });
+
   it("round-trips through localStorage", () => {
     const sim = sampleGame();
     SaveGame.save(sim);
