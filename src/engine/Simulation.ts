@@ -51,6 +51,23 @@ export class Simulation implements SimContext {
   /** 1..5 stars, 6 == TOWER. */
   star = 1;
   evaluatedTower = false;
+
+  /**
+   * Simulation model selector (Phase 2, review F4). `v1` is the shipped behavior:
+   * a single `tick(dt)` samples the clock once, firing `onHour`/`onDay` at most
+   * once per call and handing the full `dt` to every integrator. `v2` decomposes
+   * each `tick(dt)` into ≤30-minute sub-steps aligned to hour boundaries, so the
+   * headless engine integrates exactly like the browser (which pre-chunks). Kept
+   * behind a flag (default `v1`) so the existing suite stays authoritative until
+   * the spatial model lands and we deliberately flip the default.
+   */
+  simModel: "v1" | "v2" = "v1";
+
+  /** Number of times {@link onHour} has run this session (test/diagnostic hook). */
+  private onHourRuns = 0;
+  get hourTicks(): number {
+    return this.onHourRuns;
+  }
   log: LogEntry[] = [];
 
   /**
@@ -278,6 +295,25 @@ export class Simulation implements SimContext {
 
   /** Advance the world by `dtMinutes` of game time. */
   tick(dtMinutes: number): void {
+    if (this.simModel === "v2") {
+      // Decompose into ≤30-min sub-steps that never skip an hour boundary, so
+      // onHour/onDay fire for EVERY elapsed hour/day and the integrators get a
+      // bounded step — headless then matches the (pre-chunked) browser. (F4)
+      let remaining = dtMinutes;
+      while (remaining > 0.0001) {
+        const toNextHour = 60 - (this.clock.minuteOfDay % 60);
+        const step = Math.min(remaining, 30, toNextHour);
+        this.advanceStep(step);
+        remaining -= step;
+      }
+      return;
+    }
+    this.advanceStep(dtMinutes);
+  }
+
+  /** One integration step: move time, cars and crowd, finalise construction, and
+   * fire the hour/day boundary handlers exactly once if crossed. */
+  private advanceStep(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
     this.elevators.update(this.tower, dtMinutes, this.rushFactor());
     // Advance the individually-routed crowd in lock-step with game time (after
@@ -320,6 +356,7 @@ export class Simulation implements SimContext {
 
   /** Hourly: presence, move-ins, satisfaction, traffic income. */
   private onHour(): void {
+    this.onHourRuns++;
     this.updatePresence();
     // Guests check out in the morning (not at midnight), so overnight hotel
     // population is still present at the midnight TOWER/VIP evaluation.

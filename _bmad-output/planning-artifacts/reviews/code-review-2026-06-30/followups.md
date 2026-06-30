@@ -1,8 +1,31 @@
 # SimTower Clone — Review Follow-ups (Phase 2)
 
-This PR (`claude/simtower-fixes`) resolves the blocker and the cleanly-fixable
-majority of the [BMAD review](./review.md). This file tracks what was
-**deliberately deferred**, with rationale, so nothing is silently dropped.
+PR #35 (`claude/simtower-fixes`, merged) resolved the blocker and the
+cleanly-fixable majority of the [BMAD review](./review.md). This file tracks what
+was **deliberately deferred**, with rationale, so nothing is silently dropped.
+
+## Phase 2 — ratified plan (2026-06-30)
+
+A BMAD party-mode roundtable (PM, Game Designer, Game Architect, 1994 Purist,
+Dev/QA) + the owner ratified the direction:
+
+- **Winnability is restored by making congestion SPATIAL** (per-shaft /
+  per-served-region throughput) — the "12k can't fit" paradox is an artifact of
+  the single tower-wide scalar, not real geometry. Service coverage (F15) gets a
+  radius (the original's 10-cap); the dead palette (F13) re-expands.
+- **TOWER stays a population census** (residents + office workers + hotel guests),
+  exactly as the 1994 original — **owner decision**, overriding the party's
+  "count commercial traffic" idea, which would have diverged from canon. Only the
+  *number* (12,000 vs 15,000) is scaled; a Phase-2 tolerance band may re-derive
+  it from the spatial model, but commercial/visitor traffic is never counted.
+- **Delivery: several small PRs behind a `simModel: 'v1' | 'v2'` flag** (default
+  v1) so the existing tests stay green until a deliberate flip. Ordered steps:
+  **0** quarantine the balance-coupled TOWER assertion → **1** real hourly clock
+  (F4) → **2** spatial transport graph → **3** service coverage radius (F15/F13)
+  → **4** re-derive the goal + flip default to v2 → **5** honest organic-TOWER E2E
+  (closes the rest of F2).
+- **Rejected:** enlarging the lot (papers over the bug, kills the F8 perf work);
+  lowering the target as a first move (kept only as a tolerance-band fallback).
 
 ## Fixed in this PR (21 findings)
 
