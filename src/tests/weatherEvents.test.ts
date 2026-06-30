@@ -4,7 +4,7 @@ import { EventSystem } from "../engine/EventSystem";
 import { Tower } from "../engine/Tower";
 import { Clock } from "../engine/Clock";
 import { RNG } from "../engine/rng";
-import type { FacilityKind } from "../engine/types";
+import type { FacilityKind, WeatherKind } from "../engine/types";
 
 /** A mutable SimContext-shaped holder for driving EventSystem in isolation. */
 function makeCtx(tower: Tower, star: number, money = 1_000_000) {
@@ -47,7 +47,7 @@ describe("Weather", () => {
   });
 
   it("is mostly clear with some cloud and rain across the year", () => {
-    const counts: Record<string, number> = { clear: 0, cloudy: 0, rain: 0 };
+    const counts: Record<WeatherKind, number> = { clear: 0, cloudy: 0, rain: 0 };
     for (let d = 0; d < 720; d++) counts[Simulation.weatherFor(d)]++;
     expect(counts.clear).toBeGreaterThan(counts.cloudy + counts.rain); // clear dominates
     expect(counts.cloudy).toBeGreaterThan(0);
@@ -56,7 +56,7 @@ describe("Weather", () => {
 });
 
 describe("Seasonal & visitor events", () => {
-  function runYears(events: EventSystem, ctx: { clock: Clock }, days: number) {
+  function runDays(events: EventSystem, ctx: { clock: Clock }, days: number) {
     for (let d = 0; d < days; d++) {
       ctx.clock = new Clock(d * 1440);
       events.maybeRandomEvent();
@@ -66,7 +66,7 @@ describe("Seasonal & visitor events", () => {
   it("a thief steals from a tower with no security", () => {
     const ctx = makeCtx(new Tower(), 2);
     const events = new EventSystem(ctx, 7);
-    runYears(events, ctx, 800);
+    runDays(events, ctx, 800);
     expect(ctx.log.some((m) => m.includes("made off"))).toBe(true);
     expect(ctx.money).toBeLessThan(1_000_000);
   });
@@ -76,7 +76,7 @@ describe("Seasonal & visitor events", () => {
     tower.place("security", 2, 0);
     const ctx = makeCtx(tower, 2);
     const events = new EventSystem(ctx, 7);
-    runYears(events, ctx, 800);
+    runDays(events, ctx, 800);
     expect(ctx.log.some((m) => m.includes("caught a thief"))).toBe(true);
     expect(ctx.log.some((m) => m.includes("made off"))).toBe(false);
   });
@@ -84,21 +84,21 @@ describe("Seasonal & visitor events", () => {
   it("Santa visits a 3★ tower once over the holidays", () => {
     const ctx = makeCtx(new Tower(), 3);
     const events = new EventSystem(ctx, 7);
-    runYears(events, ctx, 360); // one full year
+    runDays(events, ctx, 360); // one full year
     expect(ctx.log.filter((m) => m.includes("Santa")).length).toBe(1);
   });
 
   it("Santa skips a low-rated tower", () => {
     const ctx = makeCtx(new Tower(), 2); // below 3★
     const events = new EventSystem(ctx, 7);
-    runYears(events, ctx, 360);
+    runDays(events, ctx, 360);
     expect(ctx.log.some((m) => m.includes("Santa"))).toBe(false);
   });
 
   it("persists Santa's once-a-year guard across save/load", () => {
     const ctx = makeCtx(new Tower(), 3);
     const events = new EventSystem(ctx, 7);
-    runYears(events, ctx, 360); // Santa visits once this year
+    runDays(events, ctx, 360); // Santa visits once this year
     expect(ctx.log.filter((m) => m.includes("Santa")).length).toBe(1);
 
     // Save → load into a fresh system (different seed), replay the same year's
