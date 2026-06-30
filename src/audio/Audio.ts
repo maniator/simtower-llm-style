@@ -136,6 +136,9 @@ export class AudioEngine {
       this.timer = setInterval(() => this.scheduler(), 60);
       this.started = true;
       this.applyScene(this.scene, 0.01);
+      // Browsers' autoplay policy creates the context "suspended"; resume it
+      // (we're inside a user gesture) or no sound is ever produced.
+      this.resume();
     } catch {
       this.ctx = null;
     }
@@ -145,6 +148,14 @@ export class AudioEngine {
     this.muted = m;
     if (this.master && this.ctx) {
       this.master.gain.setTargetAtTime(m ? 0 : 0.35, this.ctx.currentTime, 0.1);
+    }
+    if (!m) this.resume();
+  }
+
+  /** Resume a context the autoplay policy left suspended. Safe to call often. */
+  private resume(): void {
+    if (this.ctx && this.ctx.state === "suspended") {
+      void this.ctx.resume();
     }
   }
 
@@ -198,6 +209,9 @@ export class AudioEngine {
     if (!this.ctx || this.muted) return;
     const def = SCENES[this.scene];
     const secondsPerStep = 60 / def.bpm / 2; // eighth notes
+    // If the clock jumped forward (e.g. the context just resumed from suspended),
+    // re-anchor so we don't flush a burst of notes scheduled in the past.
+    if (this.nextNoteTime < this.ctx.currentTime) this.nextNoteTime = this.ctx.currentTime;
     while (this.nextNoteTime < this.ctx.currentTime + 0.2) {
       this.scheduleStep(def, this.nextNoteTime);
       this.nextNoteTime += secondsPerStep;
