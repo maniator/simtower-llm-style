@@ -5,6 +5,9 @@
  * "tiles". A facility occupies a contiguous run of tiles on a single floor.
  */
 
+/** Cosmetic sky weather, derived deterministically from the day. */
+export type WeatherKind = "clear" | "cloudy" | "rain";
+
 /** Category groups used for the build toolbar and evaluation rules. */
 export type FacilityCategory =
   | "structure"

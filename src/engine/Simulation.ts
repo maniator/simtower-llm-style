@@ -21,7 +21,7 @@ import {
   isFacilityKind,
   isHotelKind,
 } from "./facilities";
-import type { FacilityKind, SerializedGame, Unit } from "./types";
+import type { FacilityKind, SerializedGame, Unit, WeatherKind } from "./types";
 
 /**
  * Crowd time-base: one in-game minute is worth this many of the crowd's own
@@ -75,6 +75,10 @@ export class Simulation implements SimContext {
   /** Rent, traffic income, hotel revenue, housekeeping and maintenance. */
   private economy: EconomySystem;
 
+  /** Cosmetic sky weather for the day (read by the renderer). Derived purely
+   * from the day number, so it never perturbs the gameplay RNG. */
+  weather: WeatherKind = "clear";
+
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
 
@@ -89,8 +93,22 @@ export class Simulation implements SimContext {
   constructor(seed = 12345) {
     this.rng = new RNG(seed);
     this.crowd = new Crowd(seed);
-    this.events = new EventSystem(this);
+    this.events = new EventSystem(this, seed);
     this.economy = new EconomySystem(this);
+    this.weather = Simulation.weatherFor(this.clock.day);
+  }
+
+  /**
+   * Deterministic per-day sky weather — a self-contained hash of the day, kept
+   * off the gameplay RNG so adding it can't shift any seeded outcome. Mostly
+   * clear, sometimes cloudy, occasionally rainy.
+   */
+  static weatherFor(day: number): WeatherKind {
+    let h = (day * 2654435761) >>> 0;
+    h ^= h >>> 13;
+    h = (h * 1274126177) >>> 0;
+    const r = ((h >>> 8) & 0xffff) / 0x10000;
+    return r < 0.62 ? "clear" : r < 0.85 ? "cloudy" : "rain";
   }
 
   // ---- Logging -----------------------------------------------------------
@@ -282,6 +300,7 @@ export class Simulation implements SimContext {
 
   /** Daily: hotel checkout, housekeeping, rent, maintenance, events. */
   private onDay(): void {
+    this.weather = Simulation.weatherFor(this.clock.day);
     this.economy.hotelCheckout();
 
     const month = Math.floor(this.clock.day / 30);

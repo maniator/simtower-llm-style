@@ -1,6 +1,7 @@
 import type { SimContext } from "./SimContext";
 import type { Unit } from "./types";
 import { FACILITIES } from "./facilities";
+import { RNG } from "./rng";
 
 /**
  * SimTower's signature emergencies — fires (which spread unless contained) and
@@ -11,8 +12,15 @@ import { FACILITIES } from "./facilities";
 export class EventSystem {
   /** Ids of units currently ablaze (a fire emergency in progress). */
   private active = new Set<number>();
+  /** Dedicated RNG for the seasonal/visitor events, so adding them never
+   * disturbs the gameplay RNG stream the rest of the sim depends on. */
+  private readonly extra: RNG;
+  /** Year index of the last Santa visit, so he comes at most once a year. */
+  private lastSantaYear = -1;
 
-  constructor(private readonly sim: SimContext) {}
+  constructor(private readonly sim: SimContext, seed = 1) {
+    this.extra = new RNG((seed ^ 0x5a17a) >>> 0);
+  }
 
   /** Number of units currently on fire (for the UI / stats). */
   get count(): number {
@@ -28,6 +36,10 @@ export class EventSystem {
   maybeRandomEvent(): void {
     // An ongoing fire is fought (or spreads) every day until it's out.
     this.processFires();
+    // Seasonal / visitor events roll on their own RNG, independent of the
+    // emergency rolls below, so they never shift the gameplay sequence.
+    this.maybeSanta();
+    this.maybeThief();
     if (this.sim.star < 2) return;
 
     const roll = this.sim.rng.next();
@@ -119,6 +131,38 @@ export class EventSystem {
         }
       }
     }
+  }
+
+  /**
+   * Santa visits a respectable tower (3★+) once a year over the holidays,
+   * leaving a cash gift — the original's seasonal cameo.
+   */
+  private maybeSanta(): void {
+    const year = Math.floor(this.sim.clock.day / 360);
+    const dayOfYear = ((this.sim.clock.day % 360) + 360) % 360;
+    // The last stretch of the year is "the holidays".
+    if (dayOfYear < 340 || this.sim.star < 3 || year === this.lastSantaYear) return;
+    if (!this.extra.chance(0.4)) return; // not every holiday day
+    this.lastSantaYear = year;
+    const gift = 50_000 + this.extra.int(0, 100_000);
+    this.sim.money += gift;
+    this.sim.emit(`🎅 Santa visited your tower for the holidays and left a $${gift.toLocaleString()} gift!`, "money");
+  }
+
+  /**
+   * A thief occasionally slips into the tower. Security catches them; without
+   * a guard on duty they make off with some cash — another reason to staff up.
+   */
+  private maybeThief(): void {
+    if (this.sim.star < 2) return;
+    if (!this.extra.chance(0.05)) return;
+    if (this.sim.hasAny("security")) {
+      this.sim.emit("🕵️ Security caught a thief prowling the tower — nothing was taken.", "good");
+      return;
+    }
+    const loss = 5_000 + this.extra.int(0, 20_000);
+    this.sim.money -= loss;
+    this.sim.emit(`🕵️ A thief slipped through the tower and made off with $${loss.toLocaleString()} — build Security.`, "bad");
   }
 
   /** A bomb scare. Security defuses it; without guards it does real damage. */
