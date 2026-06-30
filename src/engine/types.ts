@@ -53,7 +53,8 @@ export type UnitState =
   | "moving_in"
   | "vacating" // tenant leaving due to dissatisfaction
   | "asleep" // hotel room with sleeping guest (night)
-  | "dirty"; // hotel room awaiting housekeeping after checkout
+  | "dirty" // hotel room awaiting housekeeping after checkout
+  | "fire"; // unit ablaze during a fire emergency
 
 export interface Facility {
   kind: FacilityKind;

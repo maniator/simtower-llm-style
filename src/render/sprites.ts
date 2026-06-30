@@ -62,6 +62,13 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
   if (u.kind === "lobby") return drawLobby(d, x, y, w, h);
   if (u.state === "construction") return drawConstruction(d, x, y, w, h);
 
+  // A unit ablaze: draw its gutted shell, then flames over the top.
+  if (u.state === "fire") {
+    drawBurntShell(ctx, x, y, w, h);
+    drawFlames(d, x, y, w, h);
+    return;
+  }
+
   // Faithful pixel-art rooms own all of their states (empty / closed / asleep…).
   if (ROOM_KINDS.has(u.kind)) return drawRoom(d, u, x, y, w, h);
 
@@ -172,6 +179,46 @@ function drawConstruction(d: DrawCtx, x: number, y: number, w: number, h: number
   ctx.stroke();
   ctx.fillStyle = "#caa84a";
   ctx.fillRect(hookX - 2, y + h * 0.4, 4, 3);
+}
+
+/** Charred interior behind the flames of a burning unit. */
+function drawBurntShell(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  ctx.fillStyle = "#241c18";
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#3a2a20";
+  ctx.fillRect(x, y + h - 4, w, 4);
+  // Smoke smudges up the back wall.
+  ctx.fillStyle = "rgba(20,16,14,0.55)";
+  for (let sx = x + 3; sx < x + w - 2; sx += 11) ctx.fillRect(sx, y, 5, h - 4);
+}
+
+/** Animated flames licking up from the floor of a burning unit. */
+function drawFlames(d: DrawCtx, x: number, y: number, w: number, h: number) {
+  const ctx = d.ctx;
+  const base = y + h - 3;
+  for (let fx = x + 2; fx < x + w - 2; fx += 6) {
+    const phase = d.anim * 6 + fx * 0.7;
+    const flame = (Math.sin(phase) * 0.5 + 0.5) * (h * 0.55) + h * 0.3;
+    // Outer orange tongue.
+    ctx.fillStyle = "#e8631e";
+    ctx.beginPath();
+    ctx.moveTo(fx, base);
+    ctx.lineTo(fx + 3, base - flame);
+    ctx.lineTo(fx + 6, base);
+    ctx.closePath();
+    ctx.fill();
+    // Inner yellow core.
+    ctx.fillStyle = "#ffd23a";
+    ctx.beginPath();
+    ctx.moveTo(fx + 1.5, base);
+    ctx.lineTo(fx + 3, base - flame * 0.6);
+    ctx.lineTo(fx + 4.5, base);
+    ctx.closePath();
+    ctx.fill();
+  }
+  // Ember glow wash.
+  ctx.fillStyle = "rgba(232,99,30,0.18)";
+  ctx.fillRect(x, y, w, h);
 }
 
 function drawVacancy(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: number, w: number, h: number) {

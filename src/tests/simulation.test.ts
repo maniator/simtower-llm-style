@@ -292,3 +292,69 @@ describe("Simulation time", () => {
     expect(office.state).toBe("empty");
   });
 });
+
+describe("Simulation events", () => {
+  /** A serviced tower with a single occupied office on floor 2. */
+  function towerWithOffice(seed = 7) {
+    const sim = builtTower(seed);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.build("office", 2, x0);
+    const office = sim.tower.units.find((uu) => uu.kind === "office")!;
+    office.state = "occupied";
+    office.everOccupied = true;
+    return { sim, office };
+  }
+
+  it("a fire removes a unit's population and is eventually contained", () => {
+    const { sim, office } = towerWithOffice(11);
+    expect(sim.population).toBeGreaterThan(0);
+    sim.startFire(); // only the office is flammable, so it ignites
+    expect(office.state).toBe("fire");
+    expect(sim.fires).toBe(1);
+    expect(sim.population).toBe(0); // a burning unit houses nobody
+
+    // Security + medical guarantee a fast, contained response.
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.star = 4;
+    sim.tower.place("security", 2, x0 + 12);
+    sim.tower.place("medical", 2, x0 + 22);
+    const before = sim.money;
+    let guard = 0;
+    while (sim.fires > 0 && guard++ < 60) sim.tick(60 * 24); // one day per tick
+    expect(sim.fires).toBe(0);
+    expect(office.state).toBe("empty"); // gutted, awaiting a new tenant
+    expect(sim.money).toBeLessThan(before); // repairs cost money
+  });
+
+  it("security defuses a bomb threat cheaply; without it the tower pays dearly", () => {
+    const x0 = Math.floor(GRID.width / 2) - 20;
+
+    const safe = builtTower(5);
+    safe.tower.place("security", 2, x0);
+    const before1 = safe.money;
+    safe.bombThreat();
+    expect(safe.money).toBeGreaterThanOrEqual(before1 - 5_000);
+    expect(safe.money).toBeLessThan(before1);
+
+    const exposed = builtTower(5);
+    const before2 = exposed.money;
+    exposed.bombThreat();
+    expect(exposed.money).toBeLessThanOrEqual(before2 - 15_000);
+  });
+
+  it("excavating basement rooms can unearth treasure", () => {
+    const sim = Simulation.newGame(42);
+    sim.star = 2;
+    sim.money = 10_000_000;
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    // Lay a wide B1 (floor 0) slab, then dig 20 parking rooms into it.
+    for (let i = 0; i < 120 && x0 + i < GRID.width; i++) sim.tower.place("floor", 0, x0 + i);
+    let built = 0;
+    for (let i = 0; i + 6 <= 120 && x0 + i + 6 <= GRID.width; i += 6) {
+      if (sim.build("parking", 0, x0 + i).ok) built++;
+    }
+    expect(built).toBeGreaterThan(10);
+    const treasure = sim.log.filter((e) => e.text.toLowerCase().includes("treasure"));
+    expect(treasure.length).toBeGreaterThan(0);
+  });
+});

@@ -453,6 +453,7 @@ class GameApp {
         <span class="k">Hotel rooms in use</span><span class="v">${s.occupiedHotel}/${s.hotelRooms}</span>
         <span class="k">Rooms to clean</span><span class="v">${s.dirty}</span>
         <span class="k">Shops / Food</span><span class="v">${s.shops} / ${s.restaurants}</span>
+        <span class="k">On fire</span><span class="v" style="color:${s.fires ? "var(--bad)" : "var(--good)"}">${s.fires || "None"}</span>
       </div>
     </div>`;
   }

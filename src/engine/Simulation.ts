@@ -59,6 +59,8 @@ export class Simulation {
 
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
+  /** Ids of units currently ablaze (a fire emergency in progress). */
+  private activeFires = new Set<number>();
 
   /** Bookkeeping for period boundaries. */
   private lastDay = 0;
@@ -111,6 +113,14 @@ export class Simulation {
     if (kind === "weddingHall") {
       this.emit("Wedding Hall built! A VIP will inspect your tower soon.", "good");
       this.vipVisitDay = this.clock.day + 3;
+    }
+    // Excavating the basement occasionally turns up buried treasure, just like
+    // digging the foundations in the original. Only real rooms trigger it (not
+    // the many single floor tiles), so it stays a rare, delightful windfall.
+    if (floor <= 0 && kind !== "floor" && kind !== "lobby" && this.rng.chance(0.18)) {
+      const gold = 50_000 + this.rng.int(0, 150_000);
+      this.money += gold;
+      this.emit(`💰 Excavation crews unearthed buried treasure worth $${gold.toLocaleString()}!`, "money");
     }
     return { ok: true };
   }
@@ -233,7 +243,7 @@ export class Simulation {
     const weekend = this.clock.isWeekend;
     for (const u of this.tower.units) {
       const f = FACILITIES[u.kind];
-      if (u.state === "empty" || u.state === "construction") {
+      if (u.state === "empty" || u.state === "construction" || u.state === "fire") {
         u.occupants = 0;
         continue;
       }
@@ -268,7 +278,7 @@ export class Simulation {
       this.emit("Tenants are complaining of long elevator waits — add cars or shafts.", "bad");
     }
     for (const u of this.tower.units) {
-      if (u.state === "empty" || u.state === "construction") continue;
+      if (u.state === "empty" || u.state === "construction" || u.state === "fire") continue;
       const served = this.tower.isFloorServed(u.floor);
       if (!served) {
         u.satisfaction = Math.max(0, u.satisfaction - 0.15);
@@ -385,7 +395,7 @@ export class Simulation {
     for (const u of this.tower.units) {
       const daily = ECON.dailyTrafficIncome[u.kind];
       if (daily === undefined) continue;
-      if (u.state === "construction") continue;
+      if (u.state === "construction" || u.state === "fire") continue;
       if (!this.tower.isFloorServed(u.floor)) continue;
       if (!isOpenAt(u.kind, this.clock.hour)) {
         // Closed for the night — no patrons.
@@ -526,20 +536,130 @@ export class Simulation {
 
   // ---- Random events -----------------------------------------------------
 
+  /** Number of units currently on fire (for the UI / stats). */
+  get fires(): number {
+    return this.activeFires.size;
+  }
+
+  private floorLabel(floor: number): string {
+    return floor >= 1 ? `${floor}` : `B${1 - floor}`;
+  }
+
   private maybeRandomEvent(): void {
+    // An ongoing fire is fought (or spreads) every day until it's out.
+    this.processFires();
     if (this.star < 2) return;
-    if (!this.rng.chance(0.15)) return;
-    const hasSecurity = this.hasAny("security");
+
     const roll = this.rng.next();
-    if (roll < 0.4 && !hasSecurity && this.star >= 3) {
-      const fine = 5_000 + this.rng.int(0, 5_000);
-      this.money -= fine;
-      this.emit(`Security incident! Without guards it cost $${fine.toLocaleString()}.`, "bad");
-    } else if (roll < 0.7) {
-      this.emit("A local newspaper praised your tower's design.", "good");
-    } else {
-      this.emit("Tenants are happy with the tower today.", "info");
+    // A medical center's fast emergency response makes fires far less likely.
+    const fireChance = this.hasAny("medical") ? 0.04 : 0.09;
+    if (this.activeFires.size === 0 && roll < fireChance) {
+      this.startFire();
+      return;
     }
+    // Bomb threats target prestigious towers (4★ and up).
+    if (this.star >= 4 && roll < fireChance + 0.05) {
+      this.bombThreat();
+      return;
+    }
+    // Otherwise the occasional flavorful headline.
+    if (this.rng.chance(0.15)) {
+      if (this.rng.chance(0.5)) this.emit("A local newspaper praised your tower's design.", "good");
+      else this.emit("Tenants are happy with the tower today.", "info");
+    }
+  }
+
+  /** Rooms that can catch fire (real, finished rooms — not structure). */
+  private flammableUnits(): Unit[] {
+    return this.tower.units.filter(
+      (u) =>
+        u.kind !== "floor" &&
+        u.kind !== "lobby" &&
+        u.state !== "construction" &&
+        u.state !== "fire",
+    );
+  }
+
+  /** Ignite a random room. */
+  startFire(): void {
+    const candidates = this.flammableUnits();
+    if (candidates.length === 0) return;
+    const u = this.rng.pick(candidates);
+    u.state = "fire";
+    u.occupants = 0;
+    this.activeFires.add(u.id);
+    this.emit(`🔥 Fire broke out in ${FACILITIES[u.kind].name} on floor ${this.floorLabel(u.floor)}!`, "bad");
+  }
+
+  /** The room immediately left or right of a unit on the same floor. */
+  private adjacentRoom(u: Unit): Unit | undefined {
+    return this.tower.roomAt(u.floor, u.x - 1) ?? this.tower.roomAt(u.floor, u.x + u.width);
+  }
+
+  /**
+   * Resolve active fires. Security and especially a medical center speed the
+   * emergency response; without them a blaze is more likely to spread to the
+   * neighboring room before it's contained — the core reason to staff your
+   * tower in the original game.
+   */
+  private processFires(): void {
+    if (this.activeFires.size === 0) return;
+    const control = 0.35 + (this.hasAny("security") ? 0.2 : 0) + (this.hasAny("medical") ? 0.3 : 0);
+    for (const id of [...this.activeFires]) {
+      const u = this.tower.units.find((x) => x.id === id);
+      if (!u || u.state !== "fire") {
+        this.activeFires.delete(id);
+        continue;
+      }
+      if (this.rng.chance(control)) {
+        // Contained: pay to repair the gutted unit, then it reopens vacant.
+        const repair = Math.floor(FACILITIES[u.kind].cost * 0.3);
+        this.money -= repair;
+        u.state = "empty";
+        u.satisfaction = 1;
+        u.everOccupied = false;
+        u.label = FACILITIES[u.kind].name;
+        this.activeFires.delete(id);
+        this.emit(`Firefighters contained the blaze on floor ${this.floorLabel(u.floor)}. Repairs cost $${repair.toLocaleString()}.`, "money");
+      } else {
+        const next = this.adjacentRoom(u);
+        if (next && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && next.state !== "construction") {
+          next.state = "fire";
+          next.occupants = 0;
+          this.activeFires.add(next.id);
+          this.emit(`The fire spread to ${FACILITIES[next.kind].name} on floor ${this.floorLabel(next.floor)}!`, "bad");
+        }
+      }
+    }
+    // An active emergency rattles everyone still in the building.
+    if (this.activeFires.size > 0) {
+      for (const u of this.tower.units) {
+        if (u.state === "occupied" || u.state === "asleep") {
+          u.satisfaction = Math.max(0, u.satisfaction - 0.05);
+        }
+      }
+    }
+  }
+
+  /** A bomb scare. Security defuses it; without guards it does real damage. */
+  bombThreat(): void {
+    if (this.hasAny("security")) {
+      const cost = 2_000 + this.rng.int(0, 3_000);
+      this.money -= cost;
+      this.emit(`💣 A bomb threat was called in — security swept the tower and found nothing. The evacuation cost $${cost.toLocaleString()}.`, "info");
+      return;
+    }
+    const fine = 15_000 + this.rng.int(0, 15_000);
+    this.money -= fine;
+    const targets = this.flammableUnits();
+    if (targets.length > 0) {
+      const u = this.rng.pick(targets);
+      u.state = "empty";
+      u.occupants = 0;
+      u.everOccupied = false;
+      u.label = FACILITIES[u.kind].name;
+    }
+    this.emit(`💣 A bomb threat caused chaos! With no security office the panic and damage cost $${fine.toLocaleString()} — build Security.`, "bad");
   }
 
   // ---- Transport animation (cosmetic) -----------------------------------
@@ -619,6 +739,7 @@ export class Simulation {
       basements: Math.max(0, 1 - this.tower.lowestFloor),
       elevators: this.tower.transports.filter((t) => isElevatorKind(t.kind)).length,
       transports: this.tower.transports.length,
+      fires: this.activeFires.size,
     };
   }
 
@@ -661,9 +782,10 @@ export class Simulation {
     sim.tower.towerName = data.towerName;
     sim.tower.builtWeddingHall = data.builtWeddingHall;
     sim.tower.reindex();
-    // Resume any in-progress construction.
+    // Resume any in-progress construction and ongoing fires.
     for (const u of sim.tower.units) {
       if (u.state === "construction") sim.constructing.add(u.id);
+      if (u.state === "fire") sim.activeFires.add(u.id);
     }
     sim.lastDay = sim.clock.day;
     sim.lastQuarter = sim.clock.quarter;
