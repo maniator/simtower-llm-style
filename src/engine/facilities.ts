@@ -170,7 +170,9 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     kind: "elevatorStandard",
     category: "transport",
     name: "Standard Elevator",
-    width: 4,
+    // 3 tiles ≈ one floor tall (3·11 ≈ 34), so the car is square as in the
+    // original, rather than the previous wide 4-tile cab.
+    width: 3,
     cost: 200000,
     minStar: 1,
     population: 0,
