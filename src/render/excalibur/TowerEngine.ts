@@ -1,6 +1,6 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, facilityFloors, isElevatorKind } from "../../engine/facilities";
+import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
@@ -9,6 +9,17 @@ import { Crowd, type Person } from "../../engine/Crowd";
 /** World pixels per tile / per floor. */
 export const TILE = 11;
 export const FLOOR = 34;
+
+/**
+ * The crowd advances on *game* time, not real time, so the speed control only
+ * compresses time and never changes gameplay outcomes (tenant stress). One
+ * in-game minute is worth this many of the crowd's internal seconds — small
+ * enough that a commute spans a few game-minutes, so at fast speed people
+ * simply zip through their trips. A single frame's advance is capped so a long
+ * stall (or a freshly loaded save) can't teleport the whole crowd at once.
+ */
+const CROWD_SECONDS_PER_GAME_MINUTE = 2;
+const MAX_CROWD_STEP_MINUTES = 30;
 
 export interface ViewFocus {
   centerFloor: number;
@@ -106,8 +117,8 @@ export class TowerEngine {
   // DOM-free; here we just draw each person and remove them as they despawn.
   private crowd = new Crowd();
   private crowdActors = new Map<number, { actor: ex.Actor; gfx: ex.Canvas; red: boolean }>();
-  /** Set by the controller each frame: true when the game clock is stopped. */
-  paused = false;
+  /** Game-clock minute the crowd was last advanced to (drives game-time pacing). */
+  private lastCrowdClock = 0;
 
   // Shared graphics so thousands of tiles/people cost almost nothing.
   private floorGfx!: ex.Canvas;
@@ -148,6 +159,7 @@ export class TowerEngine {
     this.syncScene();
     this.syncMotion();
     this.builtRev = this.sim.tower.revision;
+    this.lastCrowdClock = this.sim.clock.minutes;
     this.bindInput();
   }
 
@@ -297,7 +309,7 @@ export class TowerEngine {
       this.builtRev = this.sim.tower.revision;
     }
     this.updateMotion();
-    this.updateCrowd(elapsed);
+    this.updateCrowd();
   }
 
   /**
@@ -306,16 +318,18 @@ export class TowerEngine {
    * — when paused, the sim clock is frozen and so are the people. Their
    * frustration feeds back into tenant satisfaction via `sim.crowdStress`.
    */
-  private updateCrowd(elapsedMs: number): void {
-    // The crowd advances on real wall-clock seconds so it looks identical at
-    // every game speed. The controller tells us when the clock is stopped, so
-    // people advance on every running frame regardless of frame rate (no
-    // clock-sampling heuristic that could freeze them on a slow device).
-    if (!this.paused) {
-      const dtSec = Math.min(0.05, elapsedMs / 1000);
-      this.crowd.update(dtSec, this.sim.tower, this.sim.clock);
-      this.sim.crowdStress = this.crowd.stress;
-    }
+  private updateCrowd(): void {
+    // Advance the crowd by however much *game* time elapsed since the last
+    // frame, so the speed control only compresses time and never changes who
+    // gets stressed. A stopped clock (paused, or between sub-ticks) yields a
+    // zero step — a harmless no-op — so no separate pause flag is needed.
+    const now = this.sim.clock.minutes;
+    let minutes = now - this.lastCrowdClock;
+    this.lastCrowdClock = now;
+    if (minutes < 0) minutes = 0; // clock went backwards (new game / load)
+    if (minutes > MAX_CROWD_STEP_MINUTES) minutes = MAX_CROWD_STEP_MINUTES;
+    this.crowd.update(minutes * CROWD_SECONDS_PER_GAME_MINUTE, this.sim.tower, this.sim.clock);
+    this.sim.crowdStress = this.crowd.stress;
     this.reconcileCrowd();
   }
 
@@ -361,6 +375,7 @@ export class TowerEngine {
     for (const rec of this.crowdActors.values()) rec.actor.kill();
     this.crowdActors.clear();
     this.crowd.reset();
+    this.lastCrowdClock = this.sim.clock.minutes;
   }
 
   // ---- Coordinate math ----------------------------------------------------
@@ -612,7 +627,14 @@ export class TowerEngine {
         if (!this.structActors.has(u.id)) this.addStruct(u);
       } else {
         seenR.add(u.id);
-        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}`;
+        // The signature must capture every input the room sprite draws from, so
+        // it re-bakes exactly when its look changes. Crucially that includes the
+        // hour-dependent bits — a commercial unit's open/closed shutter and a
+        // condo's late-night "asleep" look — otherwise a shop baked closed at
+        // dawn would wrongly stay shuttered all day until the next lighting flip.
+        const open = hasBusinessHours(u.kind) ? (isOpenAt(u.kind, this.d.hour) ? "o" : "c") : "";
+        const lateNight = u.kind === "condo" && (this.d.hour >= 23 || this.d.hour < 6) ? "s" : "";
+        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}`;
         const a = this.roomActors.get(u.id);
         if (!a) {
           this.addRoom(u);
