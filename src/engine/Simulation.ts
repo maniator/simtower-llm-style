@@ -1,7 +1,7 @@
 import { Clock } from "./Clock";
 import { Crowd } from "./Crowd";
 import { EconomySystem } from "./EconomySystem";
-import { ECON } from "./econConfig";
+import { ECON, rentOf, rentConfig } from "./econConfig";
 import { ElevatorDispatch } from "./ElevatorDispatch";
 import { EventSystem } from "./EventSystem";
 import type { SimContext } from "./SimContext";
@@ -443,6 +443,17 @@ export class Simulation implements SimContext {
       } else {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
       }
+      // Rent pressure: charging an office above the going rate erodes
+      // satisfaction (and so retention); undercutting it keeps tenants happy.
+      // The coefficient is tuned to exceed the +0.05 served-recovery near the
+      // top of the band, so a gouged office trends to a net-negative drift and
+      // eventually vacates — otherwise rent would be free money (fill cheap,
+      // then crank to max with no downside).
+      if (u.kind === "office" && served) {
+        const cfg = rentConfig("office")!;
+        const over = (rentOf(u) - cfg.default) / cfg.default; // <0 cheap, >0 pricey
+        u.satisfaction = Math.max(0, Math.min(1, u.satisfaction - over * 0.07));
+      }
       // NOTE: the individually-routed crowd's frustration is exposed read-only via
       // {@link crowdStress} for the HUD, but is deliberately NOT written back into
       // satisfaction — its value depends on frame/step cadence, so feeding it into
@@ -517,13 +528,14 @@ export class Simulation implements SimContext {
       if (f.population === 0 && !isHotelKind(u.kind)) continue; // non-tenant facility
       if (!this.tower.isFloorServed(u.floor)) continue; // nobody moves to an unreachable floor
 
+      const demand = this.demandFactor(u);
       if (u.kind === "office") {
-        if (!weekend && this.rng.chance(0.25)) this.moveIn(u);
+        if (!weekend && this.rng.chance(0.25 * demand)) this.moveIn(u);
       } else if (u.kind === "condo") {
-        if (this.rng.chance(0.18)) this.moveIn(u);
+        if (this.rng.chance(0.18 * demand)) this.moveIn(u);
       } else if (isHotelKind(u.kind)) {
         // Hotel rooms fill in the evening only and must be clean.
-        if (this.clock.isEvening() && this.rng.chance(0.5)) {
+        if (this.clock.isEvening() && this.rng.chance(0.5 * demand)) {
           u.state = "asleep";
           u.everOccupied = true;
           this.moveInsToday.rooms++;
@@ -532,14 +544,36 @@ export class Simulation implements SimContext {
     }
   }
 
+  /** How a unit's chosen price shifts demand: 1 at the going rate, higher when
+   *  it undercuts, lower when it gouges (clamped). 1 for un-priced kinds. */
+  private demandFactor(u: Unit): number {
+    const cfg = rentConfig(u.kind);
+    if (!cfg) return 1;
+    const ratio = rentOf(u) / cfg.default;
+    return Math.max(0.15, Math.min(1.6, 2 - ratio));
+  }
+
+  /** Nudge a unit's price one step within its band — offices/hotels any time,
+   *  condos only while unsold. Returns the new price, or null if not adjustable. */
+  adjustRent(id: number, dir: 1 | -1): number | null {
+    const u = this.tower.units.find((x) => x.id === id);
+    if (!u) return null;
+    const cfg = rentConfig(u.kind);
+    if (!cfg) return null;
+    if (u.kind === "condo" && u.everOccupied) return null; // already sold
+    u.rent = Math.max(cfg.min, Math.min(cfg.max, rentOf(u) + dir * cfg.step));
+    return u.rent;
+  }
+
   private moveIn(u: Unit): void {
     u.state = "occupied";
     u.satisfaction = 1;
     if (u.kind === "condo" && !u.everOccupied) {
       u.everOccupied = true;
-      this.money += ECON.condoSalePrice;
+      const price = rentOf(u);
+      this.money += price;
       this.moveInsToday.condos++;
-      this.emit(`Condominium on ${this.floorLabel(u.floor)} sold for $${ECON.condoSalePrice.toLocaleString()}.`, "money");
+      this.emit(`Condominium on ${this.floorLabel(u.floor)} sold for $${price.toLocaleString()}.`, "money");
     }
     if (u.kind === "office") {
       u.everOccupied = true;
@@ -763,6 +797,9 @@ export class Simulation implements SimContext {
         satisfaction: Math.max(0, Math.min(1, num(u.satisfaction, 1))),
         occupants: Math.max(0, num(u.occupants, 0)),
         pendingIncome: num(u.pendingIncome, 0),
+        // Coerce the optional player-set price too, so a corrupt save can't
+        // inject a non-number rent (which would poison income / rentOf math).
+        rent: u.rent === undefined ? undefined : num(u.rent, rentConfig(u.kind)?.default ?? 0),
       }));
     sim.tower.transports = (data.transports ?? [])
       .filter((t) => isFacilityKind(t.kind))

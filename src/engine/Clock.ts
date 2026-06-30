@@ -49,6 +49,24 @@ export class Clock {
     return ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"][this.dayOfWeek];
   }
 
+  /** Year index (0-based); a game "year" is 360 days, matching the quarters. */
+  get year(): number {
+    return Math.floor(this.day / 360);
+  }
+
+  /** Original-SimTower-style date stamp, e.g. "2nd WD/1Q/1st Year". Weekdays
+   *  (Mon–Fri) read as WD 1st–5th, weekends as WE 1st–2nd. */
+  formatRetroDate(): string {
+    const ord = (n: number): string => {
+      const s = ["th", "st", "nd", "rd"];
+      const v = n % 100;
+      return n + (s[(v - 20) % 10] ?? s[v] ?? s[0]);
+    };
+    const dow = this.dayOfWeek;
+    const slot = this.isWeekend ? `${ord(dow - 4)} WE` : `${ord(dow + 1)} WD`;
+    return `${slot}/${this.quarter + 1}Q/${ord(this.year + 1)} Year`;
+  }
+
   /** Advance the clock by a number of minutes. */
   advance(min: number): void {
     this.minutes += min;

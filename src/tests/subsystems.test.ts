@@ -76,7 +76,21 @@ describe("EconomySystem", () => {
     }
     const ctx = context(tower);
     new EconomySystem(ctx).collectRent();
-    expect(ctx.money).toBe(2 * ECON.officeRentQuarterly);
+    expect(ctx.money).toBe(2 * ECON.rent.office.default);
+  });
+
+  it("collects the player-set office rent, not just the default", () => {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
+    tower.placeTransport("elevatorStandard", 4, 1, 2);
+    const r = tower.place("office", 2, 0);
+    const u = tower.units.find((x) => x.id === r.unitId)!;
+    u.state = "occupied";
+    u.rent = 15_000; // raised above the $10k default
+    const ctx = context(tower);
+    new EconomySystem(ctx).collectRent();
+    expect(ctx.money).toBe(15_000);
   });
 
   it("charges monthly maintenance for elevator cars and services", () => {
@@ -87,5 +101,22 @@ describe("EconomySystem", () => {
     const cars = tower.transports[0].cars;
     const expected = cars * ECON.maintenancePerCarMonthly + ECON.serviceMaintenanceMonthly.security;
     expect(ctx.money).toBe(-expected);
+  });
+
+  it("taxes unsold condos monthly but not sold ones", () => {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
+    const unsold = tower.place("condo", 2, 0);
+    const sold = tower.place("condo", 2, 16);
+    tower.units.find((u) => u.id === unsold.unitId)!.state = "empty";
+    const soldU = tower.units.find((u) => u.id === sold.unitId)!;
+    soldU.state = "occupied";
+    soldU.everOccupied = true; // already sold — no carrying cost
+    const ctx = context(tower);
+    new EconomySystem(ctx).payMaintenance();
+    // Only the unsold condo is taxed, at the default-price rate.
+    const tax = Math.ceil(ECON.rent.condo.default * ECON.condoMonthlyTaxRate);
+    expect(ctx.money).toBe(-tax);
   });
 });
