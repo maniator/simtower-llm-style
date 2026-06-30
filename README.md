@@ -90,22 +90,26 @@ src/
     rng.ts          deterministic PRNG (mulberry32)
     Tower.ts        spatial model: two-layer grid, placement rules, reachability
     Simulation.ts   economy, population, satisfaction, ratings, events, save
-  render/      # canvas presentation
-    Renderer.ts     camera, culling, cached structural runs, live animation
-    sprites.ts      procedural per-facility drawing
+  render/      # presentation
+    excalibur/TowerEngine.ts  Excalibur.js scene: actors, camera, pan/zoom, input
+    sprites.ts      procedural per-facility drawing (drawn into Excalibur canvases)
+    pixelSprites.ts dollhouse room interiors + walking/seated people
   ui/UI.ts     # palette, status bar, editor panel, modals, toasts
   audio/Audio.ts  # location-based procedural soundtrack + SFX
   storage/SaveGame.ts  # localStorage + JSON import/export
-  main.ts      # GameApp: input, game loop, glue
+  main.ts      # GameApp: tool semantics, sim tick, glue (input/camera via Excalibur)
   gallery.ts   # standalone sprite-catalog page (docs/screenshots)
   tests/       # Vitest unit tests for the engine
 ```
 
 The **engine** is deliberately DOM-free and deterministic so it can be unit
-tested in isolation (`npm test`). The **renderer** never mutates the simulation;
-it only reads state and draws. Performance comes from bucketing units by floor,
-merging contiguous floor/lobby tiles into cached "runs", culling off-screen
-geometry, and throttling DOM/audio updates while rendering stays at 60 fps.
+tested in isolation (`npm test`). Rendering, the camera, panning, zooming and
+pointer input all run on **[Excalibur.js](https://excaliburjs.com/)**:
+`TowerEngine` owns the game loop and scene, drawing each facility, transport and
+merged structural "run" as an Excalibur actor whose graphic reuses our pixel-art
+sprite code. `main.ts` only supplies tool semantics through the engine's
+controller hooks and advances the simulation each frame — it never touches the
+camera or raw pointer math directly.
 
 ## Screenshots
 

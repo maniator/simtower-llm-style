@@ -1,5 +1,5 @@
 import type { FacilityKind } from "../engine/types";
-import type { ViewFocus } from "../render/Renderer";
+import type { ViewFocus } from "../render/excalibur/TowerEngine";
 
 /**
  * Procedural ambient audio. SimTower famously played different background

@@ -1,7 +1,7 @@
 import { Simulation } from "./engine/Simulation";
 import { FACILITIES, GRID, MAX_CARS, isElevatorKind } from "./engine/facilities";
 import type { FacilityKind } from "./engine/types";
-import { Renderer } from "./render/Renderer";
+import { TowerEngine } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
 import { parseTWR } from "./storage/twrImport";
@@ -10,41 +10,39 @@ import { UI, type Tool } from "./ui/UI";
 /** Game speeds → in-game minutes advanced per real second. */
 const SPEEDS = [0, 30, 120, 480];
 
+/**
+ * The game controller. Excalibur (via {@link TowerEngine}) owns the render
+ * loop, scene, camera, panning, zooming and pointer input; this class supplies
+ * the tool semantics through the engine's controller hooks, ticks the
+ * simulation from the engine's per-frame `onUpdate`, and drives the DOM UI.
+ */
 class GameApp {
   sim: Simulation;
-  renderer: Renderer;
+  engine: TowerEngine;
   audio = new AudioEngine();
   ui: UI;
   speed = 1;
   tool: Tool = { type: "inspect" };
 
   private canvas: HTMLCanvasElement;
-  private lastFrame = 0;
   private accMinutes = 0;
-
-  // Pointer state.
-  private dragging = false;
-  private panning = false;
-  private spaceHeld = false;
-  private clickCandidate = false;
-  private movedDist = 0;
-  private dragStart = { x: 0, y: 0, tile: 0, floor: 0 };
-  private lastPointer = { x: 0, y: 0 };
-  /** Active pointers for multi-touch pinch handling. */
-  private pointers = new Map<number, { x: number; y: number }>();
-  private pinch: { dist: number } | null = null;
-  /** A pending touch tap (acts on pointerup if it wasn't a drag). */
-  private touchTap: { floor: number; tile: number } | null = null;
-
+  private lastUiUpdate = 0;
+  private shownWin = false;
+  /** In-progress transport drag (anchor tile/floor). */
+  private transportStart: { x: number; floor: number } | null = null;
   /** Currently selected facility for the edit panel. */
   private selected: { type: "unit" | "transport"; id: number } | null = null;
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
-    this.renderer = new Renderer(this.canvas);
     this.sim = SaveGame.load() ?? Simulation.newGame(Date.parse("2024-01-01"));
+    this.engine = new TowerEngine(this.canvas, this.sim);
     this.ui = new UI({
-      onSelectTool: (t) => (this.tool = t),
+      onSelectTool: (t) => {
+        this.tool = t;
+        this.engine.preview = null;
+        this.engine.transportPreview = null;
+      },
       onSpeed: (s) => (this.speed = s),
       onSave: () => this.save(),
       onLoad: () => this.load(),
@@ -68,8 +66,7 @@ class GameApp {
       onLoadSlot: (slot) => {
         const loaded = slot === "auto" ? SaveGame.load() : SaveGame.loadSlot(slot);
         if (loaded) {
-          this.sim = loaded;
-          this.clearSelection();
+          this.adoptSim(loaded);
           this.ui.toast("Tower loaded.", "good");
         } else {
           this.ui.toast("That slot is empty or corrupt.", "bad");
@@ -81,26 +78,101 @@ class GameApp {
       },
     });
 
-    this.bindInput();
-    window.addEventListener("resize", () => this.renderer.resize());
-    this.lastFrame = performance.now();
-    requestAnimationFrame((t) => this.loop(t));
+    this.wireEngine();
+    this.bindKeys();
+    void this.engine.start();
 
     // Autosave periodically.
     window.setInterval(() => this.save(true), 30000);
   }
 
-  // ---- Input -------------------------------------------------------------
+  // ---- Engine wiring (all input/camera goes through Excalibur) ------------
 
-  private bindInput(): void {
-    const c = this.canvas;
-    c.addEventListener("pointerdown", (e) => this.onPointerDown(e));
-    c.addEventListener("pointermove", (e) => this.onPointerMove(e));
-    window.addEventListener("pointerup", (e) => this.onPointerUp(e));
-    c.addEventListener("wheel", (e) => this.onWheel(e), { passive: false });
-    c.addEventListener("contextmenu", (e) => e.preventDefault());
+  private wireEngine(): void {
+    // Decide whether a press pans the camera or performs the active tool.
+    this.engine.classifyDown = (button, touch, space) => {
+      if (button > 0 || space) return "pan"; // middle/right button or held space
+      if (this.tool.type === "inspect") return "pan"; // inspect: drag pans, tap selects
+      if (touch && !this.isTransportTool()) return "pan"; // one finger pans; tap acts
+      return "action";
+    };
+
+    // A press-without-drag: select (inspect) or, on touch, run the tool.
+    this.engine.onTap = (tile, floor, touch) => {
+      this.audio.start();
+      if (this.tool.type === "inspect") {
+        this.selectAt(floor, tile);
+        return;
+      }
+      if (!touch) return; // mouse pan-taps with a build/bulldoze tool do nothing
+      if (this.tool.type === "bulldoze") this.doBulldoze(floor, tile);
+      else if (this.tool.type === "build" && !this.isTransportTool()) {
+        this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
+      }
+    };
+
+    this.engine.onActionDown = (tile, floor) => {
+      this.audio.start();
+      if (this.tool.type === "bulldoze") {
+        this.doBulldoze(floor, tile);
+      } else if (this.tool.type === "build") {
+        if (this.isTransportTool()) {
+          this.transportStart = { x: this.snapX(this.tool.kind, tile), floor };
+        } else {
+          // Structure paints as you drag; rooms place once here.
+          this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
+        }
+      }
+    };
+
+    this.engine.onActionMove = (tile, floor) => {
+      if (this.tool.type === "bulldoze") {
+        this.doBulldoze(floor, tile);
+        return;
+      }
+      if (this.tool.type !== "build") return;
+      const kind = this.tool.kind;
+      if (this.isTransportTool() && this.transportStart) {
+        const bottom = Math.min(this.transportStart.floor, floor);
+        const top = Math.max(this.transportStart.floor, floor);
+        const x = this.transportStart.x;
+        const valid = this.sim.tower.placeTransportDryRun(kind, x, bottom, top) && this.sim.isUnlocked(kind);
+        this.engine.transportPreview = { kind, x, bottom, top, valid };
+        this.engine.preview = null;
+      } else if (kind === "floor" || kind === "lobby") {
+        this.tryBuild(kind, floor, this.snapX(kind, tile), true);
+      }
+    };
+
+    this.engine.onActionUp = () => {
+      if (this.tool.type === "build" && this.isTransportTool() && this.engine.transportPreview) {
+        const tp = this.engine.transportPreview;
+        if (tp.valid) {
+          const res = this.sim.buildTransport(tp.kind, tp.x, tp.bottom, tp.top);
+          this.audio.sfx(res.ok ? "build" : "error");
+          if (!res.ok && res.reason) this.ui.toast(res.reason, "bad");
+        }
+        this.engine.transportPreview = null;
+      }
+      this.transportStart = null;
+    };
+
+    this.engine.onHover = (tile, floor) => {
+      if (this.tool.type === "build") {
+        this.updateBuildPreview(tile, floor);
+      } else {
+        this.engine.preview = null;
+        this.engine.transportPreview = null;
+        if (this.tool.type === "inspect") this.updateInspector(floor, tile);
+      }
+    };
+
+    // Per-frame: advance the sim and (throttled) refresh DOM/audio.
+    this.engine.onUpdate = (ms) => this.update(ms);
+  }
+
+  private bindKeys(): void {
     window.addEventListener("keydown", (e) => {
-      if (e.code === "Space") this.spaceHeld = true;
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
         document.querySelectorAll("#speed button[data-speed]").forEach((b) =>
@@ -108,193 +180,69 @@ class GameApp {
         );
       }
     });
-    window.addEventListener("keyup", (e) => {
-      if (e.code === "Space") this.spaceHeld = false;
-    });
     // First interaction starts audio (browser autoplay policy).
     const kick = () => this.audio.start();
     window.addEventListener("pointerdown", kick, { once: true });
     window.addEventListener("keydown", kick, { once: true });
   }
 
-  private localPos(e: PointerEvent): { x: number; y: number } {
-    const r = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - r.left, y: e.clientY - r.top };
-  }
-
   private isTransportTool(): boolean {
     return this.tool.type === "build" && !!FACILITIES[this.tool.kind].transport;
   }
 
-  private onPointerDown(e: PointerEvent): void {
-    this.audio.start();
-    const p = this.localPos(e);
-    this.pointers.set(e.pointerId, p);
-    // Two fingers → pinch-zoom (overrides any single-pointer action).
-    if (this.pointers.size === 2) {
-      this.startPinch();
+  private updateBuildPreview(tile: number, floor: number): void {
+    if (this.tool.type !== "build") {
+      this.engine.preview = null;
+      this.engine.transportPreview = null;
       return;
     }
-    if (this.pointers.size > 2) return;
-
-    this.lastPointer = p;
-    const tile = this.renderer.screenToTile(p.x);
-    const floor = this.renderer.screenToFloor(p.y);
-    this.dragStart = { x: p.x, y: p.y, tile, floor };
-
-    // On touch, a single finger pans the view and a tap performs the tool's
-    // action — except for transport tools, where a drag defines the span.
-    if (e.pointerType === "touch" && !this.isTransportTool()) {
-      this.panning = true;
-      this.clickCandidate = true;
-      this.movedDist = 0;
-      this.touchTap = { floor, tile };
-      return;
-    }
-
-    const wantPan = e.button === 1 || e.button === 2 || this.spaceHeld || this.tool.type === "inspect";
-    if (wantPan) {
-      this.panning = true;
-      // A pan that never really moves becomes a click → select (inspect tool).
-      this.clickCandidate = this.tool.type === "inspect";
-      this.movedDist = 0;
-      return;
-    }
-    this.dragging = true;
-
-    if (this.tool.type === "bulldoze") {
-      this.doBulldoze(floor, tile);
-    } else if (this.tool.type === "build" && !this.isTransportTool()) {
-      // Structure paints; rooms place once.
-      this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
-    }
-  }
-
-  private onPointerMove(e: PointerEvent): void {
-    const p = this.localPos(e);
-    if (this.pointers.has(e.pointerId)) this.pointers.set(e.pointerId, p);
-    if (this.pinch) {
-      this.updatePinch();
-      return;
-    }
-    const tile = this.renderer.screenToTile(p.x);
-    const floor = this.renderer.screenToFloor(p.y);
-
-    if (this.panning) {
-      const dx = p.x - this.lastPointer.x;
-      const dy = p.y - this.lastPointer.y;
-      this.movedDist += Math.abs(dx) + Math.abs(dy);
-      if (this.movedDist > 5) this.clickCandidate = false;
-      this.renderer.pan(dx, dy);
-      this.lastPointer = p;
-      return;
-    }
-    this.lastPointer = p;
-
-    // Hover preview.
-    if (this.tool.type === "build") {
-      if (this.isTransportTool()) {
-        const kind = this.tool.kind;
-        if (this.dragging) {
-          const bottom = Math.min(this.dragStart.floor, floor);
-          const top = Math.max(this.dragStart.floor, floor);
-          const x = this.snapX(kind, this.dragStart.tile);
-          const valid = this.sim.tower.placeTransportDryRun(kind, x, bottom, top) && this.sim.isUnlocked(kind);
-          this.renderer.transportPreview = { kind, x, bottom, top, valid };
-        } else {
-          const x = this.snapX(kind, tile);
-          this.renderer.transportPreview = null;
-          this.renderer.preview = {
-            kind,
-            floor,
-            x,
-            valid: this.sim.isUnlocked(kind),
-          };
-        }
-      } else {
-        const x = this.snapX(this.tool.kind, tile);
-        const valid =
-          this.sim.isUnlocked(this.tool.kind) &&
-          this.sim.tower.canPlace(this.tool.kind, floor, x).ok &&
-          this.sim.money >= FACILITIES[this.tool.kind].cost;
-        this.renderer.preview = { kind: this.tool.kind, floor, x, valid };
-        this.renderer.transportPreview = null;
-        // Paint structure while dragging.
-        if (this.dragging && (this.tool.kind === "floor" || this.tool.kind === "lobby")) {
-          this.tryBuild(this.tool.kind, floor, x, true);
-        }
-      }
+    const kind = this.tool.kind;
+    if (this.isTransportTool()) {
+      const x = this.snapX(kind, tile);
+      this.engine.transportPreview = null;
+      this.engine.preview = { kind, floor, x, valid: this.sim.isUnlocked(kind) };
     } else {
-      this.renderer.preview = null;
-      this.renderer.transportPreview = null;
-      if (this.tool.type === "inspect") this.updateInspector(floor, tile);
-      if (this.tool.type === "bulldoze" && this.dragging) this.doBulldoze(floor, tile);
+      const x = this.snapX(kind, tile);
+      const valid =
+        this.sim.isUnlocked(kind) &&
+        this.sim.tower.canPlace(kind, floor, x).ok &&
+        this.sim.money >= FACILITIES[kind].cost;
+      this.engine.preview = { kind, floor, x, valid };
+      this.engine.transportPreview = null;
     }
   }
 
-  private onPointerUp(e: PointerEvent): void {
-    this.pointers.delete(e.pointerId);
-    if (this.pinch) {
-      if (this.pointers.size < 2) {
-        this.pinch = null;
-        const rem = [...this.pointers.values()][0];
-        if (rem) this.lastPointer = rem; // avoid a jump when one finger lifts
+  // ---- Per-frame simulation + UI -----------------------------------------
+
+  private update(dtMs: number): void {
+    const minutesPerSecond = SPEEDS[this.speed] ?? 0;
+    this.accMinutes += (dtMs / 1000) * minutesPerSecond;
+    // Step the simulation in small chunks so hourly/daily boundaries fire.
+    let guard = 0;
+    while (this.accMinutes >= 1 && guard++ < 2000) {
+      const step = Math.min(20, this.accMinutes);
+      this.sim.tick(step);
+      this.accMinutes -= step;
+    }
+
+    // Throttle the comparatively expensive DOM/audio updates (~6Hz) so a busy
+    // tower never makes panning feel sluggish.
+    const now = globalThis.performance ? performance.now() : 0;
+    if (now - this.lastUiUpdate > 160) {
+      this.lastUiUpdate = now;
+      this.audio.update(this.engine.focus());
+      this.ui.update(this.sim);
+      // Keep the open editor's live stats fresh (unless the user is typing).
+      if (this.selected && this.ui.isEditorOpen()) {
+        const editing = document.activeElement?.id === "ed-name";
+        if (!editing) this.refreshEditor();
       }
-      this.resetDrag();
-      return;
-    }
-
-    if (this.dragging && this.isTransportTool() && this.renderer.transportPreview) {
-      const tp = this.renderer.transportPreview;
-      if (tp.valid) {
-        const res = this.sim.buildTransport(tp.kind, tp.x, tp.bottom, tp.top);
-        this.audio.sfx(res.ok ? "build" : "error");
-        if (!res.ok && res.reason) this.ui.toast(res.reason, "bad");
+      if (this.sim.evaluatedTower && !this.shownWin) {
+        this.shownWin = true;
+        this.audio.sfx("promote");
+        this.ui.congratsTower();
       }
-      this.renderer.transportPreview = null;
     }
-
-    // Touch tap → perform the current tool's action at the tapped cell.
-    if (this.touchTap && this.clickCandidate) {
-      const { floor, tile } = this.touchTap;
-      if (this.tool.type === "inspect") this.selectAt(floor, tile);
-      else if (this.tool.type === "bulldoze") this.doBulldoze(floor, tile);
-      else if (this.tool.type === "build" && !this.isTransportTool()) {
-        this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
-      }
-    } else if (this.panning && this.clickCandidate && this.tool.type === "inspect") {
-      // Mouse inspect click (no real drag) selects a facility to edit.
-      const p = this.localPos(e);
-      this.selectAt(this.renderer.screenToFloor(p.y), this.renderer.screenToTile(p.x));
-    }
-    this.resetDrag();
-  }
-
-  private resetDrag(): void {
-    this.dragging = false;
-    this.panning = false;
-    this.clickCandidate = false;
-    this.touchTap = null;
-  }
-
-  // ---- Pinch-zoom (touch) ------------------------------------------------
-
-  private startPinch(): void {
-    const pts = [...this.pointers.values()];
-    this.pinch = { dist: dist2(pts[0], pts[1]) };
-    this.resetDrag();
-    this.renderer.preview = null;
-    this.renderer.transportPreview = null;
-  }
-
-  private updatePinch(): void {
-    const pts = [...this.pointers.values()];
-    if (pts.length < 2 || !this.pinch) return;
-    const newDist = dist2(pts[0], pts[1]);
-    const mid = { x: (pts[0].x + pts[1].x) / 2, y: (pts[0].y + pts[1].y) / 2 };
-    const ratio = newDist / (this.pinch.dist || 1);
-    if (ratio > 0 && Number.isFinite(ratio)) this.renderer.zoomAt(ratio, mid.x, mid.y);
-    this.pinch.dist = newDist;
   }
 
   // ---- Selection & per-facility editing ---------------------------------
@@ -315,7 +263,7 @@ class GameApp {
 
   private clearSelection(): void {
     this.selected = null;
-    this.renderer.selectedId = null;
+    this.engine.selectedId = null;
     this.ui.hideEditor();
   }
 
@@ -324,12 +272,12 @@ class GameApp {
     if (this.selected.type === "unit") {
       const u = this.sim.tower.units.find((x) => x.id === this.selected!.id);
       if (!u) return this.clearSelection();
-      this.renderer.selectedId = u.id;
+      this.engine.selectedId = u.id;
       this.ui.showEditor(this.unitEditorHtml(u));
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
       if (!t) return this.clearSelection();
-      this.renderer.selectedId = null;
+      this.engine.selectedId = null;
       this.ui.showEditor(this.transportEditorHtml(t));
     }
   }
@@ -509,12 +457,6 @@ class GameApp {
     </div>`;
   }
 
-  private onWheel(e: WheelEvent): void {
-    e.preventDefault();
-    const p = { x: e.offsetX, y: e.offsetY };
-    this.renderer.zoomAt(e.deltaY < 0 ? 1.12 : 0.89, p.x, p.y);
-  }
-
   private snapX(kind: FacilityKind, tile: number): number {
     const w = FACILITIES[kind].width;
     return Math.max(0, Math.min(GRID.width - w, tile));
@@ -561,6 +503,17 @@ class GameApp {
     }
   }
 
+  // ---- Save / load / new --------------------------------------------------
+
+  /** Swap in a freshly loaded/created simulation and point the engine at it. */
+  private adoptSim(sim: Simulation): void {
+    this.sim = sim;
+    this.clearSelection();
+    this.shownWin = false;
+    this.accMinutes = 0;
+    this.engine.setSim(sim);
+  }
+
   private save(silent = false): void {
     SaveGame.save(this.sim);
     if (!silent) this.ui.toast("Tower saved.", "good");
@@ -568,7 +521,7 @@ class GameApp {
   private load(): void {
     const loaded = SaveGame.load();
     if (loaded) {
-      this.sim = loaded;
+      this.adoptSim(loaded);
       this.ui.toast("Tower loaded.", "good");
     } else {
       this.ui.toast("No saved tower found.", "bad");
@@ -576,8 +529,7 @@ class GameApp {
   }
   private importGame(json: string): void {
     try {
-      this.sim = SaveGame.import(json);
-      this.clearSelection();
+      this.adoptSim(SaveGame.import(json));
       this.ui.toast("Tower imported.", "good");
     } catch (err) {
       this.ui.toast("Import failed: " + (err as Error).message, "bad");
@@ -587,8 +539,7 @@ class GameApp {
   private importLegacy(buffer: ArrayBuffer, filename: string): void {
     try {
       const data = parseTWR(buffer);
-      this.sim = Simulation.deserialize(data);
-      this.clearSelection();
+      this.adoptSim(Simulation.deserialize(data));
       this.ui.toast("Imported original SimTower save.", "good");
     } catch (err) {
       // Expected today: the .TWR decoder is a planned v2 feature.
@@ -597,61 +548,13 @@ class GameApp {
     }
   }
   private newGame(): void {
-    this.sim = Simulation.newGame(Date.now() & 0x7fffffff);
+    this.adoptSim(Simulation.newGame(Date.now() & 0x7fffffff));
     this.ui.toast("New tower founded. Good luck!", "good");
   }
-
-  // ---- Loop --------------------------------------------------------------
-
-  private loop(now: number): void {
-    const dtMs = Math.min(100, now - this.lastFrame);
-    this.lastFrame = now;
-
-    const minutesPerSecond = SPEEDS[this.speed] ?? 0;
-    this.accMinutes += (dtMs / 1000) * minutesPerSecond;
-    // Step the simulation in small chunks so hourly/daily boundaries fire.
-    let guard = 0;
-    while (this.accMinutes >= 1 && guard++ < 2000) {
-      const step = Math.min(20, this.accMinutes);
-      this.sim.tick(step);
-      this.accMinutes -= step;
-    }
-
-    // Render every frame for smooth pan/zoom & animation.
-    this.renderer.render(this.sim);
-
-    // Throttle the comparatively expensive DOM/audio updates (~6Hz) so a busy
-    // tower never makes panning feel sluggish.
-    if (now - this.lastUiUpdate > 160) {
-      this.lastUiUpdate = now;
-      const focus = this.renderer.focus(this.sim);
-      this.audio.update(focus);
-      this.ui.update(this.sim);
-      // Keep the open editor's live stats fresh (unless the user is typing).
-      if (this.selected && this.ui.isEditorOpen()) {
-        const editing = document.activeElement?.id === "ed-name";
-        if (!editing) this.refreshEditor();
-      }
-      if (this.sim.evaluatedTower && !this.shownWin) {
-        this.shownWin = true;
-        this.audio.sfx("promote");
-        this.ui.congratsTower();
-      }
-    }
-
-    requestAnimationFrame((t) => this.loop(t));
-  }
-
-  private lastUiUpdate = 0;
-  private shownWin = false;
 }
 
 function escapeAttr(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
-}
-
-function dist2(a: { x: number; y: number }, b: { x: number; y: number }): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
 }
 
 // Bootstrap once the DOM is ready.

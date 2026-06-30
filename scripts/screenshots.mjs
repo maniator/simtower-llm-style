@@ -93,10 +93,9 @@ function buildDemoScript() {
   for (let x = left; x + 6 <= left + 70; x += 6) s.tower.place("parking", -1, x);
 
   s.evaluateStar();
-  // Centre the camera on the mid tower (TILE_W=11, FLOOR_H=34).
-  g.renderer.cam.zoom = 0.8;
-  g.renderer.cam.x = -(cx - 6) * 11 * 0.8 + g.renderer.viewWidth / 2;
-  g.renderer.cam.y = g.renderer.viewHeight * 0.92 + 14 * 34 * 0.8;
+  // Point the Excalibur engine at the rebuilt tower and frame it.
+  g.engine.setSim(s);
+  g.engine.setCamera(cx, 18, 0.55);
 }
 
 async function main() {
@@ -137,10 +136,7 @@ async function main() {
 
   // 5) Zoomed-in office detail.
   await page.evaluate(() => {
-    const g = window.game;
-    g.renderer.cam.zoom = 1.8;
-    g.renderer.cam.x = -(70) * 11 * 1.8 + g.renderer.viewWidth / 2;
-    g.renderer.cam.y = g.renderer.viewHeight * 0.6 + 6 * 34 * 1.8;
+    window.game.engine.setCamera(100, 8, 1.8);
   });
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${OUT}/05-detail.png` });
@@ -156,10 +152,7 @@ async function main() {
     let delta = target - c.minuteOfDay;
     if (delta < 0) delta += 1440;
     c.advance(delta);
-    const cx = 100;
-    g.renderer.cam.zoom = 1.7;
-    g.renderer.cam.x = -cx * 11 * 1.7 + g.renderer.viewWidth / 2;
-    g.renderer.cam.y = g.renderer.viewHeight * 0.62 + 1 * 34 * 1.7;
+    g.engine.setCamera(100, 2, 1.7);
   });
   await page.waitForTimeout(1200);
   await page.screenshot({ path: `${OUT}/07-people-rush.png` });
@@ -181,9 +174,8 @@ async function main() {
     for (let f = 2; f <= 8; f++) {
       for (let x = left + 6; x + 9 <= left + 44; x += 9) s.build("office", f, x);
     }
-    g.renderer.cam.zoom = 1.4;
-    g.renderer.cam.x = -(left + 18) * 11 * 1.4 + g.renderer.viewWidth / 2;
-    g.renderer.cam.y = g.renderer.viewHeight * 0.78 + 4 * 34 * 1.4;
+    g.engine.setSim(s);
+    g.engine.setCamera(left + 18, 4, 1.4);
     g.speed = 0; // freeze so construction is visible
   });
   await page.waitForTimeout(700);
@@ -202,10 +194,7 @@ async function main() {
   await mobile.evaluate(buildDemoScript);
   await mobile.evaluate(() => {
     const g = window.game;
-    g.renderer.resize();
-    g.renderer.cam.zoom = 0.7;
-    g.renderer.cam.x = -100 * 11 * 0.7 + g.renderer.viewWidth / 2;
-    g.renderer.cam.y = g.renderer.viewHeight * 0.8 + 14 * 34 * 0.7;
+    g.engine.setCamera(100, 16, 0.5);
     g.speed = 2;
   });
   await mobile.waitForTimeout(1000);
