@@ -20,6 +20,14 @@ export class ElevatorDispatch {
     return this.waiting.get(floor) ?? 0;
   }
 
+  /** Drop per-car dwell timers for shafts that no longer exist, so a bulldozed
+   * elevator can't leak its transient state for the rest of the session. */
+  private pruneRemovedShafts(tower: Tower): void {
+    if (this.carDwell.size === 0) return;
+    const live = new Set(tower.transports.map((t) => t.id));
+    for (const id of this.carDwell.keys()) if (!live.has(id)) this.carDwell.delete(id);
+  }
+
   /**
    * Move each elevator car like a real lift: it continues in its current
    * direction to the next floor that has waiting passengers, dwells briefly to
@@ -29,6 +37,7 @@ export class ElevatorDispatch {
    * are skipped here. `rush` is the time-of-day demand multiplier.
    */
   update(tower: Tower, dt: number, rush: number): void {
+    this.pruneRemovedShafts(tower);
     this.accumulateWaiting(tower, dt, rush);
     const demand = this.waiting;
     for (const t of tower.transports) {

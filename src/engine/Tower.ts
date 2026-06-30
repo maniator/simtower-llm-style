@@ -592,13 +592,14 @@ export class Tower {
     return !(t.skipFloors && t.skipFloors.includes(floor));
   }
 
-  /**
-   * A floor is "served" if a chain of transports connects it to the ground
-   * lobby (floor 1). Transports link via the floors they actually STOP at, so
-   * an express that skips a floor does not serve it (it only passes through).
-   */
-  isFloorServed(floor: number): boolean {
-    if (floor === 1) return true;
+  /** Cached reachable-floor set, keyed by {@link revision} so it is recomputed
+   * only when transports/structure actually change (not every tick per unit). */
+  private servedRev = -1;
+  private servedSet = new Set<number>([1]);
+
+  /** The full set of floors reachable from the ground lobby, memoised per revision. */
+  private servedFloors(): Set<number> {
+    if (this.servedRev === this.revision) return this.servedSet;
     const reachable = new Set<number>([1]);
     let changed = true;
     while (changed) {
@@ -621,7 +622,20 @@ export class Tower {
         }
       }
     }
-    return reachable.has(floor);
+    this.servedSet = reachable;
+    this.servedRev = this.revision;
+    return reachable;
+  }
+
+  /**
+   * A floor is "served" if a chain of transports connects it to the ground
+   * lobby (floor 1). Transports link via the floors they actually STOP at, so
+   * an express that skips a floor does not serve it (it only passes through).
+   * O(1) after the first call per revision — see {@link servedFloors}.
+   */
+  isFloorServed(floor: number): boolean {
+    if (floor === 1) return true;
+    return this.servedFloors().has(floor);
   }
 
   facilityOf(unit: Unit): Facility {

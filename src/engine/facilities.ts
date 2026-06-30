@@ -371,6 +371,15 @@ export function isOpenAt(kind: FacilityKind, hour: number): boolean {
   }
 }
 
+/** Number of hours per day a venue is open (used to spread its daily take so
+ * total income over a day ≈ the headline daily figure, not a per-open-hour
+ * multiple of it). */
+export function openHoursPerDay(kind: FacilityKind): number {
+  let h = 0;
+  for (let hr = 0; hr < 24; hr++) if (isOpenAt(kind, hr)) h++;
+  return h || 1;
+}
+
 /** True for facilities that keep posted business hours (can be "closed"). */
 export function hasBusinessHours(kind: FacilityKind): boolean {
   return (
