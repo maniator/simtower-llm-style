@@ -14,3 +14,4 @@ coverage/
 !eslint.config.js
 !vite.config.ts
 !vite-env.d.ts
+__pycache__/
