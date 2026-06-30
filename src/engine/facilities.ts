@@ -267,16 +267,16 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     color: "#9f7f5f",
     description: "Deep-basement subway station. Brings huge numbers of visitors to your tower.",
   },
-  cathedral: {
-    kind: "cathedral",
+  weddingHall: {
+    kind: "weddingHall",
     category: "special",
-    name: "Cathedral",
+    name: "Wedding Hall",
     width: 16,
     cost: 3000000,
     minStar: 5,
     population: 0,
-    color: "#efe9d0",
-    description: "Built atop a 5-star tower on floor 100. Triggers the final TOWER evaluation.",
+    color: "#f3ecdc",
+    description: "A grand wedding & events hall atop a 5-star tower (floor 100). Triggers the final TOWER evaluation.",
   },
 };
 
@@ -364,4 +364,27 @@ export function isElevatorKind(kind: FacilityKind): boolean {
     kind === "elevatorService" ||
     kind === "elevatorExpress"
   );
+}
+
+/** Passengers a single car of each transport type holds per trip. */
+export const TRANSPORT_CAPACITY: Record<string, number> = {
+  elevatorStandard: 21,
+  elevatorService: 16,
+  elevatorExpress: 33,
+  escalator: 30, // continuous flow, treated as per-shaft
+  stairs: 8,
+};
+
+/** Maximum cars allowed per shaft, by elevator type. */
+export const MAX_CARS: Record<string, number> = {
+  elevatorStandard: 8,
+  elevatorService: 4,
+  elevatorExpress: 8,
+};
+
+/** Maximum floors a transport may span. */
+export function maxSpanFor(kind: FacilityKind): number {
+  if (kind === "stairs" || kind === "escalator") return 1;
+  if (kind === "elevatorExpress") return 60;
+  return 30;
 }

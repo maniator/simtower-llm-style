@@ -1,4 +1,4 @@
-import { FACILITIES, GRID, isElevatorKind } from "./facilities";
+import { FACILITIES, GRID, MAX_CARS, isElevatorKind } from "./facilities";
 import type {
   Facility,
   FacilityKind,
@@ -23,7 +23,7 @@ export class Tower {
   transports: Transport[] = [];
   private nextId = 1;
   towerName = "Tower One";
-  builtCathedral = false;
+  builtWeddingHall = false;
   /** Bumped whenever units/transports are added or removed (render caching). */
   revision = 0;
 
@@ -141,8 +141,8 @@ export class Tower {
       return { ok: true };
     }
 
-    if (kind === "cathedral" && floor !== GRID.maxFloor) {
-      return { ok: false, reason: "The cathedral can only crown floor 100." };
+    if (kind === "weddingHall" && floor !== GRID.maxFloor) {
+      return { ok: false, reason: "The wedding hall can only crown floor 100." };
     }
 
     if (!this.roomSpanFree(floor, x, f.width)) {
@@ -192,7 +192,7 @@ export class Tower {
     };
     this.units.push(unit);
     this.register(unit);
-    if (kind === "cathedral") this.builtCathedral = true;
+    if (kind === "weddingHall") this.builtWeddingHall = true;
     this.revision++;
     return { ok: true, unitId: unit.id };
   }
@@ -283,7 +283,7 @@ export class Tower {
     if (idx === -1) return undefined;
     const [u] = this.units.splice(idx, 1);
     this.unregister(u);
-    if (u.kind === "cathedral") this.builtCathedral = false;
+    if (u.kind === "weddingHall") this.builtWeddingHall = false;
     this.revision++;
     return u;
   }
@@ -330,11 +330,11 @@ export class Tower {
     return { ok: true, added: newTop - newBottom + 1 - before };
   }
 
-  /** Change the number of elevator cars (1..8). */
+  /** Change the number of elevator cars (1..max for that elevator type). */
   setCars(id: number, cars: number): boolean {
     const t = this.transports.find((x) => x.id === id);
     if (!t || !isElevatorKind(t.kind)) return false;
-    cars = Math.max(1, Math.min(8, cars));
+    cars = Math.max(1, Math.min(MAX_CARS[t.kind] ?? 8, cars));
     if (cars === t.cars) return false;
     if (cars > t.cars) {
       for (let i = t.cars; i < cars; i++) {
@@ -346,6 +346,50 @@ export class Tower {
       t.carDir.length = cars;
     }
     t.cars = cars;
+    this.revision++;
+    return true;
+  }
+
+  /** Floors that have at least one lobby tile (express stops). */
+  lobbyFloors(): number[] {
+    const set = new Set<number>();
+    for (const u of this.units) if (u.kind === "lobby") set.add(u.floor);
+    return [...set].sort((a, b) => a - b);
+  }
+
+  /** Toggle whether a transport stops at a floor (express configuration). */
+  setStop(id: number, floor: number, stop: boolean): boolean {
+    const t = this.transports.find((x) => x.id === id);
+    if (!t || floor < t.bottom || floor > t.top) return false;
+    const skip = new Set(t.skipFloors ?? []);
+    if (stop) skip.delete(floor);
+    else skip.add(floor);
+    t.skipFloors = [...skip].sort((a, b) => a - b);
+    this.revision++;
+    return true;
+  }
+
+  /** Configure an elevator to stop only at lobby floors (true express). */
+  setExpressStops(id: number): boolean {
+    const t = this.transports.find((x) => x.id === id);
+    if (!t) return false;
+    const lobbies = new Set(this.lobbyFloors());
+    const skip: number[] = [];
+    for (let fl = t.bottom; fl <= t.top; fl++) {
+      // Always keep the bottom and top as stops so it stays connected.
+      if (fl === t.bottom || fl === t.top) continue;
+      if (!lobbies.has(fl)) skip.push(fl);
+    }
+    t.skipFloors = skip;
+    this.revision++;
+    return true;
+  }
+
+  /** Make a transport stop at every floor again. */
+  clearStops(id: number): boolean {
+    const t = this.transports.find((x) => x.id === id);
+    if (!t) return false;
+    t.skipFloors = [];
     this.revision++;
     return true;
   }
@@ -364,9 +408,16 @@ export class Tower {
     );
   }
 
+  /** Does this transport actually stop at the given floor (vs. skip it)? */
+  stopsAt(t: Transport, floor: number): boolean {
+    if (floor < t.bottom || floor > t.top) return false;
+    return !(t.skipFloors && t.skipFloors.includes(floor));
+  }
+
   /**
    * A floor is "served" if a chain of transports connects it to the ground
-   * lobby (floor 1). Transports link when they share at least one floor.
+   * lobby (floor 1). Transports link via the floors they actually STOP at, so
+   * an express that skips a floor does not serve it (it only passes through).
    */
   isFloorServed(floor: number): boolean {
     if (floor === 1) return true;
@@ -377,14 +428,14 @@ export class Tower {
       for (const t of this.transports) {
         let connects = false;
         for (let fl = t.bottom; fl <= t.top; fl++) {
-          if (reachable.has(fl)) {
+          if (this.stopsAt(t, fl) && reachable.has(fl)) {
             connects = true;
             break;
           }
         }
         if (connects) {
           for (let fl = t.bottom; fl <= t.top; fl++) {
-            if (!reachable.has(fl)) {
+            if (this.stopsAt(t, fl) && !reachable.has(fl)) {
               reachable.add(fl);
               changed = true;
             }

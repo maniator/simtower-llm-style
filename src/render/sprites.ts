@@ -116,8 +116,8 @@ function drawInterior(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: n
       return drawRecycling(ctx, x, y, w, h);
     case "metro":
       return drawMetro(d, x, y, w, h);
-    case "cathedral":
-      return drawCathedral(ctx, x, y, w, h);
+    case "weddingHall":
+      return drawWeddingHall(ctx, x, y, w, h);
     default:
       ctx.fillStyle = FACILITIES[u.kind].color;
       ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
@@ -257,9 +257,13 @@ function drawIcon(ctx: CanvasRenderingContext2D, kind: import("../engine/types")
       ctx.textAlign = "left";
       ctx.textBaseline = "alphabetic";
       break;
-    case "cathedral": // cross
-      ctx.fillRect(cx - 1, cy - 5, 2, 10);
-      ctx.fillRect(cx - 3, cy - 2, 6, 2);
+    case "weddingHall": // interlocking rings
+      ctx.strokeStyle = "#fff";
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.arc(cx - 2, cy, 3, 0, Math.PI * 2);
+      ctx.arc(cx + 2, cy, 3, 0, Math.PI * 2);
+      ctx.stroke();
       break;
     default:
       ctx.fillRect(cx - 2, cy - 2, 4, 4);
@@ -446,26 +450,36 @@ function windows(
 function drawOffice(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
   const { ctx } = d;
   ctx.fillStyle = "#cfd6df";
-  ctx.fillRect(x, y, w, h * 0.55);
+  ctx.fillRect(x, y, w, h * 0.5);
   windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#fff4c0", 14);
-  // Cubicle desks with monitors along the floor.
-  const deskY = y + h - 8;
-  for (let dx = x + 4; dx + 7 < x + w; dx += 11) {
-    const seed = (u.id * 31 + dx) | 0;
-    ctx.fillStyle = "#7a5a3c"; // desk
-    ctx.fillRect(dx, deskY + 3, 8, 3);
-    ctx.fillStyle = rand(seed) > 0.5 ? "#2bd0c0" : "#5db4e8"; // monitor glow
-    ctx.fillRect(dx + 1, deskY, 3, 3);
-    ctx.fillStyle = "#33384a"; // chair
-    ctx.fillRect(dx + 5, deskY + 1, 2, 4);
-    if (u.occupants > 0 && rand(seed + 7) > 0.4) {
-      ctx.fillStyle = "#e8c9a0"; // worker head
-      ctx.fillRect(dx + 5, deskY - 1, 2, 2);
+  // Big workstations: desk + monitor + office chair, sized to fill the room.
+  const deskH = Math.max(6, h * 0.26);
+  const deskTop = y + h - 3 - deskH;
+  const slot = Math.max(16, w / Math.max(2, Math.round(w / 18)));
+  for (let dx = x + 3; dx + slot - 2 < x + w; dx += slot) {
+    const seed = (u.id * 31 + (dx | 0)) | 0;
+    const dw = slot - 5;
+    // Desk top.
+    ctx.fillStyle = "#7a5a3c";
+    ctx.fillRect(dx, deskTop + deskH * 0.45, dw, deskH * 0.3);
+    ctx.fillStyle = "#5e4429";
+    ctx.fillRect(dx, deskTop + deskH * 0.72, dw, deskH * 0.28);
+    // Monitor.
+    ctx.fillStyle = "#23262f";
+    ctx.fillRect(dx + 1, deskTop, dw * 0.45, deskH * 0.5);
+    ctx.fillStyle = rand(seed) > 0.5 ? "#2bd0c0" : "#5db4e8";
+    ctx.fillRect(dx + 2, deskTop + 1, dw * 0.45 - 2, deskH * 0.5 - 2);
+    // Chair + worker.
+    ctx.fillStyle = "#33384a";
+    ctx.fillRect(dx + dw - 4, deskTop + deskH * 0.35, 4, deskH * 0.6);
+    if (u.occupants > 0 && rand(seed + 7) > 0.35) {
+      ctx.fillStyle = "#e8c9a0";
+      ctx.fillRect(dx + dw - 4, deskTop + deskH * 0.2, 3, 3);
     }
   }
   // Potted plant accent.
   ctx.fillStyle = "#3a7a3a";
-  ctx.fillRect(x + w - 5, deskY, 3, 4);
+  ctx.fillRect(x + w - 6, deskTop + deskH * 0.4, 4, deskH * 0.6);
 }
 
 // ---- Condos -------------------------------------------------------------
@@ -484,22 +498,34 @@ function drawCondo(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: numb
     ctx.fillRect(cx - 1, y + h * 0.2, 1, h * 0.42);
     ctx.fillRect(cx + 4, y + h * 0.2, 1, h * 0.42);
   }
-  const fy = y + h - 7;
-  // Sofa.
+  // Big living-room furniture filling the lower half.
+  const furnH = Math.max(7, h * 0.3);
+  const fy = y + h - 3 - furnH;
+  // Couch (scales with room width).
+  const sofaW = Math.min(w * 0.42, 30);
   ctx.fillStyle = shade(accent, -30);
-  ctx.fillRect(x + 4, fy + 1, 12, 5);
-  ctx.fillStyle = shade(accent, 20);
-  ctx.fillRect(x + 4, fy, 12, 2);
-  // Lamp.
-  ctx.fillStyle = d.lit ? "#ffd86a" : "#9a8f70";
-  ctx.fillRect(x + 19, fy - 2, 2, 7);
-  // TV with glow when home in the evening.
-  ctx.fillStyle = "#1a1a22";
-  ctx.fillRect(x + w - 10, fy, 7, 5);
-  if (u.occupants > 0) {
-    ctx.fillStyle = "#7fa9ff";
-    ctx.fillRect(x + w - 9, fy + 1, 5, 3);
-  }
+  ctx.fillRect(x + 4, fy + furnH * 0.35, sofaW, furnH * 0.65);
+  ctx.fillStyle = shade(accent, 20); // backrest
+  ctx.fillRect(x + 4, fy + furnH * 0.1, sofaW, furnH * 0.3);
+  ctx.fillStyle = shade(accent, -10); // armrests
+  ctx.fillRect(x + 4, fy + furnH * 0.2, 3, furnH * 0.8);
+  ctx.fillRect(x + 4 + sofaW - 3, fy + furnH * 0.2, 3, furnH * 0.8);
+  // Floor lamp.
+  ctx.fillStyle = "#7a6a50";
+  ctx.fillRect(x + sofaW + 8, fy + 2, 2, furnH - 2);
+  ctx.fillStyle = d.lit ? "#ffe08a" : "#9a8f70";
+  ctx.beginPath();
+  ctx.moveTo(x + sofaW + 9, fy);
+  ctx.lineTo(x + sofaW + 5, fy + 5);
+  ctx.lineTo(x + sofaW + 13, fy + 5);
+  ctx.closePath();
+  ctx.fill();
+  // Wall TV with glow.
+  const tvW = Math.min(w * 0.22, 14);
+  ctx.fillStyle = "#15151c";
+  ctx.fillRect(x + w - tvW - 4, fy + 1, tvW, furnH * 0.7);
+  ctx.fillStyle = u.occupants > 0 ? "#7fa9ff" : "#2a2f3a";
+  ctx.fillRect(x + w - tvW - 3, fy + 2, tvW - 2, furnH * 0.7 - 2);
 }
 
 // ---- Hotels -------------------------------------------------------------
@@ -511,34 +537,41 @@ function drawHotel(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: numb
   ctx.fillStyle = "#6a5f70";
   ctx.fillRect(x, y + 2, w, h - 5);
   windows(d, u.id, x, y, w, h, !asleep && (d.lit || u.occupants > 0), asleep ? "#26304a" : "#ffe9a8", 15);
-  const fy = y + h - 8;
-  // Headboard + bed with linens.
+  // A large bed that scales with the room — a suite reads bigger than a single.
+  const bedH = Math.max(7, h * 0.34);
+  const fy = y + h - 3 - bedH;
+  const bedW = w - 12; // bed runs most of the room width
+  // Headboard.
   ctx.fillStyle = "#5a3f2c";
-  ctx.fillRect(x + 4, fy - 1, 3, 7);
+  ctx.fillRect(x + 3, fy, 4, bedH);
+  // Mattress + duvet.
   ctx.fillStyle = "#e8e2d2";
-  ctx.fillRect(x + 7, fy + 1, Math.min(w - 12, 16), 5);
-  ctx.fillStyle = "#c9bfa6";
-  ctx.fillRect(x + 7, fy + 1, Math.min(w - 12, 16), 1);
+  ctx.fillRect(x + 7, fy + bedH * 0.25, bedW, bedH * 0.75);
+  ctx.fillStyle = "#cfc4a6";
+  ctx.fillRect(x + 7, fy + bedH * 0.25, bedW, 2);
+  // Pillow.
+  ctx.fillStyle = "#fbf7ec";
+  ctx.fillRect(x + 8, fy + bedH * 0.3, Math.max(5, bedW * 0.22), bedH * 0.3);
+  // Nightstand with lamp on the far side.
+  ctx.fillStyle = "#6a4a30";
+  ctx.fillRect(x + w - 7, fy + bedH * 0.5, 4, bedH * 0.5);
+
   if (asleep) {
-    // Sleeping guest under the covers.
-    ctx.fillStyle = "#6677bb";
-    ctx.fillRect(x + 9, fy + 1, Math.min(w - 16, 10), 4);
+    ctx.fillStyle = "#6677bb"; // guest under the covers
+    ctx.fillRect(x + 9 + bedW * 0.22, fy + bedH * 0.4, bedW * 0.6, bedH * 0.5);
     ctx.fillStyle = "#e8c9a0";
-    ctx.fillRect(x + 8, fy, 2, 2);
-    // Zzz
-    ctx.fillStyle = "rgba(200,210,255,0.8)";
-    ctx.font = "6px sans-serif";
-    ctx.fillText("z", x + 12, fy - 1);
+    ctx.fillRect(x + 9, fy + bedH * 0.28, 3, 3); // head on pillow
+    ctx.fillStyle = "rgba(200,210,255,0.85)";
+    ctx.font = "7px sans-serif";
+    ctx.fillText("z", x + 14, fy + bedH * 0.2);
   } else if (dirty) {
-    // Unmade bed + "needs cleaning" marker.
-    ctx.fillStyle = "#b8a98a";
-    ctx.fillRect(x + 9, fy + 1, Math.min(w - 16, 11), 3);
+    ctx.fillStyle = "#b8a98a"; // rumpled covers
+    ctx.fillRect(x + 9, fy + bedH * 0.4, bedW * 0.8, bedH * 0.4);
     ctx.fillStyle = "#d4623a";
-    ctx.fillRect(x + w - 6, fy - 2, 3, 3); // do-not-disturb / dirty tag
+    ctx.fillRect(x + w - 7, fy - 2, 4, 3); // dirty tag
   } else {
-    // Bedside lamp on for a turned-down, ready room.
-    ctx.fillStyle = "#ffd86a";
-    ctx.fillRect(x + w - 6, fy - 1, 2, 6);
+    ctx.fillStyle = "#ffd86a"; // bedside lamp, ready room
+    ctx.fillRect(x + w - 6, fy + bedH * 0.2, 2, bedH * 0.3);
   }
 }
 
@@ -831,33 +864,49 @@ function drawParking(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: numbe
   }
 }
 
-function drawCathedral(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
-  ctx.fillStyle = "#efe9d0";
+function drawWeddingHall(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
+  // Elegant pale hall.
+  ctx.fillStyle = "#f5efe0";
   ctx.fillRect(x, y, w, h);
-  // Spire.
-  ctx.fillStyle = "#caa84a";
-  ctx.beginPath();
-  ctx.moveTo(x + w / 2, y - 8);
-  ctx.lineTo(x + w / 2 - 7, y + 5);
-  ctx.lineTo(x + w / 2 + 7, y + 5);
-  ctx.closePath();
-  ctx.fill();
-  // Rose window in stained glass.
-  const cx = x + w / 2,
-    cy = y + h * 0.55,
-    r = Math.min(w, h) * 0.2;
-  const segs = ["#e85d5d", "#5db4e8", "#6bd47a", "#e8c14a", "#b07fe0"];
-  for (let i = 0; i < segs.length; i++) {
-    ctx.fillStyle = segs[i];
+  ctx.fillStyle = "#e7dcc2";
+  ctx.fillRect(x, y + h - 5, w, 5); // carpet runner base
+  // Rooftop pennant banners.
+  for (let i = 0, bx = x + 6; bx < x + w - 4; bx += 12, i++) {
+    ctx.fillStyle = ["#e07a9a", "#7fb0e8", "#e8c14a"][i % 3];
     ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, r, (i / segs.length) * Math.PI * 2, ((i + 1) / segs.length) * Math.PI * 2);
+    ctx.moveTo(bx, y);
+    ctx.lineTo(bx + 5, y);
+    ctx.lineTo(bx + 2.5, y + 5);
     ctx.closePath();
     ctx.fill();
   }
-  ctx.fillStyle = "#efe9d0";
+  // Grand arched doorway with a red carpet.
+  const cx = x + w / 2;
+  const archW = Math.min(w * 0.4, 30);
+  ctx.fillStyle = "#cdb98a";
   ctx.beginPath();
-  ctx.arc(cx, cy, r * 0.3, 0, Math.PI * 2);
+  ctx.moveTo(cx - archW / 2, y + h - 5);
+  ctx.lineTo(cx - archW / 2, y + h * 0.45);
+  ctx.arc(cx, y + h * 0.45, archW / 2, Math.PI, 0);
+  ctx.lineTo(cx + archW / 2, y + h - 5);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#caa84a"; // gilded doors
+  ctx.fillRect(cx - archW / 2 + 2, y + h * 0.5, archW - 4, h * 0.5 - 7);
+  ctx.fillStyle = "#b8243f"; // red carpet
+  ctx.fillRect(cx - 4, y + h - 5, 8, 5);
+  // Interlocking wedding rings above the arch.
+  ctx.strokeStyle = "#e8c14a";
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx - 4, y + h * 0.28, 4, 0, Math.PI * 2);
+  ctx.arc(cx + 4, y + h * 0.28, 4, 0, Math.PI * 2);
+  ctx.stroke();
+  // Topiary by the doors.
+  ctx.fillStyle = "#5a8a4a";
+  ctx.beginPath();
+  ctx.arc(cx - archW / 2 - 5, y + h - 8, 4, 0, Math.PI * 2);
+  ctx.arc(cx + archW / 2 + 5, y + h - 8, 4, 0, Math.PI * 2);
   ctx.fill();
 }
 
@@ -870,6 +919,7 @@ export function drawTransport(
   topY: number,
   w: number,
   floorH: number,
+  anim = 0,
 ): void {
   const f = FACILITIES[t.kind];
   const height = (t.top - t.bottom + 1) * floorH;
@@ -883,10 +933,26 @@ export function drawTransport(
     ctx.lineWidth = 1.5;
     for (let fl = 0; fl <= t.top - t.bottom; fl++) {
       const fy = topY + fl * floorH;
-      ctx.beginPath();
-      ctx.moveTo(sx + 2, fy + floorH - 2);
-      ctx.lineTo(sx + w - 2, fy + 2);
-      ctx.stroke();
+      // Draw the steps as a staircase rather than a single diagonal.
+      const steps = 6;
+      ctx.strokeStyle = "rgba(255,255,255,0.5)";
+      for (let s = 0; s < steps; s++) {
+        const sxStep = sx + 2 + (s / steps) * (w - 4);
+        const syStep = fy + floorH - 2 - (s / steps) * (floorH - 4);
+        ctx.strokeRect(sxStep, syStep, (w - 4) / steps, 2);
+      }
+      // People walking the stairs, alternating directions, on the global clock.
+      for (let p = 0; p < 2; p++) {
+        const up = p === 0;
+        const prog = (anim * 0.25 + p * 0.5 + fl * 0.3) % 1;
+        const along = up ? prog : 1 - prog;
+        const px = sx + 2 + along * (w - 6);
+        const py = fy + floorH - 3 - along * (floorH - 6);
+        ctx.fillStyle = ["#2a2f3e", "#5a3a3a"][p];
+        ctx.fillRect(px, py - 4, 2, 4);
+        ctx.fillStyle = "#e8c9a0";
+        ctx.fillRect(px, py - 5, 2, 1);
+      }
     }
     return;
   }
@@ -904,6 +970,16 @@ export function drawTransport(
       ctx.moveTo(sx + s, topY + floorH - (s / w) * floorH);
       ctx.lineTo(sx + s + 1, topY + floorH - (s / w) * floorH);
       ctx.stroke();
+    }
+    // Riders gliding up the moving stair.
+    for (let p = 0; p < 3; p++) {
+      const prog = (anim * 0.4 + p / 3) % 1;
+      const px = sx + 2 + prog * (w - 6);
+      const py = topY + floorH - 3 - prog * (floorH - 6);
+      ctx.fillStyle = ["#2a2f3e", "#3a4a5a", "#4a3a52"][p];
+      ctx.fillRect(px, py - 4, 2, 4);
+      ctx.fillStyle = "#e8c9a0";
+      ctx.fillRect(px, py - 5, 2, 1);
     }
     return;
   }

@@ -179,7 +179,7 @@ export class Renderer {
       for (const u of arr) this.drawUnitWorld(d, u);
     }
 
-    this.drawTransports(sim);
+    this.drawTransports(sim, anim);
     this.drawWalkers(sim, botF, topF, anim);
     this.drawSelection(sim);
     this.drawPreview(sim);
@@ -258,12 +258,12 @@ export class Renderer {
     void sim;
   }
 
-  private drawTransports(sim: Simulation): void {
+  private drawTransports(sim: Simulation, anim: number): void {
     for (const t of sim.tower.transports) {
       const sx = this.worldToScreenX(t.x);
       const w = t.width * TILE_W * this.cam.zoom;
       if (sx + w < 0 || sx > this.viewWidth) continue;
-      drawTransport(this.ctx, t, sx, this.worldToScreenY(t.top), w, FLOOR_H * this.cam.zoom);
+      drawTransport(this.ctx, t, sx, this.worldToScreenY(t.top), w, FLOOR_H * this.cam.zoom, anim);
     }
   }
 

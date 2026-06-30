@@ -229,6 +229,44 @@ describe("Transport editing", () => {
     const blocked = sim.tower.resizeTransport(t.id, 1, 9);
     expect(blocked.ok).toBe(false);
   });
+
+  it("caps cars per elevator type", () => {
+    const sim = base(3);
+    sim.star = 2; // service elevator unlocks at 2 stars
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.buildTransport("elevatorService", x0, 1, 6);
+    const t = sim.tower.transports[0];
+    expect(t).toBeDefined();
+    sim.tower.setCars(t.id, 99);
+    expect(t.cars).toBe(4); // service elevators max 4 cars
+  });
+
+  it("computes capacity and congestion from transports", () => {
+    const sim = base(4);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.buildTransport("elevatorStandard", x0, 1, 6);
+    const t = sim.tower.transports[0];
+    sim.tower.setCars(t.id, 2);
+    expect(sim.transportCapacity(t)).toBe(2 * 21);
+    // With no occupants, congestion is zero; with people and no lift, high.
+    expect(sim.congestion()).toBe(0);
+  });
+
+  it("express stops skip non-lobby floors and unserve them", () => {
+    const sim = base(5);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.buildTransport("elevatorStandard", x0, 1, 8);
+    const t = sim.tower.transports[0];
+    expect(sim.tower.isFloorServed(3)).toBe(true);
+    // Only floor 1 (ground) is a lobby; express keeps bottom & top, skips the rest.
+    sim.tower.setExpressStops(t.id);
+    expect(sim.tower.stopsAt(t, 8)).toBe(true); // top kept (connected)
+    expect(sim.tower.stopsAt(t, 3)).toBe(false); // skipped
+    expect(sim.tower.isFloorServed(3)).toBe(false);
+    expect(sim.tower.isFloorServed(8)).toBe(true);
+    sim.tower.clearStops(t.id);
+    expect(sim.tower.isFloorServed(3)).toBe(true);
+  });
 });
 
 describe("Simulation time", () => {

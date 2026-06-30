@@ -71,7 +71,7 @@ function transportEntry(label: string, kind: FacilityKind, span = 3): Entry {
       for (let i = 0; i <= span; i++) {
         drawUnit(d, makeUnit("floor", "occupied", 0, 500 + i), x - 8, topY + i * floorH, w + 16, floorH);
       }
-      drawTransport(d.ctx, t, x, topY, w, floorH);
+      drawTransport(d.ctx, t, x, topY, w, floorH, d.anim);
     },
   };
 }
@@ -97,7 +97,7 @@ const ENTRIES: Entry[] = [
   roomEntry("Housekeeping", "housekeeping"),
   roomEntry("Recycling Center", "recycling"),
   roomEntry("Metro Station (train)", "metro"),
-  roomEntry("Cathedral", "cathedral"),
+  roomEntry("Wedding Hall", "weddingHall"),
   transportEntry("Stairway", "stairs", 1),
   transportEntry("Escalator", "escalator", 1),
   transportEntry("Standard Elevator", "elevatorStandard", 3),

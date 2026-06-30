@@ -5,6 +5,7 @@ import {
   FACILITIES,
   GRID,
   STAR_THRESHOLDS,
+  TRANSPORT_CAPACITY,
   buildMinutes,
   isElevatorKind,
   isFacilityKind,
@@ -107,8 +108,8 @@ export class Simulation {
         this.constructing.add(u.id);
       }
     }
-    if (kind === "cathedral") {
-      this.emit("Cathedral built! A VIP will inspect your tower soon.", "good");
+    if (kind === "weddingHall") {
+      this.emit("Wedding Hall built! A VIP will inspect your tower soon.", "good");
       this.vipVisitDay = this.clock.day + 3;
     }
     return { ok: true };
@@ -261,11 +262,19 @@ export class Simulation {
   // ---- Satisfaction & churn ---------------------------------------------
 
   private updateSatisfaction(): void {
+    const cong = this.congestion();
+    // Warn the player when their elevators can't keep up.
+    if (cong > 1.4 && this.clock.hour === 9 && this.rng.chance(0.5)) {
+      this.emit("Tenants are complaining of long elevator waits — add cars or shafts.", "bad");
+    }
     for (const u of this.tower.units) {
       if (u.state === "empty" || u.state === "construction") continue;
       const served = this.tower.isFloorServed(u.floor);
       if (!served) {
         u.satisfaction = Math.max(0, u.satisfaction - 0.15);
+      } else if (cong > 1) {
+        // Overcrowded vertical transport stresses everyone, more so the worse it is.
+        u.satisfaction = Math.max(0, u.satisfaction - 0.04 * Math.min(3, cong - 1));
       } else {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
       }
@@ -274,6 +283,30 @@ export class Simulation {
         this.vacate(u);
       }
     }
+  }
+
+  /**
+   * Ratio of moving population to total vertical-transport capacity. Above 1.0
+   * the elevators/stairs are overcrowded and tenants get stressed. Capacity is
+   * cars × per-car capacity (plus stairs/escalators), times a headroom factor
+   * for the many trips made across a rush.
+   */
+  congestion(): number {
+    let capacity = 0;
+    for (const t of this.tower.transports) {
+      const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
+      if (isElevatorKind(t.kind)) capacity += t.cars * per;
+      else capacity += per; // stairs / escalator
+    }
+    const pop = this.tower.totalPopulation();
+    if (capacity <= 0) return pop > 0 ? 3 : 0;
+    return pop / (capacity * 12);
+  }
+
+  /** Capacity of a single transport (riders served per trip). */
+  transportCapacity(t: { kind: FacilityKind; cars: number }): number {
+    const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
+    return isElevatorKind(t.kind) ? t.cars * per : per;
   }
 
   private vacate(u: Unit): void {
@@ -477,7 +510,7 @@ export class Simulation {
     this.vipVisitDay = -1;
     const pop = this.tower.totalPopulation();
     const ok =
-      this.tower.builtCathedral &&
+      this.tower.builtWeddingHall &&
       this.star >= 5 &&
       pop >= STAR_THRESHOLDS[5] &&
       this.hasAny("metro");
@@ -606,7 +639,7 @@ export class Simulation {
       })),
       nextId: this.tower.getNextId(),
       towerName: this.tower.towerName,
-      builtCathedral: this.tower.builtCathedral,
+      builtWeddingHall: this.tower.builtWeddingHall,
       evaluatedTower: this.evaluatedTower,
     };
   }
@@ -626,7 +659,7 @@ export class Simulation {
       .map((t) => ({ ...t }));
     sim.tower.setNextId(data.nextId);
     sim.tower.towerName = data.towerName;
-    sim.tower.builtCathedral = data.builtCathedral;
+    sim.tower.builtWeddingHall = data.builtWeddingHall;
     sim.tower.reindex();
     // Resume any in-progress construction.
     for (const u of sim.tower.units) {

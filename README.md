@@ -40,7 +40,7 @@ npm run screenshots  # build + headless-capture screenshots into docs/screenshot
   restaurants and cinemas earn from foot traffic.
 - **Grow your rating.** ⭐ thresholds: 2★ at 300 population, 3★ at 1,000 (needs
   Security), 4★ at 5,000 (needs a Medical Center), 5★ at 10,000.
-- **Win.** At 5★ with a Metro Station, build the `Cathedral` on floor 100 and
+- **Win.** At 5★ with a Metro Station, build the `Wedding Hall` on floor 100 and
   pass the VIP inspection to become a **TOWER**.
 
 ### Controls
@@ -60,7 +60,7 @@ npm run screenshots  # build + headless-capture screenshots into docs/screenshot
 
 - **Facilities:** lobby, floors, offices, condominiums, three hotel room grades,
   fast food, restaurants, shops, cinema, party hall, parking, security, medical,
-  housekeeping, recycling, metro station and the cathedral.
+  housekeeping, recycling, metro station and the wedding hall.
 - **Transport:** stairs, escalators, and **standard / service / express**
   elevators — each with adjustable car counts and served-floor ranges, edited
   in-game just like the original.

@@ -22,6 +22,7 @@ export interface UICallbacks {
   onLoad(): void;
   onExport(): void;
   onImport(json: string): void;
+  onImportLegacy(buffer: ArrayBuffer, filename: string): void;
   onNew(): void;
   onToggleAudio(): boolean; // returns new muted state
   onEditAction(action: string, root: HTMLElement): void;
@@ -231,6 +232,30 @@ export class UI {
     if (document.activeElement !== this.el.towerName) this.el.towerName.value = name;
   }
 
+  /** Per-floor stop configuration for an elevator (express service). */
+  showStopsDialog(
+    title: string,
+    floors: { floor: number; stop: boolean; lobby: boolean }[],
+    onToggle: (floor: number, stop: boolean) => void,
+  ): void {
+    const rowsHtml = floors
+      .map((fl) => {
+        const label = fl.floor > 0 ? `Floor ${fl.floor}` : `B${-fl.floor}`;
+        const tag = fl.lobby ? ' <span class="stop-lobby">lobby</span>' : "";
+        return `<label class="stop-row"><input type="checkbox" data-floor="${fl.floor}" ${fl.stop ? "checked" : ""}/> <span>${label}${tag}</span></label>`;
+      })
+      .join("");
+    const box = this.openModal(`
+      <h2>${escapeHtml(title)} — Stops</h2>
+      <p style="color:var(--muted);font-size:12px">Untick a floor to make the car skip it (express service). The top and bottom stay connected.</p>
+      <div class="stop-list">${rowsHtml}</div>
+      <div class="modal-actions"><button class="primary" data-act="close">Done</button></div>`);
+    box.querySelectorAll<HTMLInputElement>("input[data-floor]").forEach((cb) => {
+      cb.addEventListener("change", () => onToggle(Number(cb.dataset.floor), cb.checked));
+    });
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+  }
+
   selectTool(tool: Tool): void {
     this.tool = tool;
     this.cb.onSelectTool(tool);
@@ -377,7 +402,9 @@ export class UI {
 
   private openImport(): void {
     const box = this.openModal(
-      `<h2>Import tower</h2><p>Paste exported JSON, or choose a file.</p>
+      `<h2>Import tower</h2>
+       <p>Paste a Tower Tycoon JSON export, or choose a file. Original SimTower
+       <code>.TWR</code> saves are recognised (full conversion is planned for a future update).</p>
        <textarea placeholder="Paste save JSON here…"></textarea>
        <div class="modal-actions">
          <button data-act="file">Choose file…</button>
@@ -397,12 +424,22 @@ export class UI {
       input.onchange = () => {
         const file = input.files?.[0];
         if (!file) return;
-        const reader = new FileReader();
-        reader.onload = () => {
-          this.closeModal();
-          this.cb.onImport(String(reader.result));
-        };
-        reader.readAsText(file);
+        // Binary .TWR legacy saves are read as bytes; JSON exports as text.
+        if (/\.twr$/i.test(file.name)) {
+          const reader = new FileReader();
+          reader.onload = () => {
+            this.closeModal();
+            this.cb.onImportLegacy(reader.result as ArrayBuffer, file.name);
+          };
+          reader.readAsArrayBuffer(file);
+        } else {
+          const reader = new FileReader();
+          reader.onload = () => {
+            this.closeModal();
+            this.cb.onImport(String(reader.result));
+          };
+          reader.readAsText(file);
+        }
       };
       input.click();
     });
@@ -417,7 +454,7 @@ export class UI {
         <li><b>Move people.</b> Every floor needs an <b>elevator</b> or <b>stairs</b> chain back to the ground lobby, or tenants leave.</li>
         <li><b>Make money.</b> Offices pay quarterly rent, condos sell once, hotels earn nightly, shops &amp; restaurants earn from foot traffic.</li>
         <li><b>Grow your rating.</b> 2★ at 300 pop, 3★ at 1,000 (needs Security), 4★ at 5,000 (needs Medical), 5★ at 10,000.</li>
-        <li><b>Win.</b> At 5★ with a Metro station, build the <b>Cathedral</b> on floor 100 and pass the VIP inspection.</li>
+        <li><b>Win.</b> At 5★ with a Metro station, build the <b>Wedding Hall</b> on floor 100 and pass the VIP inspection.</li>
         <li><b>Sky lobbies</b> every 15 floors keep tall towers moving.</li>
       </ul>
       <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
@@ -429,7 +466,7 @@ export class UI {
   congratsTower(): void {
     const box = this.openModal(`
       <h2>🏆 TOWER achieved!</h2>
-      <p>Your skyscraper has earned the legendary <b>TOWER</b> rating. The cathedral bells ring out over the city. Congratulations, master builder!</p>
+      <p>Your skyscraper has earned the legendary <b>TOWER</b> rating. Wedding bells ring out over the city from the hall on the 100th floor. Congratulations, master builder!</p>
       <div class="modal-actions"><button class="primary" data-act="close">Continue</button></div>
     `);
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());

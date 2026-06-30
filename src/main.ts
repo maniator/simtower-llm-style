@@ -1,9 +1,10 @@
 import { Simulation } from "./engine/Simulation";
-import { FACILITIES, GRID, isElevatorKind } from "./engine/facilities";
+import { FACILITIES, GRID, MAX_CARS, isElevatorKind } from "./engine/facilities";
 import type { FacilityKind } from "./engine/types";
 import { Renderer } from "./render/Renderer";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
+import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
 
 /** Game speeds → in-game minutes advanced per real second. */
@@ -49,6 +50,7 @@ class GameApp {
       onLoad: () => this.load(),
       onExport: () => this.ui.showExport(SaveGame.export(this.sim)),
       onImport: (json) => this.importGame(json),
+      onImportLegacy: (buf, name) => this.importLegacy(buf, name),
       onNew: () => this.newGame(),
       onToggleAudio: () => {
         this.audio.start();
@@ -362,16 +364,24 @@ class GameApp {
   private transportEditorHtml(t: import("./engine/types").Transport): string {
     const f = FACILITIES[t.kind];
     const isEl = isElevatorKind(t.kind);
+    const maxCars = MAX_CARS[t.kind] ?? 1;
+    const skipped = t.skipFloors?.length ?? 0;
     const rows: string[] = [
       `<span class="k">Serves floors</span><span class="v">${t.bottom} – ${t.top}</span>`,
       `<span class="k">Height</span><span class="v">${t.top - t.bottom + 1} floors</span>`,
     ];
-    if (isEl) rows.push(`<span class="k">Cars</span><span class="v">${t.cars}</span>`);
+    if (isEl) {
+      rows.push(`<span class="k">Cars</span><span class="v">${t.cars} / ${maxCars} max</span>`);
+      rows.push(`<span class="k">Capacity</span><span class="v">${this.sim.transportCapacity(t)} riders/trip</span>`);
+      rows.push(`<span class="k">Stops</span><span class="v">${skipped ? `express · skips ${skipped}` : "all floors"}</span>`);
+    }
     rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
 
     let actions = "";
     if (isEl) {
-      actions += `<div class="ed-row"><button data-edit="removecar">– Car</button><button data-edit="addcar">+ Car</button></div>`;
+      actions += `<div class="ed-row"><button data-edit="removecar"${t.cars <= 1 ? " disabled" : ""}>– Car</button><button data-edit="addcar"${t.cars >= maxCars ? " disabled" : ""}>+ Car</button></div>`;
+      actions += `<div class="ed-row"><button data-edit="stops">Configure stops…</button></div>`;
+      actions += `<div class="ed-row"><button data-edit="express">Express (lobbies)</button><button data-edit="allstops">All stops</button></div>`;
     }
     actions += `<div class="ed-row"><button data-edit="extendDown">▼ Extend down</button><button data-edit="extendUp">▲ Extend up</button></div>`;
     actions += `<div class="ed-row"><button class="danger" data-edit="sell">Sell / Bulldoze</button></div>`;
@@ -381,6 +391,22 @@ class GameApp {
       `<div class="ed-stats">${rows.join("")}</div>` +
       actions
     );
+  }
+
+  /** Open the per-floor stop-configuration dialog for the selected elevator. */
+  private openStopsDialog(): void {
+    if (!this.selected || this.selected.type !== "transport") return;
+    const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
+    if (!t) return;
+    const lobbies = new Set(this.sim.tower.lobbyFloors());
+    const floors: { floor: number; stop: boolean; lobby: boolean }[] = [];
+    for (let fl = t.top; fl >= t.bottom; fl--) {
+      floors.push({ floor: fl, stop: this.sim.tower.stopsAt(t, fl), lobby: lobbies.has(fl) });
+    }
+    this.ui.showStopsDialog(FACILITIES[t.kind].name, floors, (floor, stop) => {
+      this.sim.tower.setStop(t.id, floor, stop);
+      this.refreshEditor();
+    });
   }
 
   private handleEditAction(action: string, root: HTMLElement): void {
@@ -415,6 +441,16 @@ class GameApp {
         this.refreshEditor();
       } else if (action === "removecar") {
         this.sim.tower.setCars(t.id, t.cars - 1);
+        this.audio.sfx("click");
+        this.refreshEditor();
+      } else if (action === "stops") {
+        this.openStopsDialog();
+      } else if (action === "express") {
+        this.sim.tower.setExpressStops(t.id);
+        this.audio.sfx("click");
+        this.refreshEditor();
+      } else if (action === "allstops") {
+        this.sim.tower.clearStops(t.id);
         this.audio.sfx("click");
         this.refreshEditor();
       } else if (action === "extendUp" || action === "extendDown") {
@@ -541,9 +577,23 @@ class GameApp {
   private importGame(json: string): void {
     try {
       this.sim = SaveGame.import(json);
+      this.clearSelection();
       this.ui.toast("Tower imported.", "good");
     } catch (err) {
       this.ui.toast("Import failed: " + (err as Error).message, "bad");
+    }
+  }
+
+  private importLegacy(buffer: ArrayBuffer, filename: string): void {
+    try {
+      const data = parseTWR(buffer);
+      this.sim = Simulation.deserialize(data);
+      this.clearSelection();
+      this.ui.toast("Imported original SimTower save.", "good");
+    } catch (err) {
+      // Expected today: the .TWR decoder is a planned v2 feature.
+      this.ui.toast((err as Error).message, "info");
+      void filename;
     }
   }
   private newGame(): void {

@@ -43,7 +43,7 @@ export type FacilityKind =
   | "housekeeping"
   | "recycling"
   | "metro"
-  | "cathedral";
+  | "weddingHall";
 
 /** Occupancy / activity state of a unit. */
 export type UnitState =
@@ -115,6 +115,8 @@ export interface Transport {
   carDir: number[];
   /** Number of riders currently in transit through this transport. */
   load: number;
+  /** Floors this transport is configured NOT to stop at (express service). */
+  skipFloors?: number[];
 }
 
 export interface SerializedGame {
@@ -127,7 +129,7 @@ export interface SerializedGame {
   transports: Transport[];
   nextId: number;
   towerName: string;
-  builtCathedral: boolean;
+  builtWeddingHall: boolean;
   evaluatedTower: boolean;
 }
 
