@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Tower Tycoon — a browser-native SimTower clone in TypeScript",
   "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
