@@ -1,6 +1,6 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
+import { GRID, TRANSPORT_CAPACITY, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
@@ -990,9 +990,11 @@ export class TowerEngine {
     const anim = this.d.anim;
     for (const c of this.carActors) {
       c.actor.pos = ex.vec(this.worldX(c.t.x), -c.t.carPositions[c.i] * FLOOR);
-      // Show the actual number of riders aboard (0..4 buckets).
+      // Show the actual fill as 0..4 buckets, scaled to THIS cab's capacity, so a
+      // big express cab doesn't read "full" at a fraction of its load (review F9).
       const load = c.t.carLoad?.[c.i] ?? 0;
-      const riders = Math.max(0, Math.min(4, Math.ceil(load / 4)));
+      const cap = TRANSPORT_CAPACITY[c.t.kind] ?? 16;
+      const riders = Math.max(0, Math.min(4, Math.round((load / cap) * 4)));
       if (riders !== c.shown) {
         c.shown = riders;
         c.actor.graphics.use(c.gfx[riders]);

@@ -19,6 +19,9 @@ export interface SimContext {
   /** Mutable cash balance; subsystems add income / subtract costs directly. */
   money: number;
   readonly star: number;
+  /** Simulation model selector (Phase 2). Absent/`v1` = shipped behavior;
+   * `v2` enables the spatial models (e.g. service coverage radius). */
+  readonly simModel?: "v1" | "v2";
   emit(text: string, kind?: LogKind): void;
   /** True if the tower contains at least one unit of this kind. */
   hasAny(kind: FacilityKind): boolean;

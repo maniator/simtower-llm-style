@@ -49,7 +49,7 @@ abstraction · ⬜ not present.
 - ✅ Crowds tint red when they've waited too long / transport is overwhelmed (the original's visual cue)
 - ✅ Star thresholds: 2★ 300 · 3★ 1,000 · 4★ 5,000 · 5★ 10,000
 - ✅ Facility gates: Security required for 3★, Medical for 4★
-- ✅ **TOWER** rating: 5★ + Wedding Hall + metro + VIP inspection (12,000 pop, scaled to our model)
+- ✅ **TOWER** rating: 5★ + Wedding Hall + metro + VIP inspection (8,000 pop, scaled to our model)
 
 ## Events & disasters
 - ✅ Fire — spreads to the neighbor unless Security/Medical contain it; costs repairs
@@ -74,7 +74,7 @@ abstraction · ⬜ not present.
 ## Deliberate divergences
 - Commuters are **individually pathfound** (walk → wait → ride a real car → transfer → arrive) and their waiting drives stress, but a lightweight **aggregate** congestion model still runs underneath as the deterministic, DOM-free backbone the headless tests assert against. The visible crowd is capped (~140 on screen) for performance rather than rendering the entire population at once.
 - The **Cathedral** is a religion-agnostic **Wedding Hall**.
-- Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **12,000** rather than 15,000 to stay reachable.
+- Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **8,000** rather than 15,000 to stay reachable.
 
 ## Verification
 `npm test` runs **95 unit/integration tests** covering placement rules,

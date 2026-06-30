@@ -199,7 +199,7 @@ camera or raw pointer math directly.
 
 ## Tests
 
-99 Vitest unit tests cover placement rules, transport reachability, the economy
+The Vitest suite covers placement rules, transport reachability, the economy
 (rent, condo sales, maintenance), star promotion and its facility gates, the
 hotel housekeeping cycle, elevator editing, save/load round-trips (including
 serialize-deserialize stability and corrupt/forward-version saves), and the

@@ -78,6 +78,24 @@ export class Simulation implements SimContext {
   /** 1..5 stars, 6 == TOWER. */
   star = 1;
   evaluatedTower = false;
+
+  /**
+   * Simulation model selector (Phase 2, review F4). `v1` is the shipped behavior:
+   * a single `tick(dt)` samples the clock once, firing `onHour`/`onDay` at most
+   * once per call and handing the full `dt` to every integrator. `v2` decomposes
+   * each `tick(dt)` into ≤30-minute sub-steps aligned to hour boundaries, so the
+   * headless engine integrates exactly like the browser (which pre-chunks). Kept
+   * behind a flag so the suite could grow incrementally; now that the spatial
+   * model is in, **v2 is the default** (the real, browser-matching game). v1 is
+   * retained for the handful of tests that pin the old sampled/global behavior.
+   */
+  simModel: "v1" | "v2" = "v2";
+
+  /** Number of times {@link onHour} has run this session (test/diagnostic hook). */
+  private onHourRuns = 0;
+  get hourTicks(): number {
+    return this.onHourRuns;
+  }
   log: LogEntry[] = [];
 
   /**
@@ -305,6 +323,31 @@ export class Simulation implements SimContext {
 
   /** Advance the world by `dtMinutes` of game time. */
   tick(dtMinutes: number): void {
+    if (this.simModel === "v2") {
+      // Decompose into ≤30-min sub-steps that never skip an hour boundary, so
+      // onHour/onDay fire for EVERY elapsed hour/day and the integrators get a
+      // bounded step — headless then matches the (pre-chunked) browser. (F4)
+      const EPS = 1e-6;
+      let remaining = dtMinutes;
+      while (remaining > EPS) {
+        const toNextHour = 60 - (this.clock.minuteOfDay % 60);
+        // Guarantee forward progress: when we're sitting essentially on an hour
+        // boundary (toNextHour ≈ 0, possible with fractional minutes from the
+        // browser loop's accumulator) take a normal step instead of a vanishing
+        // one, so the loop can't stall in tiny increments. (review/Copilot F4-2)
+        const cap = toNextHour > EPS ? Math.min(30, toNextHour) : 30;
+        const step = Math.min(remaining, cap);
+        this.advanceStep(step);
+        remaining -= step;
+      }
+      return;
+    }
+    this.advanceStep(dtMinutes);
+  }
+
+  /** One integration step: move time, cars and crowd, finalise construction, and
+   * fire the hour/day boundary handlers exactly once if crossed. */
+  private advanceStep(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
     this.elevators.update(this.tower, dtMinutes, this.rushFactor());
     // Advance the individually-routed crowd in lock-step with game time (after
@@ -347,6 +390,7 @@ export class Simulation implements SimContext {
 
   /** Hourly: presence, move-ins, satisfaction, traffic income. */
   private onHour(): void {
+    this.onHourRuns++;
     this.updatePresence();
     // Guests check out in the morning (not at midnight), so overnight hotel
     // population is still present at the midnight TOWER/VIP evaluation.
@@ -425,14 +469,21 @@ export class Simulation implements SimContext {
   // ---- Satisfaction & churn ---------------------------------------------
 
   private updateSatisfaction(): void {
-    const cong = this.congestion();
+    // v2 (review F3): congestion is SPATIAL — each floor is stressed only by the
+    // shafts that actually serve it, so layout/zoning/parallel shafts matter.
+    // v1: one tower-wide scalar applied to everyone (the shipped behavior).
+    const congMap = this.simModel === "v2" ? this.spatialCongestionByFloor() : null;
+    const globalCong = congMap
+      ? Math.max(0, ...[0, ...congMap.values()])
+      : this.congestion();
     // Warn the player when their elevators can't keep up.
-    if (cong > 1.4 && this.clock.hour === 9 && this.rng.chance(0.5)) {
+    if (globalCong > 1.4 && this.clock.hour === 9 && this.rng.chance(0.5)) {
       this.emit("Tenants are complaining of long elevator waits — add cars or shafts.", "bad");
     }
     for (const u of this.tower.units) {
       if (u.state === "empty" || u.state === "construction" || u.state === "fire") continue;
       const served = this.tower.isFloorServed(u.floor);
+      const cong = congMap ? (congMap.get(u.floor) ?? 0) : globalCong;
       if (!served) {
         u.satisfaction = Math.max(0, u.satisfaction - 0.15);
       } else if (u.floor !== 1 && cong > 1) {
@@ -460,8 +511,11 @@ export class Simulation implements SimContext {
       // the authoritative, persisted satisfaction would make the headless and
       // browser runs diverge. The aggregate congestion model above is the single
       // authoritative stress driver.
-      // Tenants abandon a unit that stays unbearable.
-      if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo")) {
+      // Tenants abandon a unit that stays unbearable — offices and condos move
+      // out, and hotel guests give up too (review F25). Commercial venues aren't
+      // listed here because their income already requires a served floor, so poor
+      // access starves them directly rather than via a separate move-out.
+      if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo" || isHotelKind(u.kind))) {
         this.vacate(u);
       }
     }
@@ -474,6 +528,15 @@ export class Simulation implements SimContext {
    * for the many trips made across a rush.
    */
   congestion(): number {
+    if (this.simModel === "v2") {
+      // Population-weighted average of the per-floor spatial congestion — a single
+      // HUD-friendly summary of a model that is really per-floor.
+      const map = this.spatialCongestionByFloor();
+      if (map.size === 0) return 0;
+      let sum = 0, n = 0;
+      for (const c of map.values()) { sum += c; n++; }
+      return n > 0 ? sum / n : 0;
+    }
     let capacity = 0;
     for (const t of this.tower.transports) {
       const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
@@ -508,6 +571,92 @@ export class Simulation implements SimContext {
   transportCapacity(t: { kind: FacilityKind; cars: number }): number {
     const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
     return isElevatorKind(t.kind) ? t.cars * per : per;
+  }
+
+  /** Congestion ratio for a specific floor: per-floor in the spatial v2 model,
+   * the global scalar in v1. Exposed for the inspector and tests. */
+  congestionAt(floor: number): number {
+    if (this.simModel === "v2") return this.spatialCongestionByFloor().get(floor) ?? 0;
+    return this.congestion();
+  }
+
+  /**
+   * Spatial congestion (v2, review F3): a per-floor ratio of the travelling
+   * population that must pass through a floor's serving shafts to those shafts'
+   * capacity. A floor's population is split across every ground-connected shaft
+   * that stops there, so adding a parallel shaft genuinely relieves it, and two
+   * separately-served office clusters don't pool their load the way the old
+   * single tower-wide scalar did. Metro/parking drain commuters near the lobbies
+   * (a global demand relief). Returns floor -> congestion ratio (>1 == stressed).
+   */
+  private spatialCongestionByFloor(): Map<number, number> {
+    const HEADROOM = 12;
+    const rush = this.rushFactor();
+    const result = new Map<number, number>();
+
+    const popByFloor = new Map<number, number>();
+    let metro = 0, parking = 0;
+    for (const u of this.tower.units) {
+      if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") metro++;
+      else if (u.kind === "parking") parking++;
+      if (u.state === "occupied" || u.state === "asleep" || u.state === "moving_in") {
+        const p = FACILITIES[u.kind].population;
+        if (p > 0 && u.floor !== 1) popByFloor.set(u.floor, (popByFloor.get(u.floor) ?? 0) + p);
+      }
+    }
+    if (popByFloor.size === 0) return result;
+    const relief = Math.max(0.4, 1 - metro * 0.25 - parking * 0.02);
+
+    const served = this.tower.servedFloorSet();
+    // Ground-connected shafts and the served floors each one stops at.
+    const shaftsByFloor = new Map<number, { id: number; cap: number }[]>();
+    for (const t of this.tower.transports) {
+      let active = false;
+      for (let f = t.bottom; f <= t.top; f++) {
+        if (this.tower.stopsAt(t, f) && served.has(f)) { active = true; break; }
+      }
+      if (!active) continue;
+      const cap = this.transportCapacity(t);
+      for (let f = t.bottom; f <= t.top; f++) {
+        if (f === 1) continue;
+        if (this.tower.stopsAt(t, f) && served.has(f)) {
+          const arr = shaftsByFloor.get(f) ?? [];
+          arr.push({ id: t.id, cap });
+          shaftsByFloor.set(f, arr);
+        }
+      }
+    }
+
+    // Split each floor's travelling population across the shafts that serve it,
+    // **in proportion to each shaft's capacity** — riders prefer the higher-
+    // throughput shaft. This is the load-balancing a real bank does, and it is
+    // what makes adding ANY parallel shaft (even a weak one) strictly increase
+    // total capacity and therefore REDUCE a floor's congestion. (An equal split
+    // would wrongly route half the load onto a weak car and raise congestion.)
+    const loadByShaft = new Map<number, number>();
+    for (const [f, pop] of popByFloor) {
+      const shafts = shaftsByFloor.get(f);
+      if (!shafts || shafts.length === 0) continue; // unserved → handled by reachability
+      const totalCap = shafts.reduce((sum, s) => sum + s.cap, 0);
+      if (totalCap <= 0) continue;
+      const demand = pop * relief;
+      for (const s of shafts) {
+        const sShare = demand * (s.cap / totalCap);
+        loadByShaft.set(s.id, (loadByShaft.get(s.id) ?? 0) + sShare);
+      }
+    }
+
+    // Each floor's congestion is its worst serving shaft (loads ~balanced by the split).
+    for (const [f, shafts] of shaftsByFloor) {
+      if (!popByFloor.has(f)) continue;
+      let c = 0;
+      for (const s of shafts) {
+        const cong = s.cap > 0 ? ((loadByShaft.get(s.id) ?? 0) * rush) / (s.cap * HEADROOM) : 99;
+        if (cong > c) c = cong;
+      }
+      result.set(f, c);
+    }
+    return result;
   }
 
   private vacate(u: Unit): void {
@@ -680,6 +829,12 @@ export class Simulation implements SimContext {
   /** A bomb scare (exposed for the debug/event hooks and tests). */
   bombThreat(): void {
     this.events.bombThreat();
+  }
+
+  /** Probability a fire on `floor` is contained per day — spatial in v2 (depends
+   * on Security/Medical coverage of that floor), tower-wide in v1. */
+  fireContainmentChance(floor: number): number {
+    return this.events.controlChance(floor);
   }
 
   // ---- Derived stats for UI ---------------------------------------------

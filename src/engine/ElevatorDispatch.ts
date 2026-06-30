@@ -45,6 +45,10 @@ export class ElevatorDispatch {
       const stops: number[] = [];
       for (let fl = t.bottom; fl <= t.top; fl++) if (tower.stopsAt(t, fl)) stops.push(fl);
       if (stops.length === 0) continue;
+      // Idle cars rest at the lowest LOBBY the shaft serves (the ground/sky lobby),
+      // not merely its lowest stop — review F27.
+      const lobbySet = new Set(tower.lobbyFloors());
+      const idleFloor = stops.find((s) => lobbySet.has(s)) ?? stops[0];
 
       let dwell = this.carDwell.get(t.id);
       if (!dwell || dwell.length !== t.cars) {
@@ -55,6 +59,10 @@ export class ElevatorDispatch {
       const cap = TRANSPORT_CAPACITY[t.kind] ?? 12;
 
       const v = dt * 0.4; // floors travelled this step
+      // Floors another car in this shaft is already heading to this tick, so the
+      // cars spread out to distinct calls instead of bunching on the same floor
+      // (review F17).
+      const claimed = new Set<number>();
       for (let i = 0; i < t.cars; i++) {
         if (dwell[i] > 0) {
           dwell[i] = Math.max(0, dwell[i] - dt);
@@ -63,15 +71,15 @@ export class ElevatorDispatch {
         let pos = t.carPositions[i];
         let dir = t.carDir[i] || 1;
 
-        let target = this.nextDemandStop(stops, pos, dir, demand);
+        let target = this.nextDemandStop(stops, pos, dir, demand, claimed);
         if (target === null) {
           dir = -dir; // nothing ahead — turn around
-          target = this.nextDemandStop(stops, pos, dir, demand);
+          target = this.nextDemandStop(stops, pos, dir, demand, claimed);
         }
+        if (target !== null) claimed.add(target); // reserve this call for this car
         if (target === null) {
-          // Nobody waiting: rest at the lowest served floor (the lobby) and
-          // stop dead rather than pacing the shaft.
-          target = stops[0];
+          // Nobody waiting: return to the lobby and stop dead rather than pacing.
+          target = idleFloor;
           if (Math.abs(pos - target) < 0.05) {
             t.carDir[i] = 0;
             t.carLoad[i] = 0; // everyone's stepped off
@@ -127,12 +135,13 @@ export class ElevatorDispatch {
   }
 
   /** Nearest stop strictly ahead (in `dir`) that has a real call waiting. */
-  private nextDemandStop(stops: number[], pos: number, dir: number, demand: Map<number, number>): number | null {
+  private nextDemandStop(stops: number[], pos: number, dir: number, demand: Map<number, number>, claimed?: Set<number>): number | null {
     let best: number | null = null;
     let bestDist = Infinity;
     for (const fl of stops) {
       if (dir > 0 && fl <= pos + 0.05) continue;
       if (dir < 0 && fl >= pos - 0.05) continue;
+      if (claimed?.has(fl)) continue; // another car is already handling this call
       if ((demand.get(fl) ?? 0) < 1) continue;
       const dist = Math.abs(fl - pos);
       if (dist < bestDist) {

@@ -28,6 +28,11 @@ export default defineConfig({
     environment: "jsdom",
     root: ".",
     include: ["src/**/*.test.ts"],
+    // A few end-to-end tests drive many in-game days of the full hourly v2
+    // simulation over a tall tower; they pass quickly locally but can exceed the
+    // 5s default on slower CI runners. Give the suite generous headroom.
+    testTimeout: 30000,
+    hookTimeout: 30000,
     coverage: {
       provider: "v8",
       reporter: ["text", "json", "html"],
