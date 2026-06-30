@@ -1,5 +1,19 @@
-import { FACILITIES, hasBusinessHours, isElevatorKind, isOpenAt } from "../engine/facilities";
-import type { Transport, Unit } from "../engine/types";
+import { FACILITIES, isElevatorKind } from "../engine/facilities";
+import type { FacilityKind, Transport, Unit } from "../engine/types";
+import { drawRoom } from "./pixelSprites";
+
+/** Facility kinds rendered by the faithful pixel-art room module. */
+const ROOM_KINDS = new Set<FacilityKind>([
+  "office",
+  "condo",
+  "hotelSingle",
+  "hotelDouble",
+  "hotelSuite",
+  "fastFood",
+  "restaurant",
+  "shop",
+  "cinema",
+]);
 
 /**
  * Procedural sprite drawing. Rather than ship external image assets, every
@@ -46,62 +60,20 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
 
   if (u.kind === "floor") return drawFloor(ctx, x, y, w, h);
   if (u.kind === "lobby") return drawLobby(d, x, y, w, h);
-
   if (u.state === "construction") return drawConstruction(d, x, y, w, h);
 
-  const f = FACILITIES[u.kind];
-  const empty = u.state === "empty";
+  // Faithful pixel-art rooms own all of their states (empty / closed / asleep…).
+  if (ROOM_KINDS.has(u.kind)) return drawRoom(d, u, x, y, w, h);
 
-  // Interior back wall, slightly tinted by category colour.
-  const wall = empty ? "#2a2e3a" : shade(f.color, -78);
-  ctx.fillStyle = wall;
-  ctx.fillRect(x, y, w, h);
-  // Floor strip & ceiling shadow give a sense of a room.
-  ctx.fillStyle = shade(wall, -16);
-  ctx.fillRect(x, y, w, 2);
-  ctx.fillStyle = shade(wall, 14);
-  ctx.fillRect(x, y + h - 3, w, 3);
-
-  if (empty) {
-    // A clean, ready hotel room shows a made bed rather than a lease sign.
-    if (u.kind === "hotelSingle" || u.kind === "hotelDouble" || u.kind === "hotelSuite") {
-      return drawHotel(d, u, x, y, w, h);
-    }
-    return drawVacancy(ctx, u, x, y, w, h);
-  }
-
-  // Businesses that keep hours show a closed shutter outside opening times.
-  if (hasBusinessHours(u.kind) && !isOpenAt(u.kind, d.hour)) {
-    drawClosed(d, u, x, y, w, h);
-    drawTypeBadge(d, u.kind, x, y, w, h);
-    return;
-  }
-
+  // Service / special facilities.
+  if (u.state === "empty") return drawVacancy(ctx, u, x, y, w, h);
   drawInterior(d, u, x, y, w, h);
-  // A clear type badge in the corner makes every room identifiable at a glance.
-  drawTypeBadge(d, u.kind, x, y, w, h);
 }
 
-/** Dispatch to the per-facility interior drawing. */
+/** Dispatch to the per-facility interior drawing (services & special only). */
 function drawInterior(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number): void {
   const ctx = d.ctx;
   switch (u.kind) {
-    case "office":
-      return drawOffice(d, u, x, y, w, h);
-    case "condo":
-      return drawCondo(d, u, x, y, w, h);
-    case "hotelSingle":
-    case "hotelDouble":
-    case "hotelSuite":
-      return drawHotel(d, u, x, y, w, h);
-    case "fastFood":
-      return drawFastFood(d, u, x, y, w, h);
-    case "restaurant":
-      return drawRestaurant(d, u, x, y, w, h);
-    case "shop":
-      return drawShop(d, u, x, y, w, h);
-    case "cinema":
-      return drawCinema(d, x, y, w, h);
     case "partyHall":
       return drawPartyHall(ctx, x, y, w, h);
     case "parking":
@@ -121,152 +93,6 @@ function drawInterior(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: n
     default:
       ctx.fillStyle = FACILITIES[u.kind].color;
       ctx.fillRect(x + 1, y + 1, w - 2, h - 2);
-  }
-}
-
-/**
- * Small colour-coded badge with a drawn icon in the top-left of a room — the
- * single biggest readability win, letting you tell room types apart instantly.
- */
-function drawTypeBadge(d: DrawCtx, kind: import("../engine/types").FacilityKind, x: number, y: number, w: number, h: number): void {
-  if (w < 22 || h < 16) return; // too small to be legible
-  const ctx = d.ctx;
-  const s = 11;
-  const bx = x + 1;
-  const by = y + 1;
-  // Chip background in the facility colour.
-  ctx.fillStyle = "rgba(12,14,20,0.66)";
-  ctx.fillRect(bx, by, s, s);
-  ctx.fillStyle = FACILITIES[kind].color;
-  ctx.fillRect(bx, by, s, 2);
-  const cx = bx + s / 2;
-  const cy = by + s / 2 + 1;
-  ctx.fillStyle = "#fff";
-  ctx.strokeStyle = "#fff";
-  ctx.lineWidth = 1;
-  drawIcon(ctx, kind, cx, cy);
-}
-
-/** Draws a tiny white pictogram centred at (cx, cy) for the given kind. */
-function drawIcon(ctx: CanvasRenderingContext2D, kind: import("../engine/types").FacilityKind, cx: number, cy: number): void {
-  const rect = (w: number, hh: number) => ctx.fillRect(cx - w / 2, cy - hh / 2, w, hh);
-  switch (kind) {
-    case "office": // briefcase
-      rect(8, 5);
-      ctx.fillRect(cx - 2, cy - 4, 4, 2);
-      ctx.fillStyle = "rgba(0,0,0,0.5)";
-      ctx.fillRect(cx - 4, cy, 8, 1);
-      break;
-    case "condo": { // house
-      ctx.beginPath();
-      ctx.moveTo(cx - 5, cy);
-      ctx.lineTo(cx, cy - 5);
-      ctx.lineTo(cx + 5, cy);
-      ctx.closePath();
-      ctx.fill();
-      ctx.fillRect(cx - 3, cy, 6, 4);
-      break;
-    }
-    case "hotelSingle":
-    case "hotelDouble":
-    case "hotelSuite": // bed
-      ctx.fillRect(cx - 5, cy, 10, 3);
-      ctx.fillRect(cx - 5, cy - 3, 4, 3); // pillow
-      ctx.fillRect(cx - 5, cy + 3, 1, 2);
-      ctx.fillRect(cx + 4, cy + 3, 1, 2);
-      break;
-    case "fastFood": // burger
-      ctx.beginPath();
-      ctx.arc(cx, cy - 1, 4, Math.PI, 0);
-      ctx.fill();
-      ctx.fillRect(cx - 4, cy - 1, 8, 2);
-      ctx.fillStyle = "#caa42e";
-      ctx.fillRect(cx - 4, cy + 1, 8, 2);
-      break;
-    case "restaurant": // fork & knife
-      ctx.fillRect(cx - 3, cy - 5, 1, 10);
-      ctx.fillRect(cx - 4, cy - 5, 1, 3);
-      ctx.fillRect(cx - 2, cy - 5, 1, 3);
-      ctx.fillRect(cx + 2, cy - 5, 1, 10);
-      ctx.fillRect(cx + 1, cy - 5, 3, 3);
-      break;
-    case "shop": // shopping bag
-      ctx.fillRect(cx - 4, cy - 2, 8, 7);
-      ctx.strokeRect(cx - 2, cy - 5, 4, 3);
-      break;
-    case "cinema": // play triangle
-      ctx.beginPath();
-      ctx.moveTo(cx - 3, cy - 4);
-      ctx.lineTo(cx - 3, cy + 4);
-      ctx.lineTo(cx + 4, cy);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    case "partyHall": // music note
-      ctx.fillRect(cx + 1, cy - 5, 1, 7);
-      ctx.beginPath();
-      ctx.arc(cx, cy + 2, 2, 0, Math.PI * 2);
-      ctx.fill();
-      break;
-    case "parking":
-      ctx.font = "bold 9px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("P", cx, cy);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-      break;
-    case "security": // shield
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 5);
-      ctx.lineTo(cx + 4, cy - 3);
-      ctx.lineTo(cx + 4, cy + 1);
-      ctx.lineTo(cx, cy + 5);
-      ctx.lineTo(cx - 4, cy + 1);
-      ctx.lineTo(cx - 4, cy - 3);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    case "medical": // cross
-      ctx.fillStyle = "#e23b3b";
-      ctx.fillRect(cx - 4, cy - 1, 8, 2);
-      ctx.fillRect(cx - 1, cy - 4, 2, 8);
-      break;
-    case "housekeeping": // broom
-      ctx.fillRect(cx - 1, cy - 5, 2, 6);
-      ctx.beginPath();
-      ctx.moveTo(cx - 3, cy + 4);
-      ctx.lineTo(cx, cy + 1);
-      ctx.lineTo(cx + 3, cy + 4);
-      ctx.closePath();
-      ctx.fill();
-      break;
-    case "recycling": // triangle
-      ctx.beginPath();
-      ctx.moveTo(cx, cy - 4);
-      ctx.lineTo(cx + 4, cy + 3);
-      ctx.lineTo(cx - 4, cy + 3);
-      ctx.closePath();
-      ctx.stroke();
-      break;
-    case "metro":
-      ctx.font = "bold 9px system-ui, sans-serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("M", cx, cy);
-      ctx.textAlign = "left";
-      ctx.textBaseline = "alphabetic";
-      break;
-    case "weddingHall": // interlocking rings
-      ctx.strokeStyle = "#fff";
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.arc(cx - 2, cy, 3, 0, Math.PI * 2);
-      ctx.arc(cx + 2, cy, 3, 0, Math.PI * 2);
-      ctx.stroke();
-      break;
-    default:
-      ctx.fillRect(cx - 2, cy - 2, 4, 4);
   }
 }
 
@@ -349,36 +175,6 @@ function drawConstruction(d: DrawCtx, x: number, y: number, w: number, h: number
   ctx.fillRect(hookX - 2, y + h * 0.4, 4, 3);
 }
 
-function drawClosed(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const ctx = d.ctx;
-  const f = FACILITIES[u.kind];
-  // Dim sign band keeps the shop identifiable.
-  ctx.fillStyle = shade(f.color, -50);
-  ctx.fillRect(x, y, w, h);
-  ctx.fillStyle = shade(f.color, -20);
-  ctx.fillRect(x, y, w, 4);
-  // Rolling shutter.
-  ctx.fillStyle = "#3a3f48";
-  ctx.fillRect(x + 2, y + 5, w - 4, h - 9);
-  ctx.strokeStyle = "rgba(0,0,0,0.35)";
-  ctx.lineWidth = 1;
-  for (let ly = y + 7; ly < y + h - 5; ly += 3) {
-    ctx.beginPath();
-    ctx.moveTo(x + 2, ly);
-    ctx.lineTo(x + w - 2, ly);
-    ctx.stroke();
-  }
-  if (w > 26) {
-    ctx.fillStyle = "#1b1f2a";
-    ctx.fillRect(x + w / 2 - 16, y + h / 2 - 5, 32, 10);
-    ctx.fillStyle = "#e0556b";
-    ctx.font = "bold 7px system-ui, sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("CLOSED", x + w / 2, y + h / 2 + 2);
-    ctx.textAlign = "left";
-  }
-}
-
 function drawVacancy(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: number, w: number, h: number) {
   // "For lease" hatch and a tiny sign.
   ctx.strokeStyle = "rgba(255,255,255,0.10)";
@@ -401,286 +197,8 @@ function drawVacancy(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: numbe
   void u;
 }
 
-// ---- Window helper ------------------------------------------------------
-
-/**
- * Window strip with independent per-window lighting and occasional flicker, so
- * a row of identical rooms shows a lively scatter of lit / dark windows.
- */
-function windows(
-  d: DrawCtx,
-  seed: number,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  baseLit: boolean,
-  tint: string,
-  spacing = 7,
-) {
-  const ctx = d.ctx;
-  const wy = y + Math.max(3, h * 0.2);
-  const wh = Math.max(4, h * 0.4);
-  const pane = Math.max(5, spacing - 4);
-  let i = 0;
-  for (let wx = x + 4; wx + pane < x + w - 1; wx += spacing) {
-    const r = rand(seed * 131 + i * 17);
-    // Most windows lit when the room is "on"; a few glow even when off.
-    let on = baseLit ? r > 0.22 : r > 0.86;
-    // Rare flicker keeps the facade alive.
-    if (r > 0.6 && Math.floor(d.anim * 0.7 + r * 20) % 17 === 0) on = !on;
-    // Window frame + glass.
-    ctx.fillStyle = "rgba(40,46,60,0.55)";
-    ctx.fillRect(wx - 1, wy - 1, pane + 2, wh + 2);
-    ctx.fillStyle = on ? tint : "#3d4a63";
-    ctx.fillRect(wx, wy, pane, wh);
-    ctx.fillStyle = "rgba(255,255,255,0.18)";
-    ctx.fillRect(wx, wy, 1, wh);
-    if (on) {
-      // Warm sill glow.
-      ctx.fillStyle = "rgba(255,220,140,0.25)";
-      ctx.fillRect(wx, wy + wh - 1, pane, 1);
-    }
-    i++;
-  }
-}
-
-// ---- Offices ------------------------------------------------------------
-
-function drawOffice(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const { ctx } = d;
-  ctx.fillStyle = "#cfd6df";
-  ctx.fillRect(x, y, w, h * 0.5);
-  windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#fff4c0", 14);
-  // Big workstations: desk + monitor + office chair, sized to fill the room.
-  const deskH = Math.max(6, h * 0.26);
-  const deskTop = y + h - 3 - deskH;
-  const slot = Math.max(16, w / Math.max(2, Math.round(w / 18)));
-  for (let dx = x + 3; dx + slot - 2 < x + w; dx += slot) {
-    const seed = (u.id * 31 + (dx | 0)) | 0;
-    const dw = slot - 5;
-    // Desk top.
-    ctx.fillStyle = "#7a5a3c";
-    ctx.fillRect(dx, deskTop + deskH * 0.45, dw, deskH * 0.3);
-    ctx.fillStyle = "#5e4429";
-    ctx.fillRect(dx, deskTop + deskH * 0.72, dw, deskH * 0.28);
-    // Monitor.
-    ctx.fillStyle = "#23262f";
-    ctx.fillRect(dx + 1, deskTop, dw * 0.45, deskH * 0.5);
-    ctx.fillStyle = rand(seed) > 0.5 ? "#2bd0c0" : "#5db4e8";
-    ctx.fillRect(dx + 2, deskTop + 1, dw * 0.45 - 2, deskH * 0.5 - 2);
-    // Chair + worker.
-    ctx.fillStyle = "#33384a";
-    ctx.fillRect(dx + dw - 4, deskTop + deskH * 0.35, 4, deskH * 0.6);
-    if (u.occupants > 0 && rand(seed + 7) > 0.35) {
-      ctx.fillStyle = "#e8c9a0";
-      ctx.fillRect(dx + dw - 4, deskTop + deskH * 0.2, 3, 3);
-    }
-  }
-  // Potted plant accent.
-  ctx.fillStyle = "#3a7a3a";
-  ctx.fillRect(x + w - 6, deskTop + deskH * 0.4, 4, deskH * 0.6);
-}
-
-// ---- Condos -------------------------------------------------------------
-
-function drawCondo(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const { ctx } = d;
-  // Warm wallpaper, varied per unit.
-  const hue = rand(u.id) > 0.5 ? "#8a6f54" : "#7a6470";
-  ctx.fillStyle = shade(hue, 10);
-  ctx.fillRect(x, y + 2, w, h - 5);
-  windows(d, u.id, x, y, w, h, d.lit || u.occupants > 0, "#ffe7b0", 16);
-  // Curtains in a per-unit accent.
-  const accent = ACCENTS[u.id % ACCENTS.length];
-  ctx.fillStyle = accent;
-  for (let cx = x + 3; cx + 4 < x + w; cx += 9) {
-    ctx.fillRect(cx - 1, y + h * 0.2, 1, h * 0.42);
-    ctx.fillRect(cx + 4, y + h * 0.2, 1, h * 0.42);
-  }
-  // Big living-room furniture filling the lower half.
-  const furnH = Math.max(7, h * 0.3);
-  const fy = y + h - 3 - furnH;
-  // Couch (scales with room width).
-  const sofaW = Math.min(w * 0.42, 30);
-  ctx.fillStyle = shade(accent, -30);
-  ctx.fillRect(x + 4, fy + furnH * 0.35, sofaW, furnH * 0.65);
-  ctx.fillStyle = shade(accent, 20); // backrest
-  ctx.fillRect(x + 4, fy + furnH * 0.1, sofaW, furnH * 0.3);
-  ctx.fillStyle = shade(accent, -10); // armrests
-  ctx.fillRect(x + 4, fy + furnH * 0.2, 3, furnH * 0.8);
-  ctx.fillRect(x + 4 + sofaW - 3, fy + furnH * 0.2, 3, furnH * 0.8);
-  // Floor lamp.
-  ctx.fillStyle = "#7a6a50";
-  ctx.fillRect(x + sofaW + 8, fy + 2, 2, furnH - 2);
-  ctx.fillStyle = d.lit ? "#ffe08a" : "#9a8f70";
-  ctx.beginPath();
-  ctx.moveTo(x + sofaW + 9, fy);
-  ctx.lineTo(x + sofaW + 5, fy + 5);
-  ctx.lineTo(x + sofaW + 13, fy + 5);
-  ctx.closePath();
-  ctx.fill();
-  // Wall TV with glow.
-  const tvW = Math.min(w * 0.22, 14);
-  ctx.fillStyle = "#15151c";
-  ctx.fillRect(x + w - tvW - 4, fy + 1, tvW, furnH * 0.7);
-  ctx.fillStyle = u.occupants > 0 ? "#7fa9ff" : "#2a2f3a";
-  ctx.fillRect(x + w - tvW - 3, fy + 2, tvW - 2, furnH * 0.7 - 2);
-}
-
-// ---- Hotels -------------------------------------------------------------
-
-function drawHotel(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const { ctx } = d;
-  const asleep = u.state === "asleep";
-  const dirty = u.state === "dirty";
-  ctx.fillStyle = "#6a5f70";
-  ctx.fillRect(x, y + 2, w, h - 5);
-  windows(d, u.id, x, y, w, h, !asleep && (d.lit || u.occupants > 0), asleep ? "#26304a" : "#ffe9a8", 15);
-  // A large bed that scales with the room — a suite reads bigger than a single.
-  const bedH = Math.max(7, h * 0.34);
-  const fy = y + h - 3 - bedH;
-  const bedW = w - 12; // bed runs most of the room width
-  // Headboard.
-  ctx.fillStyle = "#5a3f2c";
-  ctx.fillRect(x + 3, fy, 4, bedH);
-  // Mattress + duvet.
-  ctx.fillStyle = "#e8e2d2";
-  ctx.fillRect(x + 7, fy + bedH * 0.25, bedW, bedH * 0.75);
-  ctx.fillStyle = "#cfc4a6";
-  ctx.fillRect(x + 7, fy + bedH * 0.25, bedW, 2);
-  // Pillow.
-  ctx.fillStyle = "#fbf7ec";
-  ctx.fillRect(x + 8, fy + bedH * 0.3, Math.max(5, bedW * 0.22), bedH * 0.3);
-  // Nightstand with lamp on the far side.
-  ctx.fillStyle = "#6a4a30";
-  ctx.fillRect(x + w - 7, fy + bedH * 0.5, 4, bedH * 0.5);
-
-  if (asleep) {
-    ctx.fillStyle = "#6677bb"; // guest under the covers
-    ctx.fillRect(x + 9 + bedW * 0.22, fy + bedH * 0.4, bedW * 0.6, bedH * 0.5);
-    ctx.fillStyle = "#e8c9a0";
-    ctx.fillRect(x + 9, fy + bedH * 0.28, 3, 3); // head on pillow
-    ctx.fillStyle = "rgba(200,210,255,0.85)";
-    ctx.font = "7px sans-serif";
-    ctx.fillText("z", x + 14, fy + bedH * 0.2);
-  } else if (dirty) {
-    ctx.fillStyle = "#b8a98a"; // rumpled covers
-    ctx.fillRect(x + 9, fy + bedH * 0.4, bedW * 0.8, bedH * 0.4);
-    ctx.fillStyle = "#d4623a";
-    ctx.fillRect(x + w - 7, fy - 2, 4, 3); // dirty tag
-  } else {
-    ctx.fillStyle = "#ffd86a"; // bedside lamp, ready room
-    ctx.fillRect(x + w - 6, fy + bedH * 0.2, 2, bedH * 0.3);
-  }
-}
-
-// ---- Food ---------------------------------------------------------------
-
-function drawFastFood(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const { ctx } = d;
-  ctx.fillStyle = "#f0d8b0";
-  ctx.fillRect(x, y + 2, w, h - 5);
-  // Bright sign band.
-  ctx.fillStyle = "#e8462e";
-  ctx.fillRect(x, y + 2, w, 4);
-  ctx.fillStyle = "#ffd24a";
-  for (let sx = x + 2; sx < x + w - 2; sx += 6) ctx.fillRect(sx, y + 3, 3, 2);
-  // Counter.
-  const fy = y + h - 7;
-  ctx.fillStyle = "#b5742e";
-  ctx.fillRect(x + 3, fy + 2, w - 6, 4);
-  // Diners at little round tables.
-  for (let tx = x + 8; tx + 4 < x + w; tx += 12) {
-    ctx.fillStyle = "#ffffff";
-    ctx.beginPath();
-    ctx.arc(tx, fy + 3, 2.5, 0, Math.PI * 2);
-    ctx.fill();
-    if (u.occupants !== 0 || rand((u.id + tx) | 0) > 0.4) {
-      ctx.fillStyle = "#3a3550";
-      ctx.fillRect(tx - 3, fy, 2, 3);
-      ctx.fillRect(tx + 2, fy, 2, 3);
-    }
-  }
-}
-
-function drawRestaurant(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const { ctx } = d;
-  ctx.fillStyle = "#3a2230";
-  ctx.fillRect(x, y + 2, w, h - 5);
-  // Chandelier.
-  ctx.fillStyle = d.lit ? "#ffe08a" : "#8a7a55";
-  ctx.fillRect(x + w / 2 - 1, y + 3, 2, 4);
-  ctx.beginPath();
-  ctx.arc(x + w / 2, y + 8, 3, 0, Math.PI * 2);
-  ctx.fill();
-  // White-clothed tables with candles.
-  const fy = y + h - 8;
-  for (let tx = x + 8; tx + 6 < x + w; tx += 14) {
-    ctx.fillStyle = "#f4f0e8";
-    ctx.fillRect(tx, fy + 2, 9, 4);
-    ctx.fillStyle = "#e8a030"; // candle flame
-    ctx.fillRect(tx + 4, fy, 1, 2);
-    ctx.fillStyle = "#2b2238";
-    ctx.fillRect(tx - 2, fy + 1, 2, 4);
-    ctx.fillRect(tx + 9, fy + 1, 2, 4);
-  }
-  void u;
-}
-
-// ---- Retail -------------------------------------------------------------
-
-function drawShop(d: DrawCtx, u: Unit, x: number, y: number, w: number, h: number) {
-  const { ctx } = d;
-  ctx.fillStyle = "#efe9f5";
-  ctx.fillRect(x, y + 2, w, h - 5);
-  // Striped awning.
-  for (let sx = x; sx < x + w; sx += 8) {
-    ctx.fillStyle = (Math.floor(sx / 8) % 2) === 0 ? "#ffffff" : ACCENTS[u.id % ACCENTS.length];
-    ctx.fillRect(sx, y + 2, 4, 4);
-  }
-  // Shelves of colourful goods.
-  const fy = y + h - 9;
-  for (let row = 0; row < 2; row++) {
-    const ry = fy + row * 4;
-    ctx.fillStyle = "#a98a6a";
-    ctx.fillRect(x + 3, ry + 3, w - 6, 1);
-    for (let gx = x + 4; gx + 2 < x + w - 3; gx += 4) {
-      ctx.fillStyle = ACCENTS[(gx + row) % ACCENTS.length];
-      ctx.fillRect(gx, ry, 2, 3);
-    }
-  }
-}
 
 // ---- Entertainment ------------------------------------------------------
-
-function drawCinema(d: DrawCtx, x: number, y: number, w: number, h: number) {
-  const ctx = d.ctx;
-  ctx.fillStyle = "#140d28";
-  ctx.fillRect(x, y + 2, w, h - 5);
-  // Marquee bulbs chase along with time (animated).
-  const chase = Math.floor(d.anim * 6);
-  for (let i = 0, bx = x + 3; bx < x + w - 2; bx += 6, i++) {
-    ctx.fillStyle = (i + chase) % 2 === 0 ? "#ffd24a" : "#ff6b6b";
-    ctx.fillRect(bx, y + 3, 2, 2);
-  }
-  // Glowing screen — the movie flickers through changing colours.
-  const frame = Math.floor(d.anim * 3);
-  const palette = ["#9fc0ff", "#ffd9a0", "#c0ffd0", "#ffb0c0", "#d0c0ff"];
-  ctx.fillStyle = palette[frame % palette.length];
-  ctx.fillRect(x + w / 2 - 14, y + 9, 28, h - 18);
-  ctx.fillStyle = "rgba(255,255,255,0.45)";
-  ctx.fillRect(x + w / 2 - 14, y + 9 + ((frame * 3) % Math.max(1, h - 20)), 28, 2);
-  // Rows of seats silhouetted, some with audience heads.
-  for (let i = 0, sx = x + 4; sx < x + w - 3; sx += 5, i++) {
-    ctx.fillStyle = "#0a0716";
-    ctx.fillRect(sx, y + h - 6, 3, 4);
-    if (rand(i * 7 + 3) > 0.5) {
-      ctx.fillStyle = "#2a2438";
-      ctx.fillRect(sx, y + h - 8, 3, 2);
-    }
-  }
-}
 
 function drawPartyHall(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   ctx.fillStyle = "#2a1f3a";
