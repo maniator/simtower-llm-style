@@ -338,11 +338,14 @@ export class Simulation {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
       }
       // The real, individually-routed crowd shaves a little extra satisfaction
-      // when lots of commuters are visibly stuck waiting — but it never alone
-      // empties a unit (floored above the churn threshold), so the headless
-      // congestion model above stays the authoritative driver tests rely on.
+      // when lots of commuters are visibly stuck waiting — but this penalty
+      // alone never empties a unit: it can't push satisfaction below a small
+      // floor, and (crucially) never raises it, so a unit already driven to 0
+      // by the aggregate congestion model still vacates. That keeps the
+      // headless congestion model the authoritative driver tests rely on.
       if (this.crowdStress > 0.5) {
-        u.satisfaction = Math.max(0.05, u.satisfaction - 0.01 * Math.min(1, this.crowdStress));
+        const penalty = 0.01 * Math.min(1, this.crowdStress);
+        u.satisfaction = Math.min(u.satisfaction, Math.max(0.05, u.satisfaction - penalty));
       }
       // Tenants abandon a unit that stays unbearable.
       if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo")) {

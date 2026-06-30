@@ -1,7 +1,7 @@
 import type { Clock } from "./Clock";
 import type { Tower } from "./Tower";
 import type { FacilityKind, Transport } from "./types";
-import { isHotelKind } from "./facilities";
+import { isElevatorKind, isHotelKind } from "./facilities";
 import { RNG } from "./rng";
 
 /**
@@ -36,6 +36,8 @@ export interface Person {
   leg: number;
   shaftId: number | null;
   carIndex: number | null;
+  /** Tile x to stroll to on the destination floor (within built structure). */
+  destX: number;
   /** Seconds spent waiting on the current call (drives stress). */
   wait: number;
   /** Idle timer once arrived, before despawning. */
@@ -71,6 +73,10 @@ export class Crowd {
     this.people = [];
     this.carRiders.clear();
     this.frustration = 0;
+    // Drop the partial spawn accumulator and id counter too, so a fresh sim
+    // doesn't immediately spawn a backlog or grow ids without bound.
+    this.spawnAcc = 0;
+    this.nextId = 1;
   }
 
   /** 0..1 — how stressed the current crowd is by elevator waits. */
@@ -93,6 +99,11 @@ export class Crowd {
     // floor -> list of {floor, shaftId} reachable in one ride.
     const adj = new Map<number, { f: number; shaft: number }[]>();
     for (const t of tower.transports) {
+      // Only elevators carry our riders — they board real cars. Stairs and
+      // escalators have no cars, so routing through them would strand a
+      // commuter waiting forever for a car that never comes; their decorative
+      // climbers cover that movement instead.
+      if (!isElevatorKind(t.kind)) continue;
       const stops = this.stopsOf(tower, t);
       for (const a of stops) {
         let list = adj.get(a);
@@ -174,7 +185,7 @@ export class Crowd {
       state: "toShaft",
       floor: from,
       fy: from,
-      x: this.rng.int(2, 40),
+      x: this.pickX(tower, from, seed),
       floors: r.floors,
       shafts: r.shafts,
       leg: 0,
@@ -182,7 +193,23 @@ export class Crowd {
       carIndex: null,
       wait: 0,
       linger: 0,
+      destX: this.pickX(tower, to, seed),
     });
+  }
+
+  /** A tile within the built structure of a floor (so people stand on solid
+   * ground, not in midair). Falls back to a sensible spot if the floor is bare. */
+  private pickX(tower: Tower, floor: number, seed: number): number {
+    let min = Infinity;
+    let max = -Infinity;
+    for (const u of tower.units) {
+      if ((u.kind === "floor" || u.kind === "lobby") && u.floor === floor) {
+        if (u.x < min) min = u.x;
+        if (u.x + u.width - 1 > max) max = u.x + u.width - 1;
+      }
+    }
+    if (min === Infinity) return 2 + (Math.abs(seed) % 40);
+    return min + (Math.abs(seed) % (max - min + 1));
   }
 
   // ---- Per-frame update ---------------------------------------------------
@@ -255,8 +282,7 @@ export class Crowd {
         const dest = p.floors[p.leg + 1];
         if (Math.abs(pos - dest) < 0.2) {
           // Arrived at this leg's floor — step off.
-          this.carRiders.set(`${shaft.id}:${p.carIndex}`, Math.max(0, (this.carRiders.get(`${shaft.id}:${p.carIndex}`) ?? 1) - 1));
-          p.carIndex = null;
+          this.releaseSeat(p);
           p.floor = dest;
           p.fy = dest;
           p.leg++;
@@ -271,8 +297,7 @@ export class Crowd {
       }
       case "toDest": {
         // Stroll to a spot on the destination floor, linger, then leave.
-        const targetX = 6 + (Math.abs(p.seed) % 60);
-        if (this.walkTo(p, targetX, dt)) {
+        if (this.walkTo(p, p.destX, dt)) {
           p.linger += dt;
           if (p.linger > 2) this.finish(p);
         }
@@ -295,7 +320,17 @@ export class Crowd {
     return false;
   }
 
+  /** Free this person's seat in their current car (if aboard), so bulldozing
+   * a shaft mid-ride never leaks rider counts and shrinks a car's capacity. */
+  private releaseSeat(p: Person): void {
+    if (p.carIndex == null || p.shaftId == null) return;
+    const key = `${p.shaftId}:${p.carIndex}`;
+    this.carRiders.set(key, Math.max(0, (this.carRiders.get(key) ?? 1) - 1));
+    p.carIndex = null;
+  }
+
   private finish(p: Person): void {
+    this.releaseSeat(p);
     p.state = "done";
   }
 }

@@ -107,6 +107,7 @@ export class TowerEngine {
   private crowd = new Crowd();
   private crowdActors = new Map<number, { actor: ex.Actor; gfx: ex.Canvas; red: boolean }>();
   private lastClockMinutes = -1;
+  private lastTickAt = -1;
 
   // Shared graphics so thousands of tiles/people cost almost nothing.
   private floorGfx!: ex.Canvas;
@@ -306,9 +307,17 @@ export class TowerEngine {
    * frustration feeds back into tenant satisfaction via `sim.crowdStress`.
    */
   private updateCrowd(elapsedMs: number): void {
-    const running = this.sim.clock.minutes !== this.lastClockMinutes;
-    this.lastClockMinutes = this.sim.clock.minutes;
-    if (running) {
+    // The crowd advances on real wall-clock seconds so it looks identical at
+    // every game speed. A sim tick bumps the clock, so if the clock changed
+    // recently the game is running — including the many render frames between
+    // ticks at slow speed, where the clock is briefly static. Only once it's
+    // been static for a beat do we treat the game as paused and freeze people.
+    const nowSec = this.d.anim;
+    if (this.sim.clock.minutes !== this.lastClockMinutes) {
+      this.lastClockMinutes = this.sim.clock.minutes;
+      this.lastTickAt = nowSec;
+    }
+    if (nowSec - this.lastTickAt < 0.3) {
       const dtSec = Math.min(0.05, elapsedMs / 1000);
       this.crowd.update(dtSec, this.sim.tower, this.sim.clock);
       this.sim.crowdStress = this.crowd.stress;
@@ -359,6 +368,7 @@ export class TowerEngine {
     this.crowdActors.clear();
     this.crowd.reset();
     this.lastClockMinutes = -1;
+    this.lastTickAt = -1;
   }
 
   // ---- Coordinate math ----------------------------------------------------

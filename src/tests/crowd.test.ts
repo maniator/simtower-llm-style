@@ -51,6 +51,17 @@ describe("Crowd: routing and movement", () => {
     expect(r!.floors).toContain(15);
   });
 
+  it("never routes over carless stairs or escalators", () => {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
+    tower.placeTransport("stairs", 4, 1, 2); // a stair has no cars to board
+    const crowd = new Crowd();
+    // Floor 2 is reachable on foot via the stairs, but our riders only board
+    // real elevator cars — so there is no boardable route for them.
+    expect(crowd.route(tower, 1, 2)).toBeNull();
+  });
+
   it("spawns and advances commuters, reporting stress in [0,1]", () => {
     const tower = towerWithElevator(8);
     // An occupied office up top gives morning commuters a destination.
@@ -63,14 +74,17 @@ describe("Crowd: routing and movement", () => {
     expect(crowd.people.length).toBeGreaterThan(0);
     expect(crowd.stress).toBeGreaterThanOrEqual(0);
     expect(crowd.stress).toBeLessThanOrEqual(1);
-    // Everyone is heading to or from a real floor on a real route.
+    // Everyone is heading to or from a real floor on a real route, and their
+    // destination sits on built structure (tiles 0..39 here), not in midair.
     for (const p of crowd.people) {
       expect(p.floors.length).toBeGreaterThanOrEqual(2);
       expect(p.shafts.length).toBeGreaterThanOrEqual(1);
+      expect(p.destX).toBeGreaterThanOrEqual(0);
+      expect(p.destX).toBeLessThanOrEqual(39);
     }
   });
 
-  it("clears all people on reset", () => {
+  it("fully resets — no carried spawn backlog after switching sims", () => {
     const tower = towerWithElevator(8);
     const r = tower.place("office", 5, 0);
     tower.units.find((uu) => uu.id === r.unitId)!.state = "occupied";
@@ -80,5 +94,9 @@ describe("Crowd: routing and movement", () => {
     crowd.reset();
     expect(crowd.people.length).toBe(0);
     expect(crowd.stress).toBe(0);
+    // A single tiny step must not immediately spawn a backlog from a leftover
+    // accumulator (the bug: spawnAcc surviving reset).
+    crowd.update(0.001, tower, clock);
+    expect(crowd.people.length).toBe(0);
   });
 });

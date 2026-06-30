@@ -74,7 +74,7 @@ abstraction · ⬜ not present.
 - Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **12,000** rather than 15,000 to stay reachable.
 
 ## Verification
-`npm test` runs **63 unit/integration tests** covering placement rules,
+`npm test` runs **64 unit/integration tests** covering placement rules,
 economy, ratings gates, the housekeeping/fire/bomb events, elevator dispatch,
 the individually-routed **crowd's BFS routing and movement**
 (`src/tests/crowd.test.ts`), save/load, the `.TWR` parser, and an
