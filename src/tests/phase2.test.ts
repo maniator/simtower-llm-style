@@ -13,7 +13,8 @@ const C = Math.floor(W / 2);
 
 describe("F4 / Step 1 — v2 integrates per hour; v1 keeps the sampled behavior", () => {
   it("v1 fires onHour at most once for a multi-hour tick (the documented sampling)", () => {
-    const sim = Simulation.newGame(1); // starts Mon 07:00, simModel defaults to v1
+    const sim = Simulation.newGame(1); // starts Mon 07:00
+    sim.simModel = "v1"; // pin the legacy sampled model (v2 is now the default)
     sim.tick(60 * 5); // 07:00 -> 12:00
     expect(sim.hourTicks).toBe(1); // sampled: one onHour despite 5 hours elapsing
     expect(sim.clock.day).toBe(0);
@@ -36,6 +37,7 @@ describe("F4 / Step 1 — v2 integrates per hour; v1 keeps the sampled behavior"
 
   it("v2 advances the same total game time as v1 (sub-stepping is exact)", () => {
     const a = Simulation.newGame(2);
+    a.simModel = "v1";
     const b = Simulation.newGame(2);
     b.simModel = "v2";
     a.tick(247); // arbitrary, not hour-aligned
@@ -142,5 +144,73 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
     // Every occupied band now has a station within the security radius.
     expect(sim.fireContainmentChance(10)).toBeGreaterThan(0.5);
     expect(sim.fireContainmentChance(90)).toBeGreaterThan(0.5);
+  });
+});
+
+import { TOWER_POPULATION, FACILITIES } from "../engine/facilities";
+
+describe("F2 / Step 5 — honest v2 endgame: a served, well-zoned tower wins under the real hourly clock", () => {
+  it("a properly-zoned tower reaches TOWER and does NOT mass-vacate under hourly simulation", () => {
+    const sim = Simulation.newGame(1); // v2 by default
+    sim.money = 1e12;
+    const lay = (k: "floor" | "lobby", f: number) => {
+      for (let x = C; x < W; x++) sim.tower.place(k, f, x);
+      for (let x = C - 1; x >= 0; x--) sim.tower.place(k, f, x);
+    };
+    lay("lobby", 1);
+    for (let f = 2; f <= 100; f++) lay("floor", f);
+    const sky = [15, 30, 45, 60, 75, 90];
+    for (const sf of sky) lay("lobby", sf);
+    lay("floor", 0); // basement for the metro
+
+    // Zoned transport: 2 express (lobby-to-lobby) + 1 local per 15-floor band.
+    let col = W - 4;
+    const addShaft = (kind: string, b: number, t: number) => {
+      const r = sim.buildTransport(kind as never, col, b, t);
+      if (r.ok) sim.tower.setCars(sim.tower.transports[sim.tower.transports.length - 1].id, 8);
+      col -= 5;
+    };
+    addShaft("elevatorExpress", 1, 100);
+    addShaft("elevatorExpress", 1, 100);
+    for (const [b, t] of [[1, 15], [15, 30], [30, 45], [45, 60], [60, 75], [75, 90], [90, 100]]) {
+      addShaft("elevatorStandard", b as number, t as number);
+    }
+    const right = col; // offices must stop before the shaft columns
+
+    // Services distributed up the tower (coverage radius), a metro, and offices.
+    sim.tower.place("metro", 0, 0);
+    for (let f = 8; f <= 98; f += 15) sim.tower.place("security", f, 0);
+    for (let f = 8; f <= 98; f += 24) sim.tower.place("medical", f, 8);
+
+    const skyset = new Set(sky);
+    let pop = 0;
+    for (let f = 2; f <= 99 && pop < TOWER_POPULATION + 600; f++) {
+      if (skyset.has(f)) continue;
+      for (let x = 16; x + 9 <= right && pop < TOWER_POPULATION + 600; x += 9) {
+        const r = sim.tower.place("office", f, x);
+        if (r.ok) {
+          const u = sim.tower.units.find((uu) => uu.id === r.unitId)!;
+          u.state = "occupied";
+          u.everOccupied = true;
+          pop += FACILITIES.office.population;
+        }
+      }
+    }
+    expect(sim.population).toBeGreaterThanOrEqual(TOWER_POPULATION);
+
+    // Crown it and summon the VIP, then run several real days of hourly sim.
+    sim.star = 5;
+    expect(sim.build("weddingHall", 100, C).ok).toBe(true);
+    const popBeforeRun = sim.population;
+    for (let day = 0; day < 8 && !sim.evaluatedTower; day++) sim.tick(60 * 24);
+
+    // Spatial congestion held: the tower did not bleed population under proper
+    // hourly simulation (the whole point — v1 would have vacated an unserved
+    // tower; a badly-zoned v2 tower would too).
+    expect(sim.population).toBeGreaterThanOrEqual(TOWER_POPULATION);
+    expect(sim.population).toBeGreaterThanOrEqual(popBeforeRun * 0.95);
+    // And it won.
+    expect(sim.evaluatedTower).toBe(true);
+    expect(sim.star).toBe(6);
   });
 });

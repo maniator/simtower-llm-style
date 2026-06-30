@@ -382,8 +382,8 @@ passes a **VIP inspection**. Realizes **UJ-3**, **UJ-5**.
   (jingle / headline).
 - **FR-46** — The **TOWER rank** requires: **5★** + a built **Wedding Hall**
   (floor 100) + a **Metro Station** + passing the **VIP inspection** at a
-  population target of **12,000** [`TOWER_POPULATION`]. `[NOTE FOR PM: original
-  target is 15,000; reduced to 12,000 for the smaller-scale population model —
+  population target of **8,000** [`TOWER_POPULATION`]. `[NOTE FOR PM: original
+  target is 15,000; reduced to 8,000 for the smaller-scale population model —
   see §4.10 / FR-67.]`
   `[DECISION 2026-06-30 (owner): "TOWER" measures OCCUPANT POPULATION (residents +
   office workers + hotel guests) exactly as the 1994 original did — NOT total
@@ -496,7 +496,7 @@ gaps. Full rationale and the complete source-of-truth mapping live in
   triggering the TOWER evaluation (see FR-19, FR-46).
 - **FR-67** — The TOWER goal stays a **population census** as in the 1994 original
   (residents + office workers + hotel guests; commercial visitors excluded), at a
-  target of **12,000** rather than the original's **15,000** — the only divergence
+  target of **8,000** rather than the original's **15,000** — the only divergence
   is the *number* (scaled to this build), not *what is counted*. The Phase-2
   tolerance band may re-derive the number from the spatial model, but the metric
   stays canonical (see the DECISION note on FR-46).
@@ -522,7 +522,7 @@ gaps. Full rationale and the complete source-of-truth mapping live in
 - **No backend/server.** The game is fully client-side; saves live in the
   browser or in exported files.
 - **Not a 1:1 population-scale simulation.** Population is smaller-scale than the
-  original; the TOWER target is tuned to 12,000 (vs. 15,000) accordingly.
+  original; the TOWER target is tuned to 8,000 (vs. 15,000) accordingly.
 - **Not a full `.TWR` import tool.** Only a documented best-effort stub.
 
 ## 6. MVP Scope
@@ -554,7 +554,7 @@ as implemented and test-covered.)*
   may want their old towers back; revisit if a robust decoder becomes feasible.]`
 - **Original assets / Cathedral naming** — permanent non-goal, not a deferral.
 - **Population at full original scale (15,000 TOWER)** — deferred pending a
-  larger-scale population model; 12,000 is the MVP target.
+  larger-scale population model; 8,000 is the MVP target.
 - **Online features, accounts, leaderboards, mod support** — not planned.
 - **Additional disaster types beyond the original set** — none planned.
 
@@ -600,8 +600,11 @@ as implemented and test-covered.)*
 3. *(Resolved 2026-06-30)* Express auto-restriction is confirmed in
    `Tower.setExpressStops()`: express skips intermediate non-lobby floors but
    always keeps its shaft endpoints as stops. FR-25 updated accordingly.
-4. Is the 12,000 TOWER target final, or should a future larger-scale population
-   model restore the original 15,000? (FR-46)
+4. *(Resolved 2026-06-30)* The TOWER target was re-derived to **8,000** from the
+   lot's measured capacity under the v2 spatial model (a well-zoned 100×200 tower
+   tops out near ~8,900 occupants once shaft columns are reserved). The metric
+   stays a population census per the original; the number is a tolerance band the
+   owner can retune from playtest data. (FR-46 / FR-67)
 5. What is the precise trigger/odds model for buried treasure, and is it strictly
    basement-excavation-tied? (FR-39)
 6. Accessibility targets (keyboard-only play, color-blind-safe red congestion

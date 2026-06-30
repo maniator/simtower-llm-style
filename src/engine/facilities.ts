@@ -312,11 +312,15 @@ export const STAR_THRESHOLDS: Record<number, number> = {
 };
 
 /**
- * Population needed for the final TOWER rating (above 5 stars). The original
- * asks for 15,000; our population model is smaller-scale (retail/food add no
- * residents), so the equivalent "fill a tall tower" goal sits at 12,000.
+ * Population needed for the final TOWER rating (above 5 stars). Same metric as
+ * the 1994 original — a census of OCCUPANTS (office workers + condo residents +
+ * hotel guests); commercial/visitor traffic never counts. The original asked for
+ * 15,000, but that assumed a denser lot: under the v2 spatial transport model a
+ * fully, well-zoned 100×200 tower tops out near ~8,900 occupants once shaft
+ * columns are reserved (measured), so the goal is re-derived to 8,000 — reachable
+ * with good play, with margin. (Phase 2 / review F2; owner-ratified metric.)
  */
-export const TOWER_POPULATION = 12000;
+export const TOWER_POPULATION = 8000;
 
 /** Tower geometry constants. */
 export const GRID = {

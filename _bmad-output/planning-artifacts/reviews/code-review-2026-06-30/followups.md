@@ -95,3 +95,21 @@ test as-is, clearly flagged.
    12k-vs-lot-size balance question.
 4. Sweep up F17/F20/F25/F38/F39 (all ride on the new routing/stress model).
 5. F9/F40/F51 render & docs polish.
+
+## Phase 2 — DONE (2026-06-30)
+
+All Phase-2 steps implemented behind `simModel`, with v2 now the **default**:
+
+- **Step 1 (F4)** — real hourly clock: `tick()` sub-steps to hour boundaries.
+- **Step 2 (F3)** — spatial congestion: per-floor, load split across the shafts
+  that serve a floor; parallel shafts relieve, separate clusters don't pool.
+- **Step 3 (F15/F13)** — service coverage radius (Security ±8, Medical ±12);
+  fire containment is spatial; tall towers must distribute stations (10-cap bites).
+- **Step 4** — flipped default to v2; **re-derived the TOWER target to 8,000**
+  (measured lot ceiling ~8,900 under good zoning); pinned the constructed
+  TOWER/rating tests to v1; PRD/PARITY updated.
+- **Step 5 (F2)** — honest endgame test: a served, well-zoned tower reaches TOWER
+  under the real hourly clock and does NOT mass-vacate.
+
+Suite: 106 passing. Remaining smaller review items (F17/F20/F25/F27/etc.) are
+swept in the follow-up commit; see the review report for the originals.

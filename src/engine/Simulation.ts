@@ -58,10 +58,11 @@ export class Simulation implements SimContext {
    * once per call and handing the full `dt` to every integrator. `v2` decomposes
    * each `tick(dt)` into ≤30-minute sub-steps aligned to hour boundaries, so the
    * headless engine integrates exactly like the browser (which pre-chunks). Kept
-   * behind a flag (default `v1`) so the existing suite stays authoritative until
-   * the spatial model lands and we deliberately flip the default.
+   * behind a flag so the suite could grow incrementally; now that the spatial
+   * model is in, **v2 is the default** (the real, browser-matching game). v1 is
+   * retained for the handful of tests that pin the old sampled/global behavior.
    */
-  simModel: "v1" | "v2" = "v1";
+  simModel: "v1" | "v2" = "v2";
 
   /** Number of times {@link onHour} has run this session (test/diagnostic hook). */
   private onHourRuns = 0;

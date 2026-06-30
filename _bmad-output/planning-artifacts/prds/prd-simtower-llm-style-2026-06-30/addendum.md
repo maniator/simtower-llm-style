@@ -18,7 +18,7 @@ supporting context for downstream architecture/UX work.
 | Metro/subway brings visitors | Whole-basement Metro Station | Faithful |
 | **Cathedral** on floor 100 for TOWER | **Wedding Hall** on floor 100 | **Renamed** — religion-agnostic |
 | Stairs, escalators, standard/service/express elevators with cars + stops | All present; SCAN dispatch; editable cars & per-floor stops | Faithful |
-| Star ratings 2★/3★/4★/5★ at 300/1k/5k/10k; TOWER at **15,000** | Same star thresholds; TOWER at **12,000** | **TOWER pop reduced** |
+| Star ratings 2★/3★/4★/5★ at 300/1k/5k/10k; TOWER at **15,000** | Same star thresholds; TOWER at **8,000** | **TOWER pop reduced** |
 | Fire, terrorist/bomb, VIP inspection, treasure | All present, plus thief + seasonal Santa cameo | Faithful + flavor additions |
 | Aggregate congestion/stress model | **Individually-routed** crowd (BFS) + aggregate backstop | **Enhanced** + backstop |
 | `.TWR` save format | JSON saves; `.TWR` import = documented stub | Modernized; `.TWR` import partial |
@@ -28,9 +28,9 @@ supporting context for downstream architecture/UX work.
 1. **Cathedral → Wedding Hall.** A religion-agnostic events hall avoids
    reproducing the original's specific religious building while preserving the
    "grand capstone on floor 100 that triggers the win" role.
-2. **TOWER population 12,000 vs. 15,000.** This build's population model is
+2. **TOWER population 8,000 vs. 15,000.** This build's population model is
    smaller-scale (retail/food/entertainment add visitors but no resident
-   population). 12,000 keeps the win reachable while preserving the "fill a tall
+   population). 8,000 keeps the win reachable while preserving the "fill a tall
    tower" intent. Revisit if a larger-scale model lands (Open Question 4).
 3. **Individually-routed crowd + aggregate backstop.** The original used an
    aggregate stress model. This build pathfinds real commuters (walk → wait →

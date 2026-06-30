@@ -164,7 +164,7 @@ camera or raw pointer math directly.
 
 ## Tests
 
-95 Vitest unit tests cover placement rules, transport reachability, the economy
+106 Vitest unit tests cover placement rules, transport reachability, the economy
 (rent, condo sales, maintenance), star promotion and its facility gates, the
 hotel housekeeping cycle, elevator editing, save/load round-trips, and the
 clock. Run with `npm test`.
