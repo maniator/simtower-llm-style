@@ -638,6 +638,12 @@ export class Tower {
     return this.servedFloors().has(floor);
   }
 
+  /** The full set of ground-connected floors (memoised per revision). Read-only
+   * view for the spatial congestion model. */
+  servedFloorSet(): ReadonlySet<number> {
+    return this.servedFloors();
+  }
+
   facilityOf(unit: Unit): Facility {
     return FACILITIES[unit.kind];
   }

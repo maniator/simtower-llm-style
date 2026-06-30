@@ -435,14 +435,21 @@ export class Simulation implements SimContext {
   // ---- Satisfaction & churn ---------------------------------------------
 
   private updateSatisfaction(): void {
-    const cong = this.congestion();
+    // v2 (review F3): congestion is SPATIAL — each floor is stressed only by the
+    // shafts that actually serve it, so layout/zoning/parallel shafts matter.
+    // v1: one tower-wide scalar applied to everyone (the shipped behavior).
+    const congMap = this.simModel === "v2" ? this.spatialCongestionByFloor() : null;
+    const globalCong = congMap
+      ? Math.max(0, ...[0, ...congMap.values()])
+      : this.congestion();
     // Warn the player when their elevators can't keep up.
-    if (cong > 1.4 && this.clock.hour === 9 && this.rng.chance(0.5)) {
+    if (globalCong > 1.4 && this.clock.hour === 9 && this.rng.chance(0.5)) {
       this.emit("Tenants are complaining of long elevator waits — add cars or shafts.", "bad");
     }
     for (const u of this.tower.units) {
       if (u.state === "empty" || u.state === "construction" || u.state === "fire") continue;
       const served = this.tower.isFloorServed(u.floor);
+      const cong = congMap ? (congMap.get(u.floor) ?? 0) : globalCong;
       if (!served) {
         u.satisfaction = Math.max(0, u.satisfaction - 0.15);
       } else if (u.floor !== 1 && cong > 1) {
@@ -473,6 +480,15 @@ export class Simulation implements SimContext {
    * for the many trips made across a rush.
    */
   congestion(): number {
+    if (this.simModel === "v2") {
+      // Population-weighted average of the per-floor spatial congestion — a single
+      // HUD-friendly summary of a model that is really per-floor.
+      const map = this.spatialCongestionByFloor();
+      if (map.size === 0) return 0;
+      let sum = 0, n = 0;
+      for (const c of map.values()) { sum += c; n++; }
+      return n > 0 ? sum / n : 0;
+    }
     let capacity = 0;
     for (const t of this.tower.transports) {
       const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
@@ -507,6 +523,82 @@ export class Simulation implements SimContext {
   transportCapacity(t: { kind: FacilityKind; cars: number }): number {
     const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
     return isElevatorKind(t.kind) ? t.cars * per : per;
+  }
+
+  /** Congestion ratio for a specific floor: per-floor in the spatial v2 model,
+   * the global scalar in v1. Exposed for the inspector and tests. */
+  congestionAt(floor: number): number {
+    if (this.simModel === "v2") return this.spatialCongestionByFloor().get(floor) ?? 0;
+    return this.congestion();
+  }
+
+  /**
+   * Spatial congestion (v2, review F3): a per-floor ratio of the travelling
+   * population that must pass through a floor's serving shafts to those shafts'
+   * capacity. A floor's population is split across every ground-connected shaft
+   * that stops there, so adding a parallel shaft genuinely relieves it, and two
+   * separately-served office clusters don't pool their load the way the old
+   * single tower-wide scalar did. Metro/parking drain commuters near the lobbies
+   * (a global demand relief). Returns floor -> congestion ratio (>1 == stressed).
+   */
+  private spatialCongestionByFloor(): Map<number, number> {
+    const HEADROOM = 12;
+    const rush = this.rushFactor();
+    const result = new Map<number, number>();
+
+    const popByFloor = new Map<number, number>();
+    let metro = 0, parking = 0;
+    for (const u of this.tower.units) {
+      if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") metro++;
+      else if (u.kind === "parking") parking++;
+      if (u.state === "occupied" || u.state === "asleep" || u.state === "moving_in") {
+        const p = FACILITIES[u.kind].population;
+        if (p > 0 && u.floor !== 1) popByFloor.set(u.floor, (popByFloor.get(u.floor) ?? 0) + p);
+      }
+    }
+    if (popByFloor.size === 0) return result;
+    const relief = Math.max(0.4, 1 - metro * 0.25 - parking * 0.02);
+
+    const served = this.tower.servedFloorSet();
+    // Ground-connected shafts and the served floors each one stops at.
+    const shaftsByFloor = new Map<number, { id: number; cap: number }[]>();
+    for (const t of this.tower.transports) {
+      let active = false;
+      for (let f = t.bottom; f <= t.top; f++) {
+        if (this.tower.stopsAt(t, f) && served.has(f)) { active = true; break; }
+      }
+      if (!active) continue;
+      const cap = this.transportCapacity(t);
+      for (let f = t.bottom; f <= t.top; f++) {
+        if (f === 1) continue;
+        if (this.tower.stopsAt(t, f) && served.has(f)) {
+          const arr = shaftsByFloor.get(f) ?? [];
+          arr.push({ id: t.id, cap });
+          shaftsByFloor.set(f, arr);
+        }
+      }
+    }
+
+    // Split each floor's travelling population across the shafts that serve it.
+    const loadByShaft = new Map<number, number>();
+    for (const [f, pop] of popByFloor) {
+      const shafts = shaftsByFloor.get(f);
+      if (!shafts || shafts.length === 0) continue; // unserved → handled by reachability
+      const share = (pop * relief) / shafts.length;
+      for (const s of shafts) loadByShaft.set(s.id, (loadByShaft.get(s.id) ?? 0) + share);
+    }
+
+    // Each floor's congestion is its worst serving shaft (loads ~balanced by the split).
+    for (const [f, shafts] of shaftsByFloor) {
+      if (!popByFloor.has(f)) continue;
+      let c = 0;
+      for (const s of shafts) {
+        const cong = s.cap > 0 ? ((loadByShaft.get(s.id) ?? 0) * rush) / (s.cap * HEADROOM) : 99;
+        if (cong > c) c = cong;
+      }
+      result.set(f, c);
+    }
+    return result;
   }
 
   private vacate(u: Unit): void {

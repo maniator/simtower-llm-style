@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../engine/Simulation";
+import { GRID } from "../engine/facilities";
+
+const W = GRID.width;
+const C = Math.floor(W / 2);
 
 /**
  * Phase 2 (BMAD review F4 + spatial model) tests. Behavior changes land behind
@@ -37,5 +41,66 @@ describe("F4 / Step 1 — v2 integrates per hour; v1 keeps the sampled behavior"
     a.tick(247); // arbitrary, not hour-aligned
     b.tick(247);
     expect(b.clock.minutes).toBe(a.clock.minutes);
+  });
+});
+
+describe("F3 / Step 2 — spatial congestion (v2): layout and parallel shafts matter", () => {
+  function lay(sim: Simulation, kind: "floor" | "lobby", floor: number): void {
+    for (let x = C; x < W; x++) sim.tower.place(kind, floor, x);
+    for (let x = C - 1; x >= 0; x--) sim.tower.place(kind, floor, x);
+  }
+  /** A v2 tower with a full-width ground lobby and floors 2..top, no transport. */
+  function clusterTower(seed: number, top: number): Simulation {
+    const sim = Simulation.newGame(seed);
+    sim.simModel = "v2";
+    sim.money = 1_000_000_000;
+    lay(sim, "lobby", 1);
+    for (let f = 2; f <= top; f++) lay(sim, "floor", f);
+    return sim;
+  }
+  function fillFloor(sim: Simulation, floor: number, count: number): void {
+    let placed = 0;
+    for (let x = 0; x + 9 <= W && placed < count; x += 9) {
+      const r = sim.tower.place("office", floor, x);
+      if (r.ok) {
+        sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+        placed++;
+      }
+    }
+  }
+
+  it("adding a parallel shaft relieves a congested band", () => {
+    const sim = clusterTower(1, 10);
+    for (let f = 2; f <= 10; f++) fillFloor(sim, f, 18); // a packed 9-floor band on one shaft
+    sim.buildTransport("elevatorStandard", W - 6, 1, 10);
+    sim.tower.setCars(sim.tower.transports[0].id, 1); // deliberately weak
+    const before = sim.congestionAt(8);
+    expect(before).toBeGreaterThan(1); // the band overwhelms one weak shaft
+
+    sim.buildTransport("elevatorStandard", W - 12, 1, 10); // a second parallel shaft
+    sim.tower.setCars(sim.tower.transports[1].id, 1);
+    const after = sim.congestionAt(8);
+    expect(after).toBeLessThan(before * 0.6); // load splits across shafts → ~halved
+  });
+
+  it("a distant cluster on its own shaft does not raise another cluster's congestion", () => {
+    const sim = clusterTower(2, 30);
+    // Shaft A serves the low band (1..10), shaft B serves the high band (10..30),
+    // transferring at floor 10. They overlap only at floor 10 (no offices there).
+    sim.buildTransport("elevatorStandard", W - 6, 1, 10);
+    sim.tower.setCars(sim.tower.transports[0].id, 1);
+    sim.buildTransport("elevatorStandard", W - 12, 10, 30);
+    sim.tower.setCars(sim.tower.transports[1].id, 1);
+
+    for (let f = 2; f <= 9; f++) fillFloor(sim, f, 18); // cluster A (served by A only)
+    const aAlone = sim.congestionAt(8);
+
+    for (let f = 11; f <= 30; f++) fillFloor(sim, f, 18); // cluster B (served by B only)
+    const aAfter = sim.congestionAt(8);
+
+    // The old single global scalar would have jumped when cluster B filled in;
+    // the spatial model leaves floor 8 (served only by shaft A) unchanged.
+    expect(aAfter).toBeCloseTo(aAlone, 5);
+    expect(sim.congestionAt(25)).toBeGreaterThan(0); // cluster B is genuinely loaded
   });
 });
