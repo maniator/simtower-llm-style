@@ -36,6 +36,15 @@ npm run build       # production build must succeed
 
 CI (`.github/workflows/test.yml`) runs all of the above on every PR.
 
+## Code review
+
+- Codex re-reviews automatically on every push. **Copilot does not** — its
+  review is a one-shot snapshot, so after pushing new commits to a PR you must
+  **re-request a review from Copilot** to get it to look at the latest changes
+  (GitHub UI: the ↻ next to Copilot under Reviewers, or
+  `request_copilot_review` via the GitHub MCP tools / `gh pr edit`).
+- Resolve a review thread only once its finding is actually addressed in code.
+
 ## Gameplay model notes
 
 - Facilities are defined in `src/engine/facilities.ts`. Each has a `width` (in
