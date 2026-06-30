@@ -1,7 +1,7 @@
 import type { Clock } from "./Clock";
 import type { Tower } from "./Tower";
-import type { FacilityKind, Transport } from "./types";
-import { isElevatorKind, isHotelKind } from "./facilities";
+import type { FacilityKind, Transport, Unit } from "./types";
+import { isElevatorKind, isHotelKind, isOpenAt } from "./facilities";
 import { RNG } from "./rng";
 
 /**
@@ -172,10 +172,11 @@ export class Crowd {
 
   // ---- Spawning -----------------------------------------------------------
 
-  private occupiedFloors(tower: Tower, pred: (kind: FacilityKind) => boolean): number[] {
+  /** Floors carrying an in-service unit (occupied/asleep) that matches `pred`. */
+  private floorsWhere(tower: Tower, pred: (u: Unit) => boolean): number[] {
     const set = new Set<number>();
     for (const u of tower.units) {
-      if ((u.state === "occupied" || u.state === "asleep") && pred(u.kind)) set.add(u.floor);
+      if ((u.state === "occupied" || u.state === "asleep") && pred(u)) set.add(u.floor);
     }
     return [...set];
   }
@@ -185,15 +186,22 @@ export class Crowd {
     if (this.people.length >= MAX_PEOPLE) return;
     // Reuse the Clock's own commute windows so peak hours never drift out of
     // sync between the simulation and the crowd.
+    const hour = clock.hour;
     const morning = clock.isMorning();
     const evening = clock.isEvening();
     const day = !morning && !evening && !clock.isNight();
-    // Offices are leased year-round but only staffed on weekdays (presence sets
-    // their occupants to 0 at weekends), so don't send commuters to empty
-    // offices on Sat/Sun — that would spawn phantom riders and fake stress.
-    const offices = clock.isWeekend ? [] : this.occupiedFloors(tower, (k) => k === "office");
-    const homes = this.occupiedFloors(tower, (k) => k === "condo" || isHotelKind(k));
-    const venues = this.occupiedFloors(tower, (k) => k === "shop" || k === "restaurant" || k === "fastFood" || k === "cinema");
+    const isVenue = (k: FacilityKind) => k === "shop" || k === "restaurant" || k === "fastFood" || k === "cinema";
+    // Offices are leased year-round but only staffed on weekdays, so inbound
+    // workers only head to weekday offices.
+    const leasedOffices = clock.isWeekend ? [] : this.floorsWhere(tower, (u) => u.kind === "office");
+    // Outbound office trips require workers actually present right now (presence
+    // zeroes occupants after 18:00 and at weekends), so we never spawn commuters
+    // leaving an empty office through the back half of the evening window.
+    const staffedOffices = this.floorsWhere(tower, (u) => u.kind === "office" && u.occupants > 0);
+    const homes = this.floorsWhere(tower, (u) => u.kind === "condo" || isHotelKind(u.kind));
+    // Venues are destinations only while they're actually open for business, so
+    // visible demand tracks the same hours the economy and sprites use.
+    const openVenues = this.floorsWhere(tower, (u) => isVenue(u.kind) && isOpenAt(u.kind, hour));
 
     const trip = (from: number, to: number) => this.add(tower, from, to);
     // Each call makes one trip, chosen at random from whatever movements fit
@@ -202,17 +210,17 @@ export class Crowd {
     // ever emptying the offices (the old if/else chain starved the others).
     const options: Array<() => void> = [];
     if (morning) {
-      if (offices.length) options.push(() => trip(1, this.rng.pick(offices)));
+      if (leasedOffices.length) options.push(() => trip(1, this.rng.pick(leasedOffices)));
       if (homes.length) options.push(() => trip(this.rng.pick(homes), 1)); // residents head out
     } else if (evening) {
-      if (offices.length) options.push(() => trip(this.rng.pick(offices), 1));
+      if (staffedOffices.length) options.push(() => trip(this.rng.pick(staffedOffices), 1));
       if (homes.length) options.push(() => trip(1, this.rng.pick(homes)));
-      if (venues.length) options.push(() => trip(1, this.rng.pick(venues)));
+      if (openVenues.length) options.push(() => trip(1, this.rng.pick(openVenues)));
     } else if (day) {
-      if (venues.length) options.push(() => trip(1, this.rng.pick(venues)));
-      if (offices.length && this.rng.chance(0.3)) options.push(() => trip(1, this.rng.pick(offices)));
-    } else if (venues.length) {
-      options.push(() => trip(this.rng.pick(venues), 1)); // late-night stragglers leaving
+      if (openVenues.length) options.push(() => trip(1, this.rng.pick(openVenues)));
+      if (leasedOffices.length && this.rng.chance(0.3)) options.push(() => trip(1, this.rng.pick(leasedOffices)));
+    } else if (openVenues.length) {
+      options.push(() => trip(this.rng.pick(openVenues), 1)); // late-night stragglers leaving
     }
     if (options.length) this.rng.pick(options)();
   }

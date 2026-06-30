@@ -4,7 +4,7 @@ import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from
 import type { FacilityKind, Transport, Unit } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
-import { Crowd, type Person } from "../../engine/Crowd";
+import type { Person } from "../../engine/Crowd";
 
 /** World pixels per tile / per floor. */
 export const TILE = 11;
@@ -18,8 +18,6 @@ export const FLOOR = 34;
  * simply zip through their trips. A single frame's advance is capped so a long
  * stall (or a freshly loaded save) can't teleport the whole crowd at once.
  */
-const CROWD_SECONDS_PER_GAME_MINUTE = 2;
-const MAX_CROWD_STEP_MINUTES = 30;
 
 export interface ViewFocus {
   centerFloor: number;
@@ -113,12 +111,10 @@ export class TowerEngine {
   private litState = false;
   private lastSyncHour = -1;
 
-  // Individually-routed commuters (SimTower's signature). The Crowd is pure and
-  // DOM-free; here we just draw each person and remove them as they despawn.
-  private crowd = new Crowd();
+  // Individually-routed commuters (SimTower's signature) are owned and advanced
+  // by the engine; the renderer only draws each person and removes them as they
+  // despawn — it never mutates the simulation.
   private crowdActors = new Map<number, { actor: ex.Actor; gfx: ex.Canvas; red: boolean }>();
-  /** Game-clock minute the crowd was last advanced to (drives game-time pacing). */
-  private lastCrowdClock = 0;
 
   // Shared graphics so thousands of tiles/people cost almost nothing.
   private floorGfx!: ex.Canvas;
@@ -159,7 +155,6 @@ export class TowerEngine {
     this.syncScene();
     this.syncMotion();
     this.builtRev = this.sim.tower.revision;
-    this.lastCrowdClock = this.sim.clock.minutes;
     this.bindInput();
   }
 
@@ -309,34 +304,14 @@ export class TowerEngine {
       this.builtRev = this.sim.tower.revision;
     }
     this.updateMotion();
-    this.updateCrowd();
-  }
-
-  /**
-   * Advance and draw the individually-routed commuters. They move on real
-   * seconds (so they're watchable) but only while the game is actually running
-   * — when paused, the sim clock is frozen and so are the people. Their
-   * frustration feeds back into tenant satisfaction via `sim.crowdStress`.
-   */
-  private updateCrowd(): void {
-    // Advance the crowd by however much *game* time elapsed since the last
-    // frame, so the speed control only compresses time and never changes who
-    // gets stressed. A stopped clock (paused, or between sub-ticks) yields a
-    // zero step — a harmless no-op — so no separate pause flag is needed.
-    const now = this.sim.clock.minutes;
-    let minutes = now - this.lastCrowdClock;
-    this.lastCrowdClock = now;
-    if (minutes < 0) minutes = 0; // clock went backwards (new game / load)
-    if (minutes > MAX_CROWD_STEP_MINUTES) minutes = MAX_CROWD_STEP_MINUTES;
-    this.crowd.update(minutes * CROWD_SECONDS_PER_GAME_MINUTE, this.sim.tower, this.sim.clock);
-    this.sim.crowdStress = this.crowd.stress;
     this.reconcileCrowd();
   }
 
-  /** Add/remove/position one actor per live person, by stable id. */
+  /** Draw the engine-owned commuters: add/remove/position one actor per live
+   * person, by stable id. Read-only — the engine advances the crowd in tick(). */
   private reconcileCrowd(): void {
     const seen = new Set<number>();
-    for (const p of this.crowd.people) {
+    for (const p of this.sim.crowd.people) {
       seen.add(p.id);
       let rec = this.crowdActors.get(p.id);
       if (!rec) {
@@ -372,10 +347,9 @@ export class TowerEngine {
   }
 
   private clearCrowd(): void {
+    // Only the drawn actors are ours; the crowd model belongs to the sim.
     for (const rec of this.crowdActors.values()) rec.actor.kill();
     this.crowdActors.clear();
-    this.crowd.reset();
-    this.lastCrowdClock = this.sim.clock.minutes;
   }
 
   // ---- Coordinate math ----------------------------------------------------

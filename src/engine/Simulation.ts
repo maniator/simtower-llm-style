@@ -1,4 +1,5 @@
 import { Clock } from "./Clock";
+import { Crowd } from "./Crowd";
 import { Tower } from "./Tower";
 import { RNG } from "./rng";
 import {
@@ -15,6 +16,15 @@ import {
   isOpenAt,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit } from "./types";
+
+/**
+ * Crowd time-base: one in-game minute is worth this many of the crowd's own
+ * seconds (small, so a commute spans a few game-minutes and people zip through
+ * trips at fast speed), and a single tick advances the crowd by at most this
+ * many crowd-seconds so a day-long catch-up step stays bounded.
+ */
+const CROWD_SECONDS_PER_MINUTE = 2;
+const CROWD_MAX_STEP = 60;
 
 /** Tunable economic constants (dollars). */
 export const ECON = {
@@ -60,12 +70,20 @@ export class Simulation {
   log: LogEntry[] = [];
 
   /**
-   * 0..1 frustration reported by the renderer's individually-routed {@link Crowd}
-   * — the fraction of real people stuck waiting too long for an elevator. It
-   * supplements the aggregate {@link congestion} signal with what's actually
-   * happening to the visible commuters. Stays 0 in headless runs (no renderer).
+   * Individually-routed commuters. The engine owns and advances them as part of
+   * the deterministic tick (the renderer only reads {@link Crowd.people} to draw
+   * them), so their stress feeds satisfaction identically in headless runs.
    */
-  crowdStress = 0;
+  readonly crowd: Crowd;
+
+  /**
+   * 0..1 frustration from the {@link Crowd}: the fraction of real people stuck
+   * waiting too long for an elevator. Supplements the aggregate
+   * {@link congestion} signal with what's actually happening to the commuters.
+   */
+  get crowdStress(): number {
+    return this.crowd.stress;
+  }
 
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
@@ -82,6 +100,7 @@ export class Simulation {
 
   constructor(seed = 12345) {
     this.rng = new RNG(seed);
+    this.crowd = new Crowd(seed);
   }
 
   // ---- Logging -----------------------------------------------------------
@@ -224,6 +243,11 @@ export class Simulation {
   tick(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
     this.updateElevators(dtMinutes);
+    // Advance the individually-routed crowd in lock-step with game time (after
+    // the cars move, so people board their fresh positions). They run on the
+    // crowd's own seconds — a few per game-minute — and a single huge tick is
+    // capped so a day-long step can't teleport everyone at once.
+    this.crowd.update(Math.min(CROWD_MAX_STEP, dtMinutes * CROWD_SECONDS_PER_MINUTE), this.tower, this.clock);
     this.finishConstruction();
 
     const hour = this.clock.hour;

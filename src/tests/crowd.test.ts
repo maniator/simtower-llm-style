@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { Tower } from "../engine/Tower";
 import { Clock } from "../engine/Clock";
 import { Crowd } from "../engine/Crowd";
+import { Simulation } from "../engine/Simulation";
 
 /**
  * The Crowd is SimTower's signature: real people who route through the tower.
@@ -94,6 +95,28 @@ describe("Crowd: routing and movement", () => {
     }
   });
 
+  it("only sends visitors to venues that are currently open", () => {
+    const tower = towerWithElevator(8);
+    const r = tower.place("fastFood", 5, 0);
+    tower.units.find((uu) => uu.id === r.unitId)!.state = "occupied";
+    const crowd = new Crowd();
+    const small = new Clock(3 * 60); // 03:00 — fast food (07–22) is closed
+    for (let i = 0; i < 400; i++) crowd.update(0.05, tower, small);
+    expect(crowd.people.length).toBe(0);
+  });
+
+  it("does not send workers home from an unstaffed office in the evening", () => {
+    const tower = towerWithElevator(8);
+    const r = tower.place("office", 5, 0);
+    const u = tower.units.find((uu) => uu.id === r.unitId)!;
+    u.state = "occupied"; // leased…
+    u.occupants = 0; // …but nobody is in today
+    const crowd = new Crowd();
+    const evening = new Clock(19 * 60); // 19:00 — past the 18:00 staffing window
+    for (let i = 0; i < 400; i++) crowd.update(0.05, tower, evening);
+    expect(crowd.people.length).toBe(0);
+  });
+
   it("does not send commuters to unstaffed weekend offices", () => {
     const tower = towerWithElevator(8);
     const r = tower.place("office", 5, 0);
@@ -149,5 +172,27 @@ describe("Crowd: routing and movement", () => {
     // accumulator (the bug: spawnAcc surviving reset).
     crowd.update(0.001, tower, clock);
     expect(crowd.people.length).toBe(0);
+  });
+});
+
+describe("Crowd: owned and advanced by the engine", () => {
+  it("advances the crowd inside the deterministic tick — no renderer required", () => {
+    const sim = Simulation.newGame(1);
+    sim.money = 1_000_000_000;
+    const c = 90;
+    for (let x = c; x < c + 30; x++) sim.tower.place("lobby", 1, x);
+    for (let f = 2; f <= 6; f++) for (let x = c; x < c + 30; x++) sim.tower.place("floor", f, x);
+    const r = sim.tower.place("office", 5, c);
+    const u = sim.tower.units.find((uu) => uu.id === r.unitId)!;
+    u.state = "occupied";
+    u.everOccupied = true;
+    // Elevator on a column clear of the office footprint (c..c+8).
+    sim.tower.placeTransport("elevatorStandard", c + 20, 1, 6);
+    // Tick through a weekday morning (the world starts Mon 07:00) — workers
+    // commute in purely through the engine's own tick.
+    for (let i = 0; i < 120; i++) sim.tick(1);
+    expect(sim.crowd.people.length).toBeGreaterThan(0);
+    // Stress is read straight off the engine-owned crowd, not pushed in.
+    expect(sim.crowdStress).toBe(sim.crowd.stress);
   });
 });
