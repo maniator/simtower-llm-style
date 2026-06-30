@@ -308,6 +308,13 @@ export class Simulation {
       if (isElevatorKind(t.kind)) capacity += t.cars * per;
       else capacity += per; // stairs / escalator
     }
+    // Metro stations and basement parking move commuters in and out without
+    // ever touching the passenger elevators, easing the crunch — the very
+    // reason you build them in the original.
+    for (const u of this.tower.units) {
+      if (u.kind === "metro") capacity += 60;
+      else if (u.kind === "parking") capacity += 4;
+    }
     const pop = this.tower.totalPopulation();
     if (capacity <= 0) return pop > 0 ? 3 : 0;
     // Demand swings with the day: a heavy morning/evening commute can overwhelm
@@ -426,10 +433,13 @@ export class Simulation {
   }
 
 
-  /** 0..~1.5 multiplier from how busy the tower is. */
+  /** 0..~1.8 multiplier from how busy the tower is. A metro station pulls in
+   *  crowds of outside visitors, lifting trade for every shop and eatery —
+   *  the classic reason to dig down to the subway in the original. */
   private trafficAppeal(): number {
     const pop = this.tower.totalPopulation();
-    return Math.min(1.5, 0.3 + pop / 4000);
+    const metro = this.hasAny("metro") ? 0.4 : 0;
+    return Math.min(1.8, 0.3 + pop / 4000 + metro);
   }
 
   // ---- Hotels ------------------------------------------------------------

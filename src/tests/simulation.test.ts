@@ -366,6 +366,28 @@ describe("Simulation events", () => {
     expect(maxPos).toBeLessThanOrEqual(8);
   });
 
+  it("metro and parking relieve elevator congestion", () => {
+    const sim = Simulation.newGame(3);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let f = 2; f <= 20; f++) for (let i = 0; i < 30; i++) sim.tower.place("floor", f, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 20);
+    const t = sim.tower.transports[0];
+    sim.tower.setCars(t.id, 1);
+    for (let f = 2; f <= 20; f++) for (let i = 0; i + 9 <= 30; i += 9) {
+      const r = sim.tower.place("office", f, x0 + i);
+      if (r.ok) sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+    }
+    const before = sim.congestion();
+    // A whole-floor basement metro adds major throughput. Lay B1 (floor 0)
+    // outward from a supported tile so the full span connects, then dig it in.
+    for (let x = x0; x < GRID.width; x++) sim.tower.place("floor", 0, x);
+    for (let x = x0 - 1; x >= 0; x--) sim.tower.place("floor", 0, x);
+    const metro = sim.tower.place("metro", 0, 0);
+    expect(metro.ok).toBe(true);
+    const afterMetro = sim.congestion();
+    expect(afterMetro).toBeLessThan(before);
+  });
+
   it("excavating basement rooms can unearth treasure", () => {
     const sim = Simulation.newGame(42);
     sim.star = 2;

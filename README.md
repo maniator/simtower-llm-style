@@ -4,10 +4,10 @@ A from-scratch, browser-native homage to the classic **SimTower** (1994). Build 
 high-rise floor by floor, wire it with elevators, attract tenants, keep them
 happy, and climb the star ratings all the way to a coveted **TOWER**.
 
-Written in **TypeScript**, rendered on an **HTML5 Canvas**, with a procedural
-**WebAudio** soundtrack that changes depending on which part of the tower you're
-looking at. No game engine, no external art assets — every sprite is drawn in
-code.
+Written in **TypeScript** on the **[Excalibur.js](https://excaliburjs.com/)**
+game engine (camera, scene, culling, collision and the render loop), with a
+procedural **WebAudio** soundtrack that changes depending on which part of the
+tower you're looking at. No external art assets — every sprite is drawn in code.
 
 ![Sprite gallery](docs/screenshots/06-sprite-gallery.png)
 
@@ -77,7 +77,47 @@ npm run screenshots  # build + headless-capture screenshots into docs/screenshot
   musical "scenes" (lobby muzak, office hum, hotel calm, food-court bustle,
   cinema score, subway rumble…) based on what the camera is centered on, plus
   build/sell/promotion jingles.
-- **Save anywhere:** autosave to `localStorage`, plus JSON export/import.
+- **Save anywhere:** autosave to `localStorage`, multiple save slots, plus JSON
+  export/import.
+
+## 1994 SimTower parity
+
+How the clone maps to the original's mechanics. Items marked ✅ are implemented
+and covered by the Vitest suite and/or the captured screenshots.
+
+| Original mechanic | Status |
+| --- | --- |
+| Build floors, then rooms on top; ground + sky lobbies | ✅ |
+| Lobby floors are transit-only (no rooms) | ✅ |
+| ~100 floors up, basements below, continuous numbering (B1 = floor 0) | ✅ |
+| Offices (quarterly rent) | ✅ |
+| Condos / apartments (one-time sale) | ✅ |
+| Hotel single / double / suite (nightly, need housekeeping) | ✅ |
+| Fast food, restaurant, shop (foot-traffic income, business hours) | ✅ |
+| Multi-floor cinema, party hall | ✅ |
+| Parking, security, medical, housekeeping, recycling | ✅ |
+| Whole-floor basement metro that brings visitors & eases the commute | ✅ |
+| Cathedral → **religion-agnostic Wedding Hall** on floor 100 | ✅ |
+| Stairs, escalators, standard / service / express elevators | ✅ |
+| Adjustable elevator cars + per-floor (express) stop config | ✅ |
+| **Demand-driven elevator cars** (SCAN dispatch toward waiting floors) | ✅ |
+| Star ratings 1–5 → TOWER, population thresholds + facility gates | ✅ |
+| VIP inspection for the final TOWER rating | ✅ |
+| Elevator overcrowding stresses tenants; the unhappy leave | ✅ |
+| Rush-hour demand (morning/lunch/evening) vs. quiet nights | ✅ |
+| Stressed crowds turn red when transport is overwhelmed | ✅ |
+| Construction time with scaffolding; destruction/sell refunds | ✅ |
+| **Fire** that spreads unless security/medical contain it | ✅ |
+| **Bomb threats** (defused by security) on prestige towers | ✅ |
+| **Buried treasure** found while excavating basements | ✅ |
+| Living tower: walking people, riding cars, the metro train, day/night | ✅ |
+| Save/load, multiple slots, JSON export/import | ✅ |
+| `.TWR` original-save import | ⏳ foundation in place (v2) |
+| Per-person stress/routing simulation | ◻︎ abstracted as an aggregate model |
+
+**Desktop vs. mobile:** the desktop layout mirrors the original's dollhouse
+cross-section; mobile gets a responsive portrait layout with an icon toolbar and
+touch pan/pinch (see `docs/screenshots/09-mobile.png`).
 
 ## Architecture
 
