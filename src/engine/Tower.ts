@@ -1,4 +1,4 @@
-import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind } from "./facilities";
+import { BUILD_CAPS, FACILITIES, GRID, MAX_CARS, POOLED_CAPS, facilityFloors, isElevatorKind } from "./facilities";
 import type {
   Facility,
   FacilityKind,
@@ -139,6 +139,32 @@ export class Tower {
     this.revision++;
   }
 
+  /** Count existing units/transports of a kind (across both layers). */
+  private countKind(kind: FacilityKind): number {
+    let n = 0;
+    for (const u of this.units) if (u.kind === kind) n++;
+    for (const t of this.transports) if (t.kind === kind) n++;
+    return n;
+  }
+
+  /**
+   * Enforce the 1994 hard build caps (single kinds via {@link BUILD_CAPS},
+   * pooled groups like elevator shafts / walkways via {@link POOLED_CAPS}).
+   * Returns a failure reason if the cap is reached, else undefined.
+   */
+  private capReason(kind: FacilityKind): string | undefined {
+    const single = BUILD_CAPS[kind];
+    if (single !== undefined && this.countKind(kind) >= single) {
+      return `Only ${single} ${FACILITIES[kind].name}${single === 1 ? "" : "s"} allowed per tower.`;
+    }
+    for (const pool of POOLED_CAPS) {
+      if (!pool.kinds.includes(kind)) continue;
+      const total = pool.kinds.reduce((sum, k) => sum + this.countKind(k), 0);
+      if (total >= pool.cap) return `Only ${pool.cap} ${pool.label} allowed per tower.`;
+    }
+    return undefined;
+  }
+
   /** True if any tile of the span sits on a lobby (transit-only) concourse. */
   private spanHasLobby(floor: number, x: number, width: number): boolean {
     for (let i = 0; i < width; i++) {
@@ -175,6 +201,8 @@ export class Tower {
     if (kind === "weddingHall" && floor !== GRID.maxFloor) {
       return { ok: false, reason: "The wedding hall can only crown floor 100." };
     }
+    const cap = this.capReason(kind);
+    if (cap) return { ok: false, reason: cap };
 
     // Multi-story facilities (e.g. the cinema) occupy several floors upward.
     const hgt = facilityFloors(kind);
@@ -213,6 +241,8 @@ export class Tower {
     if (kind === "weddingHall" && floor !== GRID.maxFloor) {
       return { ok: false, reason: "The wedding hall can only crown floor 100." };
     }
+    const cap = this.capReason(kind);
+    if (cap) return { ok: false, reason: cap };
     const hgt = facilityFloors(kind);
     if (floor + hgt - 1 > GRID.maxFloor) return { ok: false, reason: "Not enough floors above for this facility." };
     if (f.basement && floor + hgt - 1 >= 1) return { ok: false, reason: `${f.name} can only be built in the basement.` };
@@ -338,6 +368,8 @@ export class Tower {
   validateTransport(kind: FacilityKind, x: number, bottom: number, top: number): PlaceResult {
     const f = FACILITIES[kind];
     if (!f.transport) return { ok: false, reason: "Not a transport." };
+    const cap = this.capReason(kind);
+    if (cap) return { ok: false, reason: cap };
     if (top <= bottom) return { ok: false, reason: "Transport needs height." };
     if (x < 0 || x + f.width > GRID.width) {
       return { ok: false, reason: "Off the edge of the lot." };
@@ -406,6 +438,11 @@ export class Tower {
       load: 0,
     };
     this.transports.push(t);
+    // Express elevators are lobby-to-lobby by definition: seed their skip list so
+    // a freshly placed express actually behaves like one (stops only at lobby /
+    // sky-lobby floors plus its own endpoints), instead of stopping everywhere
+    // until the player opens the editor.
+    if (kind === "elevatorExpress") this.setExpressStops(t.id);
     this.revision++;
     return { ok: true, transportId: t.id };
   }
@@ -420,7 +457,11 @@ export class Tower {
     if (idx === -1) return undefined;
     const [u] = this.units.splice(idx, 1);
     this.unregister(u);
-    if (u.kind === "weddingHall") this.builtWeddingHall = false;
+    // Derive from what actually still stands, so bulldozing one of two halls
+    // doesn't wrongly clear the flag while a hall remains.
+    if (u.kind === "weddingHall") {
+      this.builtWeddingHall = this.units.some((x) => x.kind === "weddingHall");
+    }
     this.revision++;
     return u;
   }
