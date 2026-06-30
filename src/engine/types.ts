@@ -147,6 +147,8 @@ export interface SerializedGame {
   /** Scheduled day of the pending VIP inspection (-1 if none). Optional for
    * backward compatibility with saves written before it was persisted. */
   vipVisitDay?: number;
+  /** Whether a VIP has given a favorable suite review (a 4★ gate). */
+  vipFavorable?: boolean;
   /** Seasonal-event state (Santa guard + dedicated RNG position). Optional for
    * backward compatibility with saves written before it was persisted. */
   events?: { lastSantaYear: number; rngState: number };
