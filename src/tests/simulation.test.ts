@@ -124,8 +124,9 @@ describe("Simulation ratings", () => {
     sim.evaluateStar();
     expect(sim.star).toBe(2); // blocked at 2 without security
     sim.star = 2;
-    // Security sits on the ground lobby (lobby tiles count as structure).
-    const sec = sim.tower.place("security", 1, x0);
+    // Security goes on a standard floor (lobbies are transit-only). Floors
+    // above the office fill (52+) still have structure but no rooms.
+    const sec = sim.tower.place("security", 55, x0);
     expect(sec.ok).toBe(true);
     sim.evaluateStar();
     expect(sim.star).toBeGreaterThanOrEqual(3);

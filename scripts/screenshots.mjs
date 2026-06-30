@@ -70,10 +70,10 @@ function buildDemoScript() {
   };
   // Lobby-level commercial.
   for (let x = left + 26; x + 16 <= left + 70; x += 16) {
-    const r = s.tower.place("fastFood", 1, x);
+    const r = s.tower.place("fastFood", 2, x);
     if (r.ok) s.tower.units.find((u) => u.id === r.unitId).state = "occupied";
   }
-  for (let f = 2; f <= 14; f++) fill(f, "office");
+  for (let f = 3; f <= 14; f++) fill(f, "office");
   for (let f = 16; f <= 22; f++) fill(f, "condo");
   for (let f = 23; f <= 29; f++) fill(f, "office");
   for (let f = 31; f <= 36; f++) fill(f, "hotelDouble");

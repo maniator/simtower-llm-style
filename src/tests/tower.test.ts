@@ -35,6 +35,27 @@ describe("Tower placement", () => {
     expect(tower.canPlace("office", 2, 0).ok).toBe(true);
   });
 
+  it("treats lobbies as transit-only — no rooms on a lobby concourse", () => {
+    for (let i = 0; i < 20; i++) tower.place("lobby", 1, i);
+    // The ground lobby cannot host a shop/office, exactly like the original.
+    expect(tower.canPlace("fastFood", 1, 0).ok).toBe(false);
+    expect(tower.canPlace("office", 1, 0).ok).toBe(false);
+    // The same column on a plain floor above accepts rooms.
+    for (let i = 0; i < 20; i++) tower.place("floor", 2, i);
+    expect(tower.canPlace("office", 2, 0).ok).toBe(true);
+    // A sky lobby is likewise transit-only.
+    for (let i = 0; i < 20; i++) {
+      const u = tower.roomAt(2, i);
+      void u;
+    }
+    for (let i = 0; i < 20; i++) tower.place("floor", 3, i);
+    for (let i = 0; i < 20; i++) {
+      tower.removeUnit(tower.unitAt(3, i)!.id);
+      tower.place("lobby", 3, i);
+    }
+    expect(tower.canPlace("office", 3, 0).ok).toBe(false);
+  });
+
   it("keeps floors connected to existing structure", () => {
     for (let i = 0; i < 5; i++) tower.place("lobby", 1, i);
     // Floating floor far away is unsupported.

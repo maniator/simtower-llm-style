@@ -259,16 +259,34 @@ export class TowerEngine {
   // ---- Scene construction -------------------------------------------------
 
   private makeGround(): void {
-    // Dirt below street level (world y >= 0); rooms in the basement draw over it.
+    // Street level is world y = 0 (the foot of the ground floor). Everything at
+    // or below it is earth; the sky background shows above. This gives a clear
+    // horizon so the tower reads as planted in the ground, not floating.
+    const wide = GRID.width * TILE * 3;
+    const cx = (GRID.width / 2) * TILE;
+    const depth = (2 - GRID.minFloor + 14) * FLOOR; // covers every basement + margin
+
+    // Earth fill below the street.
     this.ground = new ex.Actor({
-      pos: ex.vec((GRID.width / 2) * TILE, ((GRID.maxFloor) * FLOOR) / 2),
-      width: GRID.width * TILE * 3,
-      height: (GRID.maxFloor + 12) * FLOOR,
+      pos: ex.vec(cx, 0),
+      width: wide,
+      height: depth,
       anchor: ex.vec(0.5, 0),
       z: -50,
       color: ex.Color.fromHex("#3a3326"),
     });
     this.engine.add(this.ground);
+
+    // A paved sidewalk band sitting right on the street line for a crisp horizon.
+    const sidewalk = new ex.Actor({
+      pos: ex.vec(cx, 0),
+      width: wide,
+      height: 6,
+      anchor: ex.vec(0.5, 0.5),
+      z: -49,
+      color: ex.Color.fromHex("#6f6a60"),
+    });
+    this.engine.add(sidewalk);
   }
 
   private makeOverlay(): void {

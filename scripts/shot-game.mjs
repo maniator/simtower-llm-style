@@ -27,7 +27,7 @@ await p.evaluate(() => {
   const left = 80;
   for (let x = left; x < left + 60; x++) sim.tower.place("lobby", 1, x);
   for (let f = 2; f <= 12; f++) for (let x = left + 4; x < left + 56; x++) sim.tower.place("floor", f, x);
-  for (let f = 2; f <= 7; f++) for (let x = left + 10; x + 9 <= left + 55; x += 9) {
+  for (let f = 3; f <= 7; f++) for (let x = left + 10; x + 9 <= left + 55; x += 9) {
     const r = sim.tower.place("office", f, x);
     if (r.ok) { const u = sim.tower.units.find((uu) => uu.id === r.unitId); u.state = "occupied"; u.everOccupied = true; }
   }
@@ -35,8 +35,9 @@ await p.evaluate(() => {
     const r = sim.tower.place("hotelDouble", f, x);
     if (r.ok) sim.tower.units.find((uu) => uu.id === r.unitId).state = "asleep";
   }
+  // Commercial sits on floor 2 (the lobby concourse on floor 1 stays clear).
   for (let x = left + 6; x + 12 <= left + 55; x += 12) {
-    const r = sim.tower.place("fastFood", 1, x);
+    const r = sim.tower.place("fastFood", 2, x);
     if (r.ok) sim.tower.units.find((uu) => uu.id === r.unitId).state = "occupied";
   }
   sim.tower.placeTransport("elevatorStandard", left + 6, 1, 12);

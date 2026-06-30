@@ -29,6 +29,8 @@ export class Tower {
 
   /** "floor:x" -> structural unit id (floor/lobby). */
   private structure = new Map<string, number>();
+  /** "floor:x" -> which structural kind occupies it (floor vs lobby). */
+  private structKind = new Map<string, "floor" | "lobby">();
   /** "floor:x" -> room unit id. */
   private rooms = new Map<string, number>();
 
@@ -99,30 +101,45 @@ export class Tower {
   }
 
   private register(unit: Unit): void {
-    const map = isStructural(unit.kind) ? this.structure : this.rooms;
+    const structural = isStructural(unit.kind);
+    const map = structural ? this.structure : this.rooms;
     const hgt = facilityFloors(unit.kind);
     for (let fl = 0; fl < hgt; fl++) {
       for (let i = 0; i < unit.width; i++) {
-        map.set(this.key(unit.floor + fl, unit.x + i), unit.id);
+        const k = this.key(unit.floor + fl, unit.x + i);
+        map.set(k, unit.id);
+        if (structural) this.structKind.set(k, unit.kind as "floor" | "lobby");
       }
     }
   }
 
   private unregister(unit: Unit): void {
-    const map = isStructural(unit.kind) ? this.structure : this.rooms;
+    const structural = isStructural(unit.kind);
+    const map = structural ? this.structure : this.rooms;
     const hgt = facilityFloors(unit.kind);
     for (let fl = 0; fl < hgt; fl++) {
       for (let i = 0; i < unit.width; i++) {
-        map.delete(this.key(unit.floor + fl, unit.x + i));
+        const k = this.key(unit.floor + fl, unit.x + i);
+        map.delete(k);
+        if (structural) this.structKind.delete(k);
       }
     }
   }
 
   reindex(): void {
     this.structure.clear();
+    this.structKind.clear();
     this.rooms.clear();
     for (const u of this.units) this.register(u);
     this.revision++;
+  }
+
+  /** True if any tile of the span sits on a lobby (transit-only) concourse. */
+  private spanHasLobby(floor: number, x: number, width: number): boolean {
+    for (let i = 0; i < width; i++) {
+      if (this.structKind.get(this.key(floor, x + i)) === "lobby") return true;
+    }
+    return false;
   }
 
   canPlace(kind: FacilityKind, floor: number, x: number): PlaceResult {
@@ -166,6 +183,11 @@ export class Tower {
       }
       if (!this.spanHasFloor(fl, x, f.width)) {
         return { ok: false, reason: "Build floors on every story first." };
+      }
+      // Lobbies are transit concourses — no rooms may sit on them, exactly as
+      // in the original, where the ground/sky lobby floors stay clear.
+      if (this.spanHasLobby(fl, x, f.width)) {
+        return { ok: false, reason: "Lobbies are transit-only — build rooms on a standard floor." };
       }
     }
     return { ok: true };
