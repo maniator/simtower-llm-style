@@ -1,5 +1,5 @@
 import { Simulation } from "./engine/Simulation";
-import { FACILITIES, GRID, MAX_CARS, isElevatorKind, isHotelKind } from "./engine/facilities";
+import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
 import { ECON, rentConfig, rentOf } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
@@ -42,6 +42,14 @@ class GameApp {
   private paint: { tile: number; floor: number } | null = null;
   /** Currently selected facility for the edit panel. */
   private selected: { type: "unit" | "transport"; id: number } | null = null;
+  /** World cell the hover inspector tooltip is describing, so it can be
+   *  anchored to that spot on screen and ride the tower when the camera moves. */
+  private inspectAnchor: { x: number; floor: number } | null = null;
+  /** Cached so per-frame anchoring doesn't construct a MediaQueryList each tick. */
+  private mobileMq = window.matchMedia("(max-width: 860px)");
+  /** Whether the panels currently carry an inline anchor (so the mobile branch
+   *  only resets them once, not every frame). */
+  private panelsAnchored = false;
   /** High-water mark of a shaft's extent during an extend-arrow drag, so a
    *  back-and-forth wiggle is only charged for floors genuinely added. */
   private extendHwm: { id: number; top: number; bottom: number } | null = null;
@@ -299,6 +307,60 @@ class GameApp {
         this.ui.congratsTower();
       }
     }
+
+    // World-anchor the editor card and inspector tooltip every frame (cheap —
+    // just writes left/top), so they ride the tower as the camera pans/zooms.
+    this.positionPanels();
+  }
+
+  /** Keep the world-attached DOM panels (selected-facility editor, hover
+   *  inspector) pinned to their facility's on-screen position. On mobile they
+   *  keep the docked CSS layout instead, to avoid the bottom palette strip. */
+  private positionPanels(): void {
+    if (this.mobileMq.matches) {
+      if (this.panelsAnchored) {
+        this.ui.clearPanelAnchors();
+        this.panelsAnchored = false;
+      }
+      return;
+    }
+    const vw = this.engine.viewWidth;
+    const vh = this.engine.viewHeight;
+    if (this.selected && this.ui.isEditorOpen()) {
+      const r = this.selectedScreenRect();
+      if (r) {
+        this.ui.anchorEditor(r, vw, vh);
+        this.panelsAnchored = true;
+      }
+    }
+    if (this.inspectAnchor && this.ui.isInspectorOpen()) {
+      const sx = this.engine.worldToScreenX(this.inspectAnchor.x);
+      const sy = this.engine.worldToScreenY(this.inspectAnchor.floor);
+      this.ui.anchorInspector(sx, sy, vw, vh);
+      this.panelsAnchored = true;
+    }
+  }
+
+  /** Screen-space rect (top edge) of the currently selected unit/transport,
+   *  for the editor card to anchor beside. */
+  private selectedScreenRect(): { x: number; y: number; w: number } | null {
+    if (!this.selected) return null;
+    let left: number, right: number, topFloor: number;
+    if (this.selected.type === "unit") {
+      const u = this.sim.tower.units.find((x) => x.id === this.selected!.id);
+      if (!u) return null;
+      left = u.x;
+      right = u.x + u.width;
+      topFloor = u.floor + facilityFloors(u.kind) - 1;
+    } else {
+      const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
+      if (!t) return null;
+      left = t.x;
+      right = t.x + t.width;
+      topFloor = t.top;
+    }
+    const sx = this.engine.worldToScreenX(left);
+    return { x: sx, y: this.engine.worldToScreenY(topFloor), w: this.engine.worldToScreenX(right) - sx };
   }
 
   // ---- Selection & per-facility editing ---------------------------------
@@ -660,12 +722,17 @@ class GameApp {
 
   private inspectPicked(p: Picked | null): void {
     if (!p || p.kind === "floor" || p.kind === "lobby") {
+      this.inspectAnchor = null;
       this.ui.showInspector(null);
       return;
     }
     if (p.type === "unit") {
       const u = this.sim.tower.units.find((x) => x.id === p.id);
-      if (!u) return this.ui.showInspector(null);
+      if (!u) {
+        this.inspectAnchor = null;
+        return this.ui.showInspector(null);
+      }
+      this.inspectAnchor = { x: u.x + u.width, floor: u.floor + facilityFloors(u.kind) - 1 };
       const f = FACILITIES[u.kind];
       const served = this.sim.tower.isFloorServed(u.floor) ? "Yes" : "No";
       this.ui.showInspector(
@@ -678,7 +745,11 @@ class GameApp {
       );
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === p.id);
-      if (!t) return this.ui.showInspector(null);
+      if (!t) {
+        this.inspectAnchor = null;
+        return this.ui.showInspector(null);
+      }
+      this.inspectAnchor = { x: t.x + t.width, floor: t.top };
       const f = FACILITIES[t.kind];
       this.ui.showInspector(
         `<h4>${f.name}</h4><div>Serves floors ${floorTag(t.bottom)}–${floorTag(t.top)}</div>` +

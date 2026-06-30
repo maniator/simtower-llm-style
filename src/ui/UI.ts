@@ -176,6 +176,11 @@ export class UI {
 
   // ---- Selected-facility editor -----------------------------------------
 
+  /** Cached panel sizes so per-frame anchoring never reads layout (no thrash);
+   *  re-measured only when the content changes. */
+  private editorSize = { w: 0, h: 0 };
+  private inspectorSize = { w: 0, h: 0 };
+
   /** Show the editor card for a selected facility with type-specific actions. */
   showEditor(html: string): void {
     this.el.editor.innerHTML = html;
@@ -184,6 +189,7 @@ export class UI {
       b.addEventListener("click", () => this.cb.onEditAction(b.dataset.edit!, this.el.editor));
     });
     this.el.editor.querySelector(".ed-close")?.addEventListener("click", () => this.hideEditor());
+    this.editorSize = { w: this.el.editor.offsetWidth, h: this.el.editor.offsetHeight };
   }
 
   hideEditor(): void {
@@ -193,6 +199,41 @@ export class UI {
 
   isEditorOpen(): boolean {
     return !this.el.editor.classList.contains("hidden");
+  }
+
+  isInspectorOpen(): boolean {
+    return !this.el.inspector.classList.contains("hidden");
+  }
+
+  /** Anchor the editor card beside a facility's on-screen rect, preferring its
+   *  right side, flipping left and clamping so it always stays on screen. */
+  anchorEditor(rect: { x: number; y: number; w: number }, viewW: number, viewH: number): void {
+    const { left, top } = anchorBeside(rect, this.editorSize, viewW, viewH);
+    this.placePanel(this.el.editor, left, top);
+  }
+
+  /** Anchor the inspector tooltip just off a facility's corner, clamped. */
+  anchorInspector(x: number, y: number, viewW: number, viewH: number): void {
+    const { w, h } = this.inspectorSize;
+    const gap = 8;
+    const left = Math.max(gap, Math.min(x + 12, viewW - w - gap));
+    const top = Math.max(gap, Math.min(y, viewH - h - gap));
+    this.placePanel(this.el.inspector, left, top);
+  }
+
+  /** Drop the inline anchor so the panels fall back to their CSS-docked layout
+   *  (used on mobile, where floating would fight the bottom palette strip). */
+  clearPanelAnchors(): void {
+    for (const el of [this.el.editor, this.el.inspector]) {
+      el.style.left = el.style.top = el.style.right = el.style.bottom = "";
+    }
+  }
+
+  private placePanel(el: HTMLElement, left: number, top: number): void {
+    el.style.left = `${Math.round(left)}px`;
+    el.style.top = `${Math.round(top)}px`;
+    el.style.right = "auto";
+    el.style.bottom = "auto";
   }
 
   showStats(html: string): void {
@@ -355,6 +396,7 @@ export class UI {
     }
     this.el.inspector.classList.remove("hidden");
     this.el.inspector.innerHTML = html;
+    this.inspectorSize = { w: this.el.inspector.offsetWidth, h: this.el.inspector.offsetHeight };
   }
 
   toast(text: string, kind: LogEntry["kind"] = "info"): void {
@@ -501,6 +543,28 @@ function shortMoney(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n % 1_000_000 ? 1 : 0)}M`;
   if (n >= 1000) return `${Math.round(n / 1000)}k`;
   return `${n}`;
+}
+
+/**
+ * Place a panel of `size` beside a facility's screen `rect`: prefer the rect's
+ * right side, flip to the left when there isn't room, and clamp so the panel
+ * always stays fully inside the viewport (with an 8px margin). Pure so the
+ * placement logic is unit-testable without a DOM.
+ */
+export function anchorBeside(
+  rect: { x: number; y: number; w: number },
+  size: { w: number; h: number },
+  viewW: number,
+  viewH: number,
+  gap = 8,
+): { left: number; top: number } {
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
+  let left = rect.x + rect.w + gap; // prefer the facility's right
+  if (left + size.w > viewW - gap) left = rect.x - size.w - gap; // no room → flip left
+  return {
+    left: clamp(left, gap, Math.max(gap, viewW - size.w - gap)),
+    top: clamp(rect.y, gap, Math.max(gap, viewH - size.h - gap)),
+  };
 }
 
 function escapeHtml(s: string): string {
