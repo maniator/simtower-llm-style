@@ -2,6 +2,48 @@
 
 Conventions for anyone (human or AI agent) working in this repository.
 
+## Use BMAD-METHOD for non-trivial work
+
+This repo has **BMAD-METHOD** (BMM core + CIS + BMGD) installed. Default to its
+agents and workflows for anything beyond a one-line tweak — planning, design,
+building, and review. The skills are available to **both Claude Code**
+(`.claude/skills/`, invoke as `/bmad-*` / `/gds-*` / `/bmad-cis-*`) **and GitHub
+Copilot** (`.agents/skills/` + custom agents in `.github/agents/*.agent.md`).
+When unsure where to start, run **`bmad-help`** and let it route you.
+
+Follow the lifecycle — each phase feeds the next. Don't jump to code for a
+feature that hasn't been specced; don't spec when a quick fix will do.
+
+**BMM — software lifecycle (use for app/engine work):**
+
+| Phase | When | Skill(s) |
+| --- | --- | --- |
+| Analysis | Frame an idea, research, or brainstorm before committing | `bmad-brainstorming`, `bmad-product-brief`, `bmad-prfaq`, `bmad-market-research` / `bmad-domain-research` / `bmad-technical-research`; agent **Mary** (`bmad-agent-analyst`) |
+| Planning | Turn the "what" into a PRD / UX spec | `bmad-prd` (create·edit·validate), `bmad-ux`; agents **John** (`bmad-agent-pm`), **Sally** (`bmad-agent-ux-designer`) |
+| Solutioning | Move from "what" to "how" | `bmad-architecture`, `bmad-create-epics-and-stories`, `bmad-check-implementation-readiness`; agent **Winston** (`bmad-agent-architect`) |
+| Implementation | Build, review, and ship a story | `bmad-sprint-planning` → `bmad-create-story` → `bmad-dev-story` → `bmad-code-review` → `bmad-retrospective`; agent **Amelia** (`bmad-agent-dev`) |
+| Anytime | Small change, bug, or orientation | `bmad-quick-dev` (intent→code in one pass), `bmad-investigate` (debug/trace), `bmad-correct-course` (mid-sprint pivots), `bmad-document-project`, `bmad-generate-project-context` |
+
+**BMGD — game design & dev (this is a game; prefer these for gameplay work):**
+`gds-create-game-brief` → `gds-gdd` (Game Design Document) → `gds-game-architecture`
+→ `gds-create-epics-and-stories` → `gds-dev-story` → `gds-code-review`. Also
+`gds-brainstorm-game`, `gds-create-narrative`, `gds-playtest-plan`,
+`gds-quick-dev`. Agents: **Samus Shepard** (`gds-agent-game-designer`), **Cloud
+Dragonborn** (`gds-agent-game-architect`), **Link Freeman** (`gds-agent-game-dev`),
+**Indie** (`gds-agent-game-solo-dev`).
+
+**CIS — creative intelligence (ideation, framing, comms):** reach for these when
+you need to generate or shape ideas rather than implement them —
+`bmad-cis-design-thinking`, `bmad-cis-innovation-strategy`,
+`bmad-cis-problem-solving`, `bmad-cis-storytelling`. Coaches: **Carson**
+(brainstorming), **Dr. Quinn** (problem-solving), **Maya** (design thinking),
+**Victor** (innovation), **Sophia** (storytelling), **Caravaggio** (presentations).
+
+BMAD planning/implementation artifacts are written under `_bmad-output/`.
+The quality gates and code-review conventions below still apply on top of any
+BMAD workflow — BMAD organizes the work; it doesn't replace `npm test` or
+self-review before pushing.
+
 ## Language & style
 
 - **Use American English everywhere** — code comments, identifiers, strings,

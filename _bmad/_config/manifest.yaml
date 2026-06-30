@@ -1,21 +1,40 @@
 installation:
   version: 6.9.0
   installDate: 2026-06-30T17:58:56.463Z
-  lastUpdated: 2026-06-30T17:58:56.463Z
+  lastUpdated: 2026-06-30T18:16:33.830Z
 modules:
   - name: core
     version: 6.9.0
     installDate: 2026-06-30T17:58:56.288Z
-    lastUpdated: 2026-06-30T17:58:56.461Z
+    lastUpdated: 2026-06-30T18:16:33.824Z
     source: built-in
     npmPackage: null
     repoUrl: null
   - name: bmm
     version: 6.9.0
     installDate: 2026-06-30T17:58:56.386Z
-    lastUpdated: 2026-06-30T17:58:56.463Z
+    lastUpdated: 2026-06-30T18:16:33.826Z
     source: built-in
     npmPackage: null
     repoUrl: null
+  - name: cis
+    version: v0.2.1
+    installDate: 2026-06-30T18:15:31.060Z
+    lastUpdated: 2026-06-30T18:16:33.828Z
+    source: external
+    npmPackage: bmad-creative-intelligence-suite
+    repoUrl: https://github.com/bmad-code-org/bmad-module-creative-intelligence-suite
+    channel: stable
+    sha: 07a8dd03d196a762f21c241d985293fe5b0f90e7
+  - name: gds
+    version: v0.6.0
+    installDate: 2026-06-30T18:15:31.202Z
+    lastUpdated: 2026-06-30T18:16:33.830Z
+    source: external
+    npmPackage: bmad-game-dev-studio
+    repoUrl: https://github.com/bmad-code-org/bmad-module-game-dev-studio.git
+    channel: stable
+    sha: 966fbc54db686f77fd0d68cae4164dce8cc98113
 ides:
   - claude-code
+  - github-copilot

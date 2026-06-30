@@ -1,5 +1,15 @@
 # Copilot Instructions
 
+## Use BMAD-METHOD
+
+This repo ships **BMAD-METHOD** skills and agents that are available to you,
+GitHub Copilot, under `.agents/skills/` (89 skills) and `.github/agents/*.agent.md`
+(custom agents for BMM, CIS, and BMGD). **Default to BMAD for non-trivial work** —
+planning, design, building, and review — instead of ad-hoc edits. The full
+routing guide (which skill/agent for which phase, and the BMGD game-dev flow that
+fits this project) lives in [`AGENTS.md`](../AGENTS.md) under "Use BMAD-METHOD for
+non-trivial work." Start with the `bmad-help` agent if you're unsure where to begin.
+
 ## Project Context
 
 This is **SimTower LLM Style** - a collection of tower building simulation games created with AI-assisted development. The project contains three independent implementations showcasing different LLM approaches.
