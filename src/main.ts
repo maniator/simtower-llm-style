@@ -49,7 +49,10 @@ class GameApp {
         this.engine.preview = null;
         this.engine.transportPreview = null;
       },
-      onSpeed: (s) => (this.speed = s),
+      onSpeed: (s) => {
+        this.speed = s;
+        this.engine.paused = SPEEDS[s] === 0;
+      },
       onSave: () => this.save(),
       onLoad: () => this.load(),
       onExport: () => this.ui.showExport(SaveGame.export(this.sim)),
@@ -198,6 +201,7 @@ class GameApp {
     window.addEventListener("keydown", (e) => {
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
+        this.engine.paused = SPEEDS[this.speed] === 0;
         document.querySelectorAll("#speed button[data-speed]").forEach((b) =>
           b.classList.toggle("active", (b as HTMLElement).dataset.speed === e.key),
         );
@@ -224,6 +228,15 @@ class GameApp {
       const x = this.snapX(kind, tile);
       this.engine.transportPreview = null;
       this.engine.preview = { kind, floor, x, valid: this.sim.isUnlocked(kind) };
+    } else if (kind === "floor" || kind === "lobby") {
+      // These tools lay a centered brush strip, not a single tile — so the
+      // shadow must span the same run a click will build.
+      const tiles = this.brushTiles(tile);
+      const left = tiles[0];
+      const span = tiles[tiles.length - 1] - left + 1;
+      const valid = this.sim.canBuild(kind, floor, this.snapX(kind, tile)).ok;
+      this.engine.preview = { kind, floor, x: left, span, valid };
+      this.engine.transportPreview = null;
     } else {
       const x = this.snapX(kind, tile);
       // Rooms auto-lay their own floor, so validity comes from canBuild (which
@@ -511,11 +524,19 @@ class GameApp {
    */
   /** Lay a wider centered run of floor/lobby from a single tap, building in
    *  passes so each tile is reached once it has a supported neighbor. */
-  private paintBrush(kind: FacilityKind, tile: number, floor: number): void {
+  /** The tiles a single floor/lobby tap paints — a strip centered on the
+   *  cursor, clamped to the lot. Shared by the placement and its preview so the
+   *  shadow always matches what a click lays down. */
+  private brushTiles(tile: number): number[] {
     const clampX = (x: number) => Math.max(0, Math.min(GRID.width - 1, x));
     const half = Math.floor(STRUCTURE_BRUSH / 2);
     const tiles: number[] = [];
     for (let d = -half; d < STRUCTURE_BRUSH - half; d++) tiles.push(clampX(tile + d));
+    return tiles;
+  }
+
+  private paintBrush(kind: FacilityKind, tile: number, floor: number): void {
+    const tiles = this.brushTiles(tile);
     let progress = true;
     while (progress) {
       progress = false;

@@ -514,8 +514,9 @@ export function drawTransport(
   // positioned by the engine — see TowerEngine's dynamic layer.
 
   if (t.kind === "stairs") {
-    ctx.fillStyle = "#c2bcaa"; // concrete stairwell
-    ctx.fillRect(sx, topY, w, height);
+    // No solid background — as in the original, stairs are an open structure you
+    // see the tower *through*; only the treads/handrail are drawn (in front of
+    // rooms via the engine's z-order).
     for (let fl = 0; fl <= t.top - t.bottom; fl++) {
       const fy = topY + fl * floorH;
       const steps = 5;
@@ -534,8 +535,8 @@ export function drawTransport(
   }
 
   if (t.kind === "escalator") {
-    ctx.fillStyle = "#5f6470";
-    ctx.fillRect(sx, topY, w, floorH);
+    // Open structure like the stairs — no solid backing, you see the tower
+    // behind it. Just the diagonal belt and step ridges are drawn.
     ctx.strokeStyle = "#cfd4dc"; // belt
     ctx.lineWidth = 2;
     ctx.beginPath();

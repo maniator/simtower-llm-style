@@ -87,6 +87,10 @@ export class Simulation implements SimContext {
   private lastQuarter = -1;
   private lastMonth = -1;
   private lastHour = -1;
+  /** Move-ins since the last daily summary (offices leased, condos sold, hotel
+   *  rooms booked) — reported as one quiet log line per day rather than a toast
+   *  per tenant, matching SimTower's readout-driven feel. */
+  private moveInsToday = { offices: 0, condos: 0, rooms: 0 };
   /** Pending VIP inspection day (for the TOWER rating). */
   private vipVisitDay = -1;
 
@@ -318,6 +322,19 @@ export class Simulation implements SimContext {
 
     this.events.maybeRandomEvent();
     this.checkVip();
+    this.reportMoveIns();
+  }
+
+  /** One quiet log line summarising the day's tenancy churn, so the player feels
+   *  the building filling up without a toast per individual tenant. */
+  private reportMoveIns(): void {
+    const m = this.moveInsToday;
+    const parts: string[] = [];
+    if (m.offices) parts.push(`${m.offices} office${m.offices > 1 ? "s" : ""} leased`);
+    if (m.condos) parts.push(`${m.condos} condo${m.condos > 1 ? "s" : ""} sold`);
+    if (m.rooms) parts.push(`${m.rooms} hotel room${m.rooms > 1 ? "s" : ""} booked`);
+    if (parts.length) this.emit(`New tenants: ${parts.join(", ")}.`, "good");
+    this.moveInsToday = { offices: 0, condos: 0, rooms: 0 };
   }
 
   // ---- Presence (who is physically in each unit right now) ---------------
@@ -458,6 +475,7 @@ export class Simulation implements SimContext {
         if (this.clock.isEvening() && this.rng.chance(0.5)) {
           u.state = "asleep";
           u.everOccupied = true;
+          this.moveInsToday.rooms++;
         }
       }
     }
@@ -469,11 +487,13 @@ export class Simulation implements SimContext {
     if (u.kind === "condo" && !u.everOccupied) {
       u.everOccupied = true;
       this.money += ECON.condoSalePrice;
+      this.moveInsToday.condos++;
       this.emit(`Condominium on ${this.floorLabel(u.floor)} sold for $${ECON.condoSalePrice.toLocaleString()}.`, "money");
     }
     if (u.kind === "office") {
       u.everOccupied = true;
       u.label = this.companyName();
+      this.moveInsToday.offices++;
     }
   }
 
