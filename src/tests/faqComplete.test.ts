@@ -247,3 +247,73 @@ describe("Interactive event choices (FAQ): fire rescue / bomb ransom", () => {
     expect(sim.pendingChoice).toBeNull();
   });
 });
+
+import { STAR_THRESHOLDS, TOWER_POPULATION } from "../engine/facilities";
+
+describe("Deep-review regressions (must not come back)", () => {
+  it("D1: cockroaches spread even with ZERO housekeeping (worst case isn't immune)", () => {
+    const sim = Simulation.newGame(1);
+    sim.money = 1e9;
+    sim.star = 3;
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    sim.buildTransport("elevatorStandard", C, 1, 2);
+    const a = sim.tower.place("hotelDouble", 2, 0);
+    const b = sim.tower.place("hotelDouble", 2, 6); // adjacent (double is 6 wide)
+    const r1 = sim.tower.units.find((u) => u.id === a.unitId)!;
+    const r2 = sim.tower.units.find((u) => u.id === b.unitId)!;
+    r1.state = "dirty"; // no housekeeping anywhere
+    for (let i = 0; i < 24; i++) sim.tick(60);
+    expect(r2.state).toBe("dirty"); // infestation spread from r1 → r2
+  });
+
+  it("D25: a condo next to an office stays unhappy but is NOT evicted by noise alone", () => {
+    const sim = Simulation.newGame(2);
+    sim.money = 1e9;
+    sim.star = 1; // 1★ → no random fire/bomb events, isolating the noise effect
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    sim.buildTransport("elevatorStandard", C, 1, 2);
+    sim.tower.place("office", 2, 0);
+    const cr = sim.tower.place("condo", 2, 9); // immediately right of the office
+    const condo = sim.tower.units.find((u) => u.id === cr.unitId)!;
+    condo.state = "occupied";
+    condo.everOccupied = true;
+    condo.satisfaction = 1;
+    for (let i = 0; i < 24 * 12; i++) sim.tick(60); // 12 days
+    expect(condo.state).toBe("occupied"); // capped-unhappy, never drained to eviction
+    expect(condo.satisfaction).toBeLessThanOrEqual(0.6);
+  });
+
+  it("D10: buried treasure is capped per tower (no basement parking farm)", () => {
+    const sim = Simulation.newGame(42);
+    sim.money = 1e9;
+    sim.star = 3;
+    for (let fl = 0; fl >= -3; fl--) for (let x = 0; x < W; x++) sim.tower.place("floor", fl, x);
+    for (let fl = 0; fl >= -3; fl--) for (let x = 0; x + 6 <= W; x += 6) sim.build("parking", fl, x);
+    const treasures = sim.log.filter((e) => e.text.toLowerCase().includes("treasure")).length;
+    expect(treasures).toBeGreaterThan(0);
+    expect(treasures).toBeLessThanOrEqual(3); // capped
+  });
+
+  it("D24: an unresolved event choice survives save/reload (no bomb save-scum)", () => {
+    const sim = Simulation.newGame(1);
+    sim.money = 1e9;
+    sim.star = 4;
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    sim.buildTransport("elevatorStandard", C, 1, 2);
+    for (let x = 0; x + 9 <= 180; x += 9) sim.tower.place("office", 2, x);
+    let guard = 0;
+    while (!sim.pendingChoice && guard++ < 600) sim.tick(60 * 24);
+    expect(sim.pendingChoice).not.toBeNull();
+    const reloaded = Simulation.deserialize(sim.serialize());
+    expect(reloaded.pendingChoice).not.toBeNull();
+    expect(reloaded.pendingChoice!.kind).toBe(sim.pendingChoice!.kind);
+  });
+
+  it("D14: the star ladder is internally consistent (5★ ≤ TOWER target, both within the lot)", () => {
+    expect(STAR_THRESHOLDS[5]).toBeLessThanOrEqual(TOWER_POPULATION); // 5★ reachable before TOWER
+    expect(TOWER_POPULATION).toBeLessThanOrEqual(8900); // within the measured non-hotel ceiling
+  });
+});

@@ -102,6 +102,10 @@ export class EconomySystem {
       this.sim.emit(`Hotel guests checked out: $${revenue.toLocaleString()} earned overnight.`, "money");
     }
     this.runHousekeeping();
+    // Spread runs unconditionally — a tower with NO housekeeping is the WORST
+    // case for roaches, not immune to them (runHousekeeping early-returns when
+    // there are zero housekeeping units, so spread can't live inside it).
+    this.spreadCockroaches();
   }
 
   /**
@@ -125,7 +129,6 @@ export class EconomySystem {
       }
     }
     if (cleaned > 0) this.sim.emit(`Housekeeping cleaned ${cleaned} hotel room(s).`, "info");
-    this.spreadCockroaches();
   }
 
   /** Rooms left dirty breed cockroaches that creep into the adjacent room along
@@ -136,12 +139,17 @@ export class EconomySystem {
     if (dirty.length === 0) return;
     let spread = 0;
     for (const u of dirty) {
-      const neighbor =
-        this.sim.tower.roomAt(u.floor, u.x + u.width) ?? this.sim.tower.roomAt(u.floor, u.x - 1);
-      if (neighbor && isHotelKind(neighbor.kind) && (neighbor.state === "asleep" || neighbor.state === "empty")) {
-        neighbor.state = "dirty";
-        neighbor.occupants = 0;
-        spread++;
+      // Check BOTH neighbours; a non-hotel room on one side shouldn't block
+      // infestation of a hotel room on the other.
+      for (const neighbor of [
+        this.sim.tower.roomAt(u.floor, u.x + u.width),
+        this.sim.tower.roomAt(u.floor, u.x - 1),
+      ]) {
+        if (neighbor && isHotelKind(neighbor.kind) && (neighbor.state === "asleep" || neighbor.state === "empty")) {
+          neighbor.state = "dirty";
+          neighbor.occupants = 0;
+          spread++;
+        }
       }
     }
     if (spread > 0) {

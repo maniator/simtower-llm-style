@@ -268,6 +268,12 @@ class GameApp {
   // ---- Per-frame simulation + UI -----------------------------------------
 
   private update(dtMs: number): void {
+    // While an emergency choice is open, freeze time (canon: the modal pauses the
+    // game) so the engine can't auto-resolve the choice out from under the player.
+    if (this.shownChoice) {
+      this.accMinutes = 0;
+      return;
+    }
     const minutesPerSecond = SPEEDS[this.speed] ?? 0;
     this.accMinutes += (dtMs / 1000) * minutesPerSecond;
     // Step the simulation in small chunks so hourly/daily boundaries fire.

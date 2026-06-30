@@ -152,7 +152,13 @@ export interface SerializedGame {
   vipFavorable?: boolean;
   /** Seasonal-event state (Santa guard + dedicated RNG position). Optional for
    * backward compatibility with saves written before it was persisted. */
-  events?: { lastSantaYear: number; rngState: number };
+  events?: {
+    lastSantaYear: number;
+    rngState: number;
+    pending?: { kind: "fireRescue" | "bombThreat"; cost: number; message: string } | null;
+  };
+  /** Buried-treasure finds so far (capped), persisted so reload can't reset it. */
+  treasuresFound?: number;
   /** Basement tiles already excavated ("floor:x"), so buried treasure stays a
    * one-time find per tile across save/reload. Optional for older saves. */
   excavated?: string[];

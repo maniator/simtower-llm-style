@@ -34,18 +34,25 @@ export class EventSystem {
     this.extra = new RNG((seed ^ 0x5a17a) >>> 0);
   }
 
-  /** Persist the seasonal-event state (RNG position + Santa guard) for saves. */
-  saveState(): { lastSantaYear: number; rngState: number } {
-    return { lastSantaYear: this.lastSantaYear, rngState: this.extra.seed };
+  /** Persist the seasonal-event state (RNG position + Santa guard) AND any open
+   * player choice, so saving mid-threat can't dodge a bomb. */
+  saveState(): { lastSantaYear: number; rngState: number; pending?: typeof EventSystem.prototype.pending } {
+    return { lastSantaYear: this.lastSantaYear, rngState: this.extra.seed, pending: this.pending };
   }
 
   /** Restore seasonal-event state from a save (no-op for older saves). Coerces
    * the fields, since saves are untrusted and may be hand-edited or stale. */
-  loadState(state?: { lastSantaYear: number; rngState: number }): void {
+  loadState(state?: { lastSantaYear: number; rngState: number; pending?: typeof EventSystem.prototype.pending }): void {
     if (!state) return;
     const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
     this.lastSantaYear = num(state.lastSantaYear, -1);
     this.extra = new RNG(num(state.rngState, 1) >>> 0 || 1);
+    // Restore an unresolved choice (a bomb threat survives save/reload).
+    const p = state.pending;
+    this.pending =
+      p && (p.kind === "fireRescue" || p.kind === "bombThreat") && Number.isFinite(p.cost)
+        ? { kind: p.kind, cost: p.cost, message: String(p.message ?? "") }
+        : null;
   }
 
   /** Number of units currently on fire (for the UI / stats). */

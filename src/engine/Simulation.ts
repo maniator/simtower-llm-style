@@ -145,6 +145,11 @@ export class Simulation implements SimContext {
   private vipVisitDay = -1;
   /** Whether a VIP has given the tower a favorable suite review (a 4★ gate). */
   vipFavorable = false;
+  /** Day of the last "VIP underwhelming" nag, so it can't spam the log daily. */
+  private lastVipNagDay = -100;
+  /** Buried-treasure finds so far. Capped so a basement dug full of cheap parking
+   * can't be farmed into tens of millions (the find stays a bounded windfall). */
+  private treasuresFound = 0;
 
   constructor(seed = 12345) {
     this.rng = new RNG(seed);
@@ -263,7 +268,10 @@ export class Simulation implements SimContext {
           }
         }
       }
-      if (freshGround && this.rng.chance(0.18)) {
+      // Capped per tower so cheap basement parking can't be farmed for tens of
+      // millions — it stays a rare windfall, not an income engine.
+      if (freshGround && this.treasuresFound < 3 && this.rng.chance(0.18)) {
+        this.treasuresFound++;
         const gold = 400_000 + this.rng.int(0, 200_000); // ~half a million, per the FAQ
         this.money += gold;
         this.emit(`💰 Excavation crews unearthed buried treasure worth $${gold.toLocaleString()}!`, "money");
@@ -516,7 +524,10 @@ export class Simulation implements SimContext {
         const left = this.tower.roomAt(u.floor, u.x - 1);
         const right = this.tower.roomAt(u.floor, u.x + u.width);
         if (left?.kind === "office" || right?.kind === "office") {
-          u.satisfaction = Math.max(0, u.satisfaction - 0.06);
+          // Noise CAPS satisfaction (persistent unhappiness) rather than draining
+          // it to zero — adjacency annoys (less income / move-in) and nudges you
+          // to move them, but doesn't on its own guarantee eviction + churn.
+          u.satisfaction = Math.min(u.satisfaction, 0.6);
         }
       }
       // NOTE: the individually-routed crowd's frustration is exposed read-only via
@@ -872,7 +883,9 @@ export class Simulation implements SimContext {
     if (suites.some((s) => s.satisfaction >= 0.7)) {
       this.vipFavorable = true;
       this.emit("A VIP enjoyed their suite — your tower earned a favorable review (4★ unlocked).", "good");
-    } else {
+    } else if (this.clock.day - this.lastVipNagDay >= 5) {
+      // Throttle the "underwhelming" line so it can't spam the log every day.
+      this.lastVipNagDay = this.clock.day;
       this.emit("A VIP's suite stay was underwhelming. Improve suite access and try again.", "info");
     }
   }
@@ -893,7 +906,8 @@ export class Simulation implements SimContext {
     const pop = this.ratingPopulation();
     const ok =
       this.hasOperational("weddingHall") &&
-      this.star >= 5 && // 5★ already implies the Metro gate
+      this.star >= 5 &&
+      this.hasOperational("metro") && // re-checked: selling the metro after 5★ must not allow the win
       pop >= TOWER_POPULATION;
     if (ok) {
       this.star = 6;
@@ -1028,6 +1042,7 @@ export class Simulation implements SimContext {
       evaluatedTower: this.evaluatedTower,
       vipVisitDay: this.vipVisitDay,
       vipFavorable: this.vipFavorable,
+      treasuresFound: this.treasuresFound,
       events: this.events.saveState(),
       excavated: [...this.excavated],
     };
@@ -1045,6 +1060,7 @@ export class Simulation implements SimContext {
     // window doesn't permanently cancel the TOWER evaluation.
     sim.vipVisitDay = data.vipVisitDay ?? -1;
     sim.vipFavorable = data.vipFavorable ?? false;
+    sim.treasuresFound = typeof data.treasuresFound === "number" ? data.treasuresFound : 0;
     // Restore excavation history so buried treasure stays one-time per tile across
     // a save/reload (otherwise the build/bulldoze exploit reopens on load).
     if (Array.isArray(data.excavated)) {
