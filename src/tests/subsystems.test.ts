@@ -76,7 +76,21 @@ describe("EconomySystem", () => {
     }
     const ctx = context(tower);
     new EconomySystem(ctx).collectRent();
-    expect(ctx.money).toBe(2 * ECON.officeRentQuarterly);
+    expect(ctx.money).toBe(2 * ECON.rent.office.default);
+  });
+
+  it("collects the player-set office rent, not just the default", () => {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
+    tower.placeTransport("elevatorStandard", 4, 1, 2);
+    const r = tower.place("office", 2, 0);
+    const u = tower.units.find((x) => x.id === r.unitId)!;
+    u.state = "occupied";
+    u.rent = 15_000; // raised above the $10k default
+    const ctx = context(tower);
+    new EconomySystem(ctx).collectRent();
+    expect(ctx.money).toBe(15_000);
   });
 
   it("charges monthly maintenance for elevator cars and services", () => {

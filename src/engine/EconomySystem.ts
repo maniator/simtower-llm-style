@@ -1,5 +1,5 @@
 import type { SimContext } from "./SimContext";
-import { ECON } from "./econConfig";
+import { ECON, rentOf } from "./econConfig";
 import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facilities";
 
 /**
@@ -18,7 +18,7 @@ export class EconomySystem {
     let count = 0;
     for (const u of this.sim.tower.units) {
       if (u.kind === "office" && u.state === "occupied" && this.sim.tower.isFloorServed(u.floor)) {
-        total += ECON.officeRentQuarterly;
+        total += rentOf(u);
         count++;
       }
     }
@@ -76,7 +76,7 @@ export class EconomySystem {
     for (const u of this.sim.tower.units) {
       if (!isHotelKind(u.kind)) continue;
       if (u.state === "asleep") {
-        revenue += ECON.hotel[u.kind] ?? 0;
+        revenue += rentOf(u);
         // Guest leaves; the room is now DIRTY and cannot be re-let until
         // housekeeping services it.
         u.state = "dirty";
