@@ -15,7 +15,7 @@ abstraction · ⬜ not present.
 - ✅ Basements (B1…B10) with continuous numbering (floor 0 = B1)
 - ✅ Multi-story facilities (cinema spans 2 floors; recycling 2; metro a whole basement floor)
 - ✅ Build/sell with construction time and a partial-refund bulldoze
-- ✅ Buildable bounds: 100 floors above, 9 below
+- ✅ Buildable bounds: 100 floors above, 10 basement levels below (B1…B10)
 
 ## Facilities (all original tenant/room types)
 - ✅ Office (quarterly rent; staffed 8–18 on weekdays)
@@ -77,7 +77,7 @@ abstraction · ⬜ not present.
 - Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **12,000** rather than 15,000 to stay reachable.
 
 ## Verification
-`npm test` runs **84 unit/integration tests** covering placement rules,
+`npm test` runs **95 unit/integration tests** covering placement rules,
 economy, ratings gates, the housekeeping/fire/bomb events, elevator dispatch,
 the individually-routed **crowd's BFS routing and movement**
 (`src/tests/crowd.test.ts`), save/load, the `.TWR` parser, and an
