@@ -1,0 +1,91 @@
+import { describe, it, expect } from "vitest";
+import { Tower } from "../engine/Tower";
+import { Clock } from "../engine/Clock";
+import { RNG } from "../engine/rng";
+import { ElevatorDispatch } from "../engine/ElevatorDispatch";
+import { EconomySystem } from "../engine/EconomySystem";
+import { ECON } from "../engine/econConfig";
+import type { SimContext } from "../engine/SimContext";
+import type { FacilityKind } from "../engine/types";
+
+/**
+ * The engine subsystems extracted from Simulation are exercised here in
+ * isolation — proof that the decomposition actually bought testability: each
+ * runs against a bare Tower (and, for the economy, a tiny hand-rolled
+ * SimContext) with no need to stand up the whole game.
+ */
+
+function towerWithElevator(top: number): Tower {
+  const tower = new Tower();
+  for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+  for (let f = 2; f <= top; f++) for (let x = 0; x < 40; x++) tower.place("floor", f, x);
+  tower.placeTransport("elevatorStandard", 4, 1, top);
+  return tower;
+}
+
+describe("ElevatorDispatch", () => {
+  it("sends a car up toward a floor with waiting passengers", () => {
+    const tower = towerWithElevator(10);
+    const r = tower.place("office", 8, 10);
+    const u = tower.units.find((uu) => uu.id === r.unitId)!;
+    u.state = "occupied";
+    u.occupants = 6; // generates demand on floor 8
+    const dispatch = new ElevatorDispatch();
+    let maxPos = 1;
+    for (let i = 0; i < 400; i++) {
+      dispatch.update(tower, 1, 1.45);
+      for (const p of tower.transports[0].carPositions) maxPos = Math.max(maxPos, p);
+    }
+    expect(maxPos).toBeGreaterThan(6); // a car climbed to serve the demand
+    expect((tower.transports[0].carLoad ?? []).some((n) => n > 0)).toBe(true);
+  });
+
+  it("parks idle cars at the lobby with no demand", () => {
+    const tower = towerWithElevator(10); // no occupied units → no passengers
+    const dispatch = new ElevatorDispatch();
+    for (let i = 0; i < 300; i++) dispatch.update(tower, 1, 1.45);
+    const t = tower.transports[0];
+    expect(t.carPositions.every((p) => Math.abs(p - t.bottom) < 0.5)).toBe(true);
+    expect(t.carDir.every((d) => d === 0)).toBe(true);
+  });
+});
+
+describe("EconomySystem", () => {
+  /** A minimal SimContext over a real tower — no Simulation required. */
+  function context(tower: Tower, star = 5): SimContext & { money: number } {
+    return {
+      tower,
+      clock: new Clock(12 * 60),
+      rng: new RNG(1),
+      money: 0,
+      star,
+      emit: () => {},
+      hasAny: (kind: FacilityKind) => tower.units.some((u) => u.kind === kind),
+      floorLabel: (floor: number) => (floor >= 1 ? `floor ${floor}` : `B${1 - floor}`),
+    };
+  }
+
+  it("collects quarterly rent from occupied, reachable offices", () => {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
+    tower.placeTransport("elevatorStandard", 4, 1, 2); // floor 2 is served
+    for (let i = 0; i < 2; i++) {
+      const r = tower.place("office", 2, i * 9);
+      tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+    }
+    const ctx = context(tower);
+    new EconomySystem(ctx).collectRent();
+    expect(ctx.money).toBe(2 * ECON.officeRentQuarterly);
+  });
+
+  it("charges monthly maintenance for elevator cars and services", () => {
+    const tower = towerWithElevator(4);
+    tower.place("security", 2, 0); // a maintained service facility
+    const ctx = context(tower);
+    new EconomySystem(ctx).payMaintenance();
+    const cars = tower.transports[0].cars;
+    const expected = cars * ECON.maintenancePerCarMonthly + ECON.serviceMaintenanceMonthly.security;
+    expect(ctx.money).toBe(-expected);
+  });
+});

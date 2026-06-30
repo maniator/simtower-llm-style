@@ -5,6 +5,9 @@
  * "tiles". A facility occupies a contiguous run of tiles on a single floor.
  */
 
+/** Cosmetic sky weather, derived deterministically from the day. */
+export type WeatherKind = "clear" | "cloudy" | "rain";
+
 /** Category groups used for the build toolbar and evaluation rules. */
 export type FacilityCategory =
   | "structure"
@@ -141,6 +144,9 @@ export interface SerializedGame {
   /** Scheduled day of the pending VIP inspection (-1 if none). Optional for
    * backward compatibility with saves written before it was persisted. */
   vipVisitDay?: number;
+  /** Seasonal-event state (Santa guard + dedicated RNG position). Optional for
+   * backward compatibility with saves written before it was persisted. */
+  events?: { lastSantaYear: number; rngState: number };
 }
 
 /** Result of attempting to place a facility. */

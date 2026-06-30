@@ -464,6 +464,7 @@ export class TowerEngine {
     }
     ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
     this.drawSun(ctx);
+    this.drawClouds(ctx);
   }
 
   private makeOverlay(): void {
@@ -484,9 +485,57 @@ export class TowerEngine {
       this.overlayCanvas.height = this.viewHeight;
     }
     ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
+    this.drawRain(ctx);
     this.drawPreview(ctx);
     this.drawSelection(ctx);
     this.drawRuler(ctx);
+  }
+
+  /** Clouds drift across the sky on overcast and rainy days (sky layer). */
+  private drawClouds(ctx: CanvasRenderingContext2D): void {
+    const w = this.sim.weather;
+    if (w === "clear") return;
+    const W = this.viewWidth;
+    const H = this.viewHeight;
+    const t = this.d.anim;
+    ctx.fillStyle = w === "rain" ? "rgba(86,92,108,0.55)" : "rgba(244,247,255,0.72)";
+    for (let i = 0; i < 5; i++) {
+      const seed = i * 97 + 11;
+      const speed = 6 + (seed % 7);
+      const y = H * 0.1 + ((seed % 100) / 100) * H * 0.22;
+      const x = (((seed * 53) % (W + 240)) + t * speed) % (W + 240) - 120;
+      this.drawCloud(ctx, x, y, 56 + (seed % 44));
+    }
+  }
+
+  private drawCloud(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    ctx.beginPath();
+    ctx.arc(x, y, r * 0.5, 0, Math.PI * 2);
+    ctx.arc(x + r * 0.5, y + 4, r * 0.4, 0, Math.PI * 2);
+    ctx.arc(x - r * 0.5, y + 4, r * 0.38, 0, Math.PI * 2);
+    ctx.arc(x, y + 9, r * 0.55, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  /** Rain falls in front of the tower on rainy days (overlay layer). */
+  private drawRain(ctx: CanvasRenderingContext2D): void {
+    if (this.sim.weather !== "rain") return;
+    const W = this.viewWidth;
+    const H = this.viewHeight;
+    const t = this.d.anim;
+    // A faint overcast tint over the whole scene.
+    ctx.fillStyle = "rgba(34,40,56,0.16)";
+    ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "rgba(200,214,236,0.45)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    for (let i = 0; i < 140; i++) {
+      const x = ((i * 2654435761) >>> 0) % W;
+      const y = (((i * 37) % H) + t * 320) % H;
+      ctx.moveTo(x, y);
+      ctx.lineTo(x - 3, y + 9);
+    }
+    ctx.stroke();
   }
 
   private drawSun(ctx: CanvasRenderingContext2D): void {

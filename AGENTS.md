@@ -15,6 +15,9 @@ Conventions for anyone (human or AI agent) working in this repository.
 ## Architecture
 
 - `src/engine/` — pure game simulation (no DOM). Deterministic; covered by tests.
+  `Simulation` is the orchestrator; cohesive subsystems live in their own
+  modules (`ElevatorDispatch`, `EventSystem`, `EconomySystem`, `Crowd`) and
+  depend on the narrow `SimContext` interface so each is testable on its own.
 - `src/render/` — canvas rendering and pixel-art sprites. Reads engine state,
   never mutates it.
 - `src/ui/` — DOM controls (palette, status bar, dialogs). Uses native
@@ -32,6 +35,31 @@ npm run build       # production build must succeed
 ```
 
 CI (`.github/workflows/test.yml`) runs all of the above on every PR.
+
+## Code review
+
+- **Self-review before pushing.** Read your own diff end-to-end with a
+  reviewer's eye — correctness (wrong conditions, off-by-one, null/undefined,
+  missing `await`, broken call sites) and cleanup (duplication, dead code,
+  needless complexity) — and fix what you find before opening or updating a PR.
+  Treat it as running `/code-review` on yourself; don't outsource the first
+  pass to the bots.
+- Codex re-reviews automatically on every push. **Copilot does not** — its
+  review is a one-shot snapshot, so after pushing new commits to a PR you must
+  **re-request a review from Copilot** to get it to look at the latest changes
+  (GitHub UI: the ↻ next to Copilot under Reviewers, or
+  `request_copilot_review` via the GitHub MCP tools / `gh pr edit`).
+- Resolve a review thread only once its finding is actually addressed in code.
+
+## Merging PRs
+
+- Default to a standard **merge commit** when merging a PR to `main`. It keeps
+  the branch's individual commits in history and lets the same branch keep
+  building cleanly afterward (a plain fast-forwardable reset, no rewrite).
+- **Don't squash-merge to `main`** unless there's a real reason (e.g. a branch
+  full of throwaway WIP commits not worth keeping). Squashing rewrites the
+  branch into a single commit — it loses granular history and forces awkward
+  force-resets of the branch for any follow-up work.
 
 ## Gameplay model notes
 

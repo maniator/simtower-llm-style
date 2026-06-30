@@ -56,9 +56,12 @@ abstraction · ⬜ not present.
 - ✅ Bomb threat (4★+) — Security defuses it; otherwise damage + fine
 - ✅ VIP inspection → TOWER win/lose
 - ✅ Treasure discovery; flavorful headlines
+- ✅ Seasonal cameo: Santa visits a 3★+ tower once over the holidays with a cash gift
+- ✅ Thief — Security catches them; otherwise they make off with some cash
 
 ## Time, audio, presentation
 - ✅ Day/night sky with the sun and moon both arcing across; lit interiors at night, lights-out when empty/asleep, shops show CLOSED off-hours
+- ✅ Weather: deterministic per-day clear / cloudy / rain (the `WeatherKind` states) — drifting clouds and rain streaks (purely cosmetic; off the gameplay RNG)
 - ✅ Location-aware procedural soundtrack + SFX
 - ✅ Pan / zoom / pinch and collision-based picking, all via Excalibur
 - ✅ Animated people: lobby/corridor walkers, stair/escalator climbers, elevator riders, the metro train
@@ -74,7 +77,7 @@ abstraction · ⬜ not present.
 - Population is smaller-scale than the original (retail/food add no residents), so the TOWER goal is tuned to **12,000** rather than 15,000 to stay reachable.
 
 ## Verification
-`npm test` runs **72 unit/integration tests** covering placement rules,
+`npm test` runs **82 unit/integration tests** covering placement rules,
 economy, ratings gates, the housekeeping/fire/bomb events, elevator dispatch,
 the individually-routed **crowd's BFS routing and movement**
 (`src/tests/crowd.test.ts`), save/load, the `.TWR` parser, and an
