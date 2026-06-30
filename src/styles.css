@@ -43,9 +43,6 @@ body,
 }
 
 body {
-  font-family: "Segoe UI", system-ui, sans-serif;
-  background: var(--bg);
-  color: var(--ink);
   overflow: hidden;
   user-select: none;
 }
@@ -55,32 +52,20 @@ body {
   flex-direction: column;
 }
 
-/* ---- Top bar ---- */
+/* ---- Top bar ---- (structure only; the retro skin section owns the look) */
 #topbar {
   display: flex;
   align-items: center;
-  gap: 18px;
-  padding: 6px 12px;
-  background: var(--r-face);
-  border-bottom: 2px solid #11141d;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
   z-index: 5;
 }
 
 .brand {
-  font-weight: 800;
-  letter-spacing: 1px;
+  font-weight: 700;
   font-size: 18px;
-  color: var(--accent);
-  text-shadow: 0 1px 0 #000;
-}
-.brand span {
-  color: var(--ink);
 }
 
 #status {
   display: flex;
-  gap: 16px;
   flex: 1;
 }
 .stat {
@@ -88,14 +73,9 @@ body {
   flex-direction: column;
   line-height: 1.1;
   min-width: 92px;
-  background: var(--r-face);
-  border: 1px solid #11141d;
-  border-radius: 4px;
-  padding: 3px 8px;
 }
 .stat .label {
   font-size: 9px;
-  color: var(--muted);
   letter-spacing: 1px;
 }
 .stat .value {
@@ -103,11 +83,7 @@ body {
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
-.value.money {
-  color: var(--money);
-}
 .value.stars {
-  color: var(--accent);
   letter-spacing: 2px;
 }
 
@@ -122,16 +98,10 @@ body {
   gap: 4px;
 }
 #speed button {
-  background: var(--panel-light);
-  color: var(--ink);
-  border: 1px solid #11141d;
-  border-radius: 4px;
   padding: 4px 9px;
   font-size: 13px;
 }
 #speed button.active {
-  background: var(--accent);
-  color: #ffffff;
   font-weight: 700;
 }
 
@@ -144,8 +114,6 @@ body {
 
 #palette {
   width: 168px;
-  background: var(--panel);
-  border-right: 2px solid #11141d;
   overflow-y: auto;
 }
 .palette-scroll {
@@ -155,7 +123,6 @@ body {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--muted);
   margin: 10px 4px 4px;
 }
 .pal-item {
@@ -163,17 +130,9 @@ body {
   align-items: center;
   gap: 7px;
   padding: 5px 6px;
-  border-radius: 4px;
   cursor: pointer;
   border: 1px solid transparent;
   font-size: 12px;
-}
-.pal-item:hover {
-  background: var(--panel-light);
-}
-.pal-item.active {
-  background: var(--panel-light);
-  border-color: var(--accent);
 }
 /* Disabled-state dimming (single source of truth; toggled by classes in UI.ts).
  * Kept legible rather than washed out on the light retro theme. */
@@ -187,8 +146,6 @@ body {
 .pal-swatch {
   width: 14px;
   height: 14px;
-  border-radius: 3px;
-  border: 1px solid rgba(0, 0, 0, 0.5);
   flex: none;
 }
 .pal-name {
@@ -199,7 +156,6 @@ body {
 }
 .pal-cost {
   font-size: 10px;
-  color: var(--muted);
   font-variant-numeric: tabular-nums;
 }
 
@@ -208,7 +164,6 @@ body {
   position: relative;
   flex: 1;
   min-width: 0;
-  background: #9aa6bd;
   overflow: hidden;
 }
 #view {
@@ -226,27 +181,20 @@ body {
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--r-face);
   padding: 4px 10px;
-  border-radius: 10px;
   font-size: 11px;
-  color: var(--muted);
   pointer-events: none;
 }
 #inspector {
   position: absolute;
   top: 10px;
   left: 10px;
-  background: var(--r-face);
-  border: 1px solid var(--line);
-  border-radius: 6px;
   padding: 8px 10px;
   font-size: 12px;
   max-width: 240px;
   pointer-events: none;
 }
 #inspector h4 {
-  color: var(--accent);
   margin-bottom: 3px;
 }
 .hidden {
@@ -263,10 +211,8 @@ body {
   align-items: flex-end;
 }
 .toast {
-  background: var(--r-face);
   border-left: 3px solid var(--accent);
   padding: 6px 10px;
-  border-radius: 4px;
   font-size: 12px;
   animation: slidein 0.2s ease;
   max-width: 280px;
@@ -290,8 +236,6 @@ body {
 /* ---- Sidebar ---- */
 #sidebar {
   width: 224px;
-  background: var(--panel);
-  border-left: 2px solid #11141d;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -303,7 +247,6 @@ body {
 }
 .panel {
   padding: 8px 10px;
-  border-bottom: 1px solid #11141d;
 }
 .panel.grow {
   flex: 1;
@@ -315,7 +258,6 @@ body {
   font-size: 10px;
   text-transform: uppercase;
   letter-spacing: 1px;
-  color: var(--muted);
   margin-bottom: 6px;
 }
 #tool-info {
@@ -323,15 +265,10 @@ body {
   line-height: 1.4;
 }
 #tool-info .ti-name {
-  color: var(--accent);
   font-weight: 700;
 }
 .name-input {
   width: 100%;
-  background: #ffffff;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
   padding: 4px 6px;
   font: inherit;
   font-size: 12px;
@@ -340,17 +277,10 @@ body {
 .wide-btn {
   width: 100%;
   margin-top: 8px;
-  background: var(--panel-light);
-  color: var(--ink);
-  border: 1px solid #11141d;
-  border-radius: 4px;
   padding: 6px;
   font: inherit;
   font-size: 12px;
   cursor: pointer;
-}
-.wide-btn:hover {
-  background: #d8d8d8;
 }
 #tower-stats {
   font-size: 12px;
@@ -365,15 +295,10 @@ body {
   bottom: 10px;
   left: 10px;
   width: 250px;
-  background: var(--r-face);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
   padding: 10px 12px;
   font-size: 12px;
-  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.5);
 }
 #editor h4 {
-  color: var(--accent);
   margin-bottom: 6px;
   display: flex;
   justify-content: space-between;
@@ -403,30 +328,20 @@ body {
 }
 #editor button {
   flex: 1;
-  background: var(--panel-light);
-  color: var(--ink);
-  border: 1px solid #11141d;
-  border-radius: 4px;
   padding: 5px;
   font: inherit;
   font-size: 11px;
   cursor: pointer;
 }
-#editor button:hover {
-  background: #d8d8d8;
-}
 #editor button.danger {
   background: #5a2a2a;
+  color: #fff;
 }
 #editor button.danger:hover {
   background: #7a3535;
 }
 #editor input {
   flex: 2;
-  background: #ffffff;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
   padding: 4px 6px;
   font: inherit;
   font-size: 11px;
@@ -471,7 +386,7 @@ body {
   align-items: center;
   gap: 10px;
   background: var(--panel-light);
-  border: 1px solid #11141d;
+  border: 1px solid var(--line);
   border-radius: 6px;
   padding: 8px 10px;
 }
@@ -498,7 +413,7 @@ body {
 .slot-actions button {
   background: var(--panel);
   color: var(--ink);
-  border: 1px solid #11141d;
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 5px 10px;
   font: inherit;
@@ -579,7 +494,7 @@ body {
   flex: 1;
   background: var(--panel-light);
   color: var(--ink);
-  border: 1px solid #11141d;
+  border: 1px solid var(--line);
   border-radius: 4px;
   padding: 6px;
   font-size: 12px;
@@ -602,16 +517,11 @@ body {
   backdrop-filter: blur(1px);
 }
 .modal-box {
-  background: var(--panel);
-  border: 2px solid #11141d;
-  border-radius: 8px;
   padding: 18px 20px;
   max-height: 82vh;
   overflow-y: auto;
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.6);
 }
 .modal-box h2 {
-  color: var(--accent);
   margin-bottom: 10px;
 }
 .modal-box p,
@@ -626,10 +536,6 @@ body {
 .modal-box textarea {
   width: 100%;
   height: 160px;
-  background: #ffffff;
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
   font-family: monospace;
   font-size: 11px;
   padding: 6px;
@@ -641,10 +547,6 @@ body {
   justify-content: flex-end;
 }
 .modal-actions button {
-  background: var(--panel-light);
-  color: var(--ink);
-  border: 1px solid #11141d;
-  border-radius: 4px;
   padding: 7px 14px;
   font: inherit;
   cursor: pointer;
@@ -698,7 +600,7 @@ body {
     width: 100%;
     height: 118px;
     border-right: none;
-    border-top: 2px solid #11141d;
+    border-top: 2px solid var(--line);
     overflow-x: auto;
     overflow-y: hidden;
   }
@@ -782,7 +684,7 @@ body {
     line-height: 1;
     border-radius: 6px;
     background: var(--panel-light);
-    border: 1px solid #11141d;
+    border: 1px solid var(--line);
     color: var(--ink);
   }
 
