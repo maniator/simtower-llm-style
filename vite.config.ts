@@ -19,6 +19,7 @@ export default defineConfig({
         main: resolve(__dirname, "src/index.html"),
         gallery: resolve(__dirname, "src/gallery.html"),
         preview: resolve(__dirname, "src/preview.html"),
+        excalibur: resolve(__dirname, "src/excalibur.html"),
       },
     },
   },
