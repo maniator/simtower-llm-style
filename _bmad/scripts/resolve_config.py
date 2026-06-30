@@ -171,6 +171,14 @@ def main():
     else:
         output = merged
 
+    write_json_stdout(output)
+
+
+def write_json_stdout(output):
+    """Write JSON as UTF-8 so Windows cp1252 stdout can carry emoji icons."""
+    reconfigure = getattr(sys.stdout, "reconfigure", None)
+    if reconfigure is not None:
+        reconfigure(encoding="utf-8")
     sys.stdout.write(json.dumps(output, indent=2, ensure_ascii=False) + "\n")
 
 
