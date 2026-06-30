@@ -750,6 +750,12 @@ export class Simulation implements SimContext {
     this.events.bombThreat();
   }
 
+  /** Probability a fire on `floor` is contained per day — spatial in v2 (depends
+   * on Security/Medical coverage of that floor), tower-wide in v1. */
+  fireContainmentChance(floor: number): number {
+    return this.events.controlChance(floor);
+  }
+
   // ---- Derived stats for UI ---------------------------------------------
 
   get population(): number {

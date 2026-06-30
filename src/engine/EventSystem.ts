@@ -18,6 +18,13 @@ export class EventSystem {
   /** Year index of the last Santa visit, so he comes at most once a year. */
   private lastSantaYear = -1;
 
+  /** Coverage radius (floors) for services in the v2 spatial model (review F15):
+   * a Security/Medical office only speeds the emergency response within this many
+   * floors, so one in a basement corner can't protect a floor-100 fire and a
+   * tall tower needs several — which is why the original caps each at 10. */
+  private static readonly SECURITY_RADIUS = 8;
+  private static readonly MEDICAL_RADIUS = 12;
+
   constructor(private readonly sim: SimContext, seed = 1) {
     this.extra = new RNG((seed ^ 0x5a17a) >>> 0);
   }
@@ -98,6 +105,33 @@ export class EventSystem {
     this.sim.emit(`🔥 Fire broke out in ${FACILITIES[u.kind].name} on ${this.sim.floorLabel(u.floor)}!`, "bad");
   }
 
+  /** True if an operational unit of `kind` is within `radius` floors of `floor`. */
+  private serviceWithin(kind: Unit["kind"], floor: number, radius: number): boolean {
+    return this.sim.tower.units.some(
+      (u) =>
+        u.kind === kind &&
+        u.state !== "construction" &&
+        u.state !== "fire" &&
+        Math.abs(u.floor - floor) <= radius,
+    );
+  }
+
+  /**
+   * Probability a fire on `floor` is contained this day. In v2 the Security /
+   * Medical bonuses apply only if a station is within its coverage radius of the
+   * fire (spatial, review F15); in v1 they apply tower-wide if one exists at all.
+   */
+  controlChance(floor: number): number {
+    const v2 = this.sim.simModel === "v2";
+    const sec = v2
+      ? this.serviceWithin("security", floor, EventSystem.SECURITY_RADIUS)
+      : this.sim.hasAny("security");
+    const med = v2
+      ? this.serviceWithin("medical", floor, EventSystem.MEDICAL_RADIUS)
+      : this.sim.hasAny("medical");
+    return 0.35 + (sec ? 0.2 : 0) + (med ? 0.3 : 0);
+  }
+
   /** The room immediately left or right of a unit on the same floor. */
   private adjacentRoom(u: Unit): Unit | undefined {
     return this.sim.tower.roomAt(u.floor, u.x - 1) ?? this.sim.tower.roomAt(u.floor, u.x + u.width);
@@ -111,13 +145,14 @@ export class EventSystem {
    */
   private processFires(): void {
     if (this.active.size === 0) return;
-    const control = 0.35 + (this.sim.hasAny("security") ? 0.2 : 0) + (this.sim.hasAny("medical") ? 0.3 : 0);
     for (const id of [...this.active]) {
       const u = this.sim.tower.units.find((x) => x.id === id);
       if (!u || u.state !== "fire") {
         this.active.delete(id);
         continue;
       }
+      // Response speed depends on whether a station covers THIS fire's floor (v2).
+      const control = this.controlChance(u.floor);
       if (this.sim.rng.chance(control)) {
         // Contained: pay to repair the gutted unit, then it reopens vacant.
         const repair = Math.floor(FACILITIES[u.kind].cost * 0.3);

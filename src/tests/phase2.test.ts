@@ -104,3 +104,43 @@ describe("F3 / Step 2 — spatial congestion (v2): layout and parallel shafts ma
     expect(sim.congestionAt(25)).toBeGreaterThan(0); // cluster B is genuinely loaded
   });
 });
+
+describe("F15 / Step 3 — service coverage radius (v2): placement matters", () => {
+  function tallTower(seed: number): Simulation {
+    const sim = Simulation.newGame(seed);
+    sim.simModel = "v2";
+    sim.money = 1_000_000_000;
+    for (let x = C; x < W; x++) sim.tower.place("lobby", 1, x);
+    for (let x = C - 1; x >= 0; x--) sim.tower.place("lobby", 1, x);
+    for (let f = 2; f <= 100; f++)
+      for (let x = C; x < W; x++) sim.tower.place("floor", f, x);
+    return sim;
+  }
+
+  it("a fire is contained faster near a station than far from it (v2)", () => {
+    const sim = tallTower(1);
+    sim.tower.place("security", 2, C); // ground-level security only
+    sim.tower.place("medical", 2, C + 8);
+    const near = sim.fireContainmentChance(3); // within radius
+    const far = sim.fireContainmentChance(100); // a floor-100 fire, far away
+    expect(near).toBeGreaterThan(far);
+    expect(near).toBeCloseTo(0.85, 5); // security + medical both cover floor 3
+    expect(far).toBeCloseTo(0.35, 5); // neither covers floor 100
+  });
+
+  it("v1 keeps tower-wide coverage (one station protects everywhere)", () => {
+    const sim = tallTower(2);
+    sim.simModel = "v1";
+    sim.tower.place("security", 2, C);
+    sim.tower.place("medical", 2, C + 8);
+    expect(sim.fireContainmentChance(3)).toBeCloseTo(sim.fireContainmentChance(100), 5);
+  });
+
+  it("distributing stations up a tall tower restores full coverage (why the 10-cap bites)", () => {
+    const sim = tallTower(3);
+    for (let f = 5; f <= 95; f += 15) sim.tower.place("security", f, C); // ~7 stations
+    // Every occupied band now has a station within the security radius.
+    expect(sim.fireContainmentChance(10)).toBeGreaterThan(0.5);
+    expect(sim.fireContainmentChance(90)).toBeGreaterThan(0.5);
+  });
+});
