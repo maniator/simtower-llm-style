@@ -31,6 +31,9 @@ class GameApp {
   private accMinutes = 0;
   private lastUiUpdate = 0;
   private shownWin = false;
+  /** Last star rating we played a promotion jingle for (so 2★–5★ promotions
+   * each get the jingle FR-58 promises, not only the final TOWER win). */
+  private lastStar = 1;
   /** In-progress transport drag (anchor tile/floor). */
   private transportStart: { x: number; floor: number } | null = null;
   /** Last cell painted while dragging a floor/lobby, so a fast drag lays one
@@ -271,6 +274,11 @@ class GameApp {
       if (this.selected && this.ui.isEditorOpen()) {
         const editing = document.activeElement?.id === "ed-name";
         if (!editing) this.refreshEditor();
+      }
+      // A jingle on every star promotion (2★–5★), not just the TOWER win.
+      if (this.sim.star > this.lastStar) {
+        this.lastStar = this.sim.star;
+        if (this.sim.star < 6) this.audio.sfx("promote");
       }
       if (this.sim.evaluatedTower && !this.shownWin) {
         this.shownWin = true;
@@ -616,6 +624,7 @@ class GameApp {
     this.sim = sim;
     this.clearSelection();
     this.shownWin = false;
+    this.lastStar = sim.star;
     this.accMinutes = 0;
     this.engine.setSim(sim);
   }

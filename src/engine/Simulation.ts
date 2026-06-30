@@ -12,6 +12,7 @@ export { ECON } from "./econConfig";
 import {
   FACILITIES,
   GRID,
+  MAX_CARS,
   STAR_THRESHOLDS,
   TOWER_POPULATION,
   TRANSPORT_CAPACITY,
@@ -81,6 +82,10 @@ export class Simulation implements SimContext {
 
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
+
+  /** Basement tiles already excavated, so buried treasure is a one-time find per
+   * tile and can't be farmed by repeatedly building and bulldozing the same spot. */
+  private excavated = new Set<string>();
 
   /** Bookkeeping for period boundaries. */
   private lastDay = 0;
@@ -197,11 +202,25 @@ export class Simulation implements SimContext {
     }
     // Excavating the basement occasionally turns up buried treasure, just like
     // digging the foundations in the original. Only real rooms trigger it (not
-    // the many single floor tiles), so it stays a rare, delightful windfall.
-    if (floor <= 0 && kind !== "floor" && kind !== "lobby" && this.rng.chance(0.18)) {
-      const gold = 50_000 + this.rng.int(0, 150_000);
-      this.money += gold;
-      this.emit(`💰 Excavation crews unearthed buried treasure worth $${gold.toLocaleString()}!`, "money");
+    // the many single floor tiles), and only on tiles never dug before — so it
+    // stays a rare windfall and can't be farmed by build/bulldoze cycling.
+    if (floor <= 0 && this.isRoomKind(kind)) {
+      let freshGround = false;
+      const hgt = facilityFloors(kind);
+      for (let fl = floor; fl < floor + hgt; fl++) {
+        for (let i = 0; i < f.width; i++) {
+          const k = `${fl}:${x + i}`;
+          if (!this.excavated.has(k)) {
+            freshGround = true;
+            this.excavated.add(k);
+          }
+        }
+      }
+      if (freshGround && this.rng.chance(0.18)) {
+        const gold = 50_000 + this.rng.int(0, 150_000);
+        this.money += gold;
+        this.emit(`💰 Excavation crews unearthed buried treasure worth $${gold.toLocaleString()}!`, "money");
+      }
     }
     return { ok: true };
   }
@@ -235,6 +254,11 @@ export class Simulation implements SimContext {
     if (u && u.kind !== "floor" && u.kind !== "lobby") {
       this.tower.removeUnit(u.id);
       this.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      // If the last Wedding Hall is gone before the VIP arrived, cancel the
+      // pending inspection so it can't keep re-failing and spamming the log.
+      if (u.kind === "weddingHall" && !this.tower.builtWeddingHall && !this.evaluatedTower) {
+        this.vipVisitDay = -1;
+      }
       return true;
     }
     if (t) {
@@ -297,16 +321,18 @@ export class Simulation implements SimContext {
   /** Hourly: presence, move-ins, satisfaction, traffic income. */
   private onHour(): void {
     this.updatePresence();
+    // Guests check out in the morning (not at midnight), so overnight hotel
+    // population is still present at the midnight TOWER/VIP evaluation.
+    if (this.clock.hour === 8) this.economy.hotelCheckout();
     this.updateSatisfaction();
     this.attemptMoveIns();
     this.economy.collectTrafficIncome();
     this.evaluateStar();
   }
 
-  /** Daily: hotel checkout, housekeeping, rent, maintenance, events. */
+  /** Daily: rent, maintenance, events, VIP. (Hotel checkout is hourly @08:00.) */
   private onDay(): void {
     this.weather = Simulation.weatherFor(this.clock.day);
-    this.economy.hotelCheckout();
 
     const month = Math.floor(this.clock.day / 30);
     if (month !== this.lastMonth) {
@@ -382,22 +408,20 @@ export class Simulation implements SimContext {
       const served = this.tower.isFloorServed(u.floor);
       if (!served) {
         u.satisfaction = Math.max(0, u.satisfaction - 0.15);
-      } else if (cong > 1) {
-        // Overcrowded vertical transport stresses everyone, more so the worse it is.
+      } else if (u.floor !== 1 && cong > 1) {
+        // Overcrowded vertical transport stresses everyone, more so the worse it
+        // is — but tenants on the ground floor (floor 1) never ride an elevator,
+        // so elevator congestion can't possibly bother them.
         u.satisfaction = Math.max(0, u.satisfaction - 0.04 * Math.min(3, cong - 1));
       } else {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
       }
-      // The real, individually-routed crowd shaves a little extra satisfaction
-      // when lots of commuters are visibly stuck waiting — but this penalty
-      // alone never empties a unit: it can't push satisfaction below a small
-      // floor, and (crucially) never raises it, so a unit already driven to 0
-      // by the aggregate congestion model still vacates. That keeps the
-      // headless congestion model the authoritative driver tests rely on.
-      if (this.crowdStress > 0.5) {
-        const penalty = 0.01 * Math.min(1, this.crowdStress);
-        u.satisfaction = Math.min(u.satisfaction, Math.max(0.05, u.satisfaction - penalty));
-      }
+      // NOTE: the individually-routed crowd's frustration is exposed read-only via
+      // {@link crowdStress} for the HUD, but is deliberately NOT written back into
+      // satisfaction — its value depends on frame/step cadence, so feeding it into
+      // the authoritative, persisted satisfaction would make the headless and
+      // browser runs diverge. The aggregate congestion model above is the single
+      // authoritative stress driver.
       // Tenants abandon a unit that stays unbearable.
       if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo")) {
         this.vacate(u);
@@ -522,9 +546,11 @@ export class Simulation implements SimContext {
         break;
       }
     }
-    // Extra gates beyond raw population, matching the original's spirit.
-    if (target >= 3 && !this.hasAny("security")) target = Math.min(target, 2);
-    if (target >= 4 && !this.hasAny("medical")) target = Math.min(target, 3);
+    // Extra gates beyond raw population, matching the original's spirit. A
+    // facility only counts once it is actually operational (not still under
+    // construction, not currently on fire).
+    if (target >= 3 && !this.hasOperational("security")) target = Math.min(target, 2);
+    if (target >= 4 && !this.hasOperational("medical")) target = Math.min(target, 3);
 
     if (target > this.star) {
       this.star = target;
@@ -536,18 +562,33 @@ export class Simulation implements SimContext {
     return this.tower.units.some((u) => u.kind === kind);
   }
 
+  /** Like {@link hasAny} but only counts a facility that is finished and intact
+   * (not under construction, not on fire). Used by the rating/TOWER gates. */
+  hasOperational(kind: FacilityKind): boolean {
+    return this.tower.units.some(
+      (u) => u.kind === kind && u.state !== "construction" && u.state !== "fire",
+    );
+  }
+
   // ---- VIP / TOWER rating ------------------------------------------------
 
   private checkVip(): void {
     if (this.evaluatedTower || this.vipVisitDay < 0) return;
+    // If the Wedding Hall is gone before the inspection (sold via ANY path —
+    // the editor and bulldoze tool call tower.removeUnit directly, not sellAt),
+    // cancel the pending visit so it can't keep re-failing and spamming the log.
+    if (!this.tower.builtWeddingHall) {
+      this.vipVisitDay = -1;
+      return;
+    }
     if (this.clock.day < this.vipVisitDay) return;
     this.vipVisitDay = -1;
     const pop = this.tower.totalPopulation();
     const ok =
-      this.tower.builtWeddingHall &&
+      this.hasOperational("weddingHall") &&
       this.star >= 5 &&
       pop >= TOWER_POPULATION &&
-      this.hasAny("metro");
+      this.hasOperational("metro");
     if (ok) {
       this.star = 6;
       this.evaluatedTower = true;
@@ -664,6 +705,7 @@ export class Simulation implements SimContext {
       evaluatedTower: this.evaluatedTower,
       vipVisitDay: this.vipVisitDay,
       events: this.events.saveState(),
+      excavated: [...this.excavated],
     };
   }
 
@@ -676,6 +718,11 @@ export class Simulation implements SimContext {
     // Restore the pending VIP inspection so saving during the post-Wedding-Hall
     // window doesn't permanently cancel the TOWER evaluation.
     sim.vipVisitDay = data.vipVisitDay ?? -1;
+    // Restore excavation history so buried treasure stays one-time per tile across
+    // a save/reload (otherwise the build/bulldoze exploit reopens on load).
+    if (Array.isArray(data.excavated)) {
+      for (const k of data.excavated) if (typeof k === "string") sim.excavated.add(k);
+    }
     // Reject any unit/transport with an unrecognized kind from untrusted saves,
     // and coerce the numeric fields that drive the loop to finite values so a
     // hand-edited or foreign save can't poison the math with NaN/undefined.
@@ -690,7 +737,33 @@ export class Simulation implements SimContext {
       }));
     sim.tower.transports = (data.transports ?? [])
       .filter((t) => isFacilityKind(t.kind))
-      .map((t) => ({ ...t }));
+      .map((t) => {
+        // Coerce car counts/positions from an untrusted save: a NaN/negative/huge
+        // `cars` would otherwise reach `new Array(cars)` in the dispatcher and
+        // throw a RangeError (or OOM) on the very next tick.
+        const maxCars = isElevatorKind(t.kind) ? (MAX_CARS[t.kind] ?? 8) : 0;
+        const cars = Math.max(0, Math.min(maxCars, Math.floor(num(t.cars, 0))));
+        const bottom = Math.round(num(t.bottom, 1));
+        // A transport must have height (validateTransport requires top > bottom);
+        // never deserialize a zero-height shaft from a corrupt save.
+        const top = Math.max(bottom + 1, Math.round(num(t.top, bottom + 1)));
+        const fixLen = (arr: unknown, fill: number) =>
+          Array.from({ length: cars }, (_, i) =>
+            Array.isArray(arr) ? num(arr[i], fill) : fill,
+          );
+        return {
+          ...t,
+          bottom,
+          top,
+          cars,
+          carPositions: fixLen(t.carPositions, bottom),
+          carDir: fixLen(t.carDir, 0),
+          carLoad: t.carLoad ? fixLen(t.carLoad, 0) : undefined,
+          skipFloors: Array.isArray(t.skipFloors)
+            ? t.skipFloors.filter((n) => typeof n === "number" && Number.isFinite(n))
+            : undefined,
+        };
+      });
     sim.tower.setNextId(data.nextId);
     sim.tower.towerName = data.towerName;
     sim.tower.builtWeddingHall = data.builtWeddingHall;

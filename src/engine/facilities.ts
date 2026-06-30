@@ -220,7 +220,9 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Security",
     width: 8,
     cost: 100000,
-    minStar: 3,
+    // Buildable at 2★ — it is the facility that GATES 3★, so it must be placeable
+    // before the tower is 3★ or the rating deadlocks at 2★ forever.
+    minStar: 2,
     population: 0,
     color: "#4f6f9f",
     description: "Security office. Reduces crime/terrorist events and improves evaluation.",
@@ -369,6 +371,15 @@ export function isOpenAt(kind: FacilityKind, hour: number): boolean {
   }
 }
 
+/** Number of hours per day a venue is open (used to spread its daily take so
+ * total income over a day ≈ the headline daily figure, not a per-open-hour
+ * multiple of it). */
+export function openHoursPerDay(kind: FacilityKind): number {
+  let h = 0;
+  for (let hr = 0; hr < 24; hr++) if (isOpenAt(kind, hr)) h++;
+  return h || 1;
+}
+
 /** True for facilities that keep posted business hours (can be "closed"). */
 export function hasBusinessHours(kind: FacilityKind): boolean {
   return (
@@ -403,6 +414,26 @@ export const MAX_CARS: Record<string, number> = {
   elevatorService: 4,
   elevatorExpress: 8,
 };
+
+/**
+ * Hard per-tower build limits, mirroring the 1994 original's caps. A kind absent
+ * here is uncapped. Elevator shafts (all three kinds) share a single 24-shaft
+ * pool; stairs and escalators share a 64-link pool — see {@link POOLED_CAPS}.
+ */
+export const BUILD_CAPS: Partial<Record<FacilityKind, number>> = {
+  metro: 1,
+  weddingHall: 1,
+  security: 10,
+  medical: 10,
+  cinema: 16,
+  partyHall: 16,
+};
+
+/** Pooled caps shared across several kinds (elevators, walkways). */
+export const POOLED_CAPS: { kinds: FacilityKind[]; cap: number; label: string }[] = [
+  { kinds: ["elevatorStandard", "elevatorService", "elevatorExpress"], cap: 24, label: "elevator shafts" },
+  { kinds: ["stairs", "escalator"], cap: 64, label: "stairs/escalators" },
+];
 
 /** Maximum floors a transport may span. */
 export function maxSpanFor(kind: FacilityKind): number {

@@ -1,6 +1,6 @@
 import type { SimContext } from "./SimContext";
 import { ECON } from "./econConfig";
-import { isElevatorKind, isHotelKind, isOpenAt } from "./facilities";
+import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facilities";
 
 /**
  * The money loop — rent, foot-traffic income, hotel revenue, housekeeping and
@@ -42,7 +42,10 @@ export class EconomySystem {
         continue;
       }
       u.state = "occupied";
-      const hourly = (daily / 8) * appeal * (0.6 + this.sim.rng.next() * 0.4);
+      // Spread the headline DAILY take across the venue's actual open hours so a
+      // full day earns ≈ `daily * appeal`, not a per-hour multiple of it. (Before,
+      // dividing by a flat 8 while open 9–15 h/day inflated income 2–3x.)
+      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * (0.6 + this.sim.rng.next() * 0.4);
       u.pendingIncome += hourly;
       if (u.pendingIncome >= 1) {
         const earned = Math.floor(u.pendingIncome);
@@ -52,13 +55,19 @@ export class EconomySystem {
     }
   }
 
-  /** 0..~1.8 multiplier from how busy the tower is. A metro station pulls in
-   *  crowds of outside visitors, lifting trade for every shop and eatery —
-   *  the classic reason to dig down to the subway in the original. */
+  /**
+   * 0..1 demand-share: what fraction of a venue's headline daily take it
+   * actually earns, driven by foot traffic. It is a SHARE (capped at 1), not a
+   * population multiplier, so commercial income can never exceed its advertised
+   * daily figure. A metro pulls in outside visitors and a recycling centre keeps
+   * the tower clean and attractive — both lift trade, the classic reasons to dig
+   * down to the subway / run recycling in the original.
+   */
   private trafficAppeal(): number {
     const pop = this.sim.tower.totalPopulation();
-    const metro = this.sim.hasAny("metro") ? 0.4 : 0;
-    return Math.min(1.8, 0.3 + pop / 4000 + metro);
+    const metro = this.sim.hasAny("metro") ? 0.25 : 0;
+    const recycling = this.sim.hasAny("recycling") ? 0.1 : 0; // F14: a real effect for the centre
+    return Math.min(1, 0.35 + pop / 8000 + metro + recycling);
   }
 
   /** Nightly hotel checkout: collect revenue, mark rooms dirty, then clean. */

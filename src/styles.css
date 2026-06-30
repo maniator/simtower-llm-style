@@ -769,3 +769,18 @@ body {
     width: min(250px, 80vw);
   }
 }
+
+/* F49: respect the OS "reduce motion" preference — kill the always-on ambient
+   animation (clouds, rain, walkers, sky transitions, toast slides, crossfades)
+   for users who get motion sick or simply prefer a still UI. The game stays
+   fully playable; only decorative motion is removed. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
+  }
+}

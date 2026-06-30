@@ -28,7 +28,10 @@ export const PAL = {
   wood: "#8C6E50",
 };
 
-const SHIRTS = ["#5A6E8C", "#3E4654", "#6E5A4A", "#C24A3A", "#4FA0C8", "#5AA85A", "#D8B05A", "#9A5FB0"];
+// No shirt may reuse the stress red (#C24A3A) — otherwise ~1-in-8 content
+// commuters look pixel-identical to a "fed up" one (F10). The former red shirt
+// is replaced with a muted teal so the stress tint reads unambiguously.
+const SHIRTS = ["#5A6E8C", "#3E4654", "#6E5A4A", "#3F8C84", "#4FA0C8", "#5AA85A", "#D8B05A", "#9A5FB0"];
 const SKIN = ["#E8C9A0", "#C99A6E", "#A9774E"];
 
 function shade(hex: string, amt: number): string {

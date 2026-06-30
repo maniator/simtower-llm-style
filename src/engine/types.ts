@@ -147,6 +147,9 @@ export interface SerializedGame {
   /** Seasonal-event state (Santa guard + dedicated RNG position). Optional for
    * backward compatibility with saves written before it was persisted. */
   events?: { lastSantaYear: number; rngState: number };
+  /** Basement tiles already excavated ("floor:x"), so buried treasure stays a
+   * one-time find per tile across save/reload. Optional for older saves. */
+  excavated?: string[];
 }
 
 /** Result of attempting to place a facility. */

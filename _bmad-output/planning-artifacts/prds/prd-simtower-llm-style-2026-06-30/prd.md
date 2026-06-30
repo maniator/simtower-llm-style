@@ -244,12 +244,15 @@ mitigate problems. Each facility type unlocks at a minimum star rating
   display as **CLOSED** outside them; income accrues only while open
   [`isOpenAt`, `hasBusinessHours`].
 - **FR-17** — The player can place **Service** facilities — **Parking** (2★,
-  basement), **Security** (3★), **Medical Center** (3★), **Housekeeping** (2★),
+  basement), **Security** (2★), **Medical Center** (3★), **Housekeeping** (2★),
   **Recycling Center** (4★, basement, 2 floors) — which generate no income and
   provide rating/mitigation effects. Security, Medical, Housekeeping, and
   Recycling each charge monthly maintenance [`ECON.serviceMaintenanceMonthly`];
   Parking carries only its build cost (no monthly service maintenance) and
-  reduces stress for tenants who drive.
+  reduces stress for tenants who drive. `[NOTE: Security unlocks at 2★ — it is
+  the facility that GATES 3★ (FR-44), so it must be buildable while the tower is
+  still 2★, otherwise the rating deadlocks. Medical (the 4★ gate) unlocks at 3★
+  for the same reason.]`
 - **FR-18** — The player can place a **Metro Station** (4★, $1,000,000,
   whole-floor deep basement) that brings large numbers of visitors to the tower.
 - **FR-19** — The player can place a **Wedding Hall** (5★, $3,000,000, floor
