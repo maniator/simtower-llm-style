@@ -153,14 +153,23 @@ class GameApp {
 
     this.engine.onActionUp = () => {
       this.paint = null;
-      if (this.tool.type === "build" && this.isTransportTool() && this.engine.transportPreview) {
+      if (this.tool.type === "build" && this.isTransportTool()) {
         const tp = this.engine.transportPreview;
-        if (tp.valid) {
-          const res = this.sim.buildTransport(tp.kind, tp.x, tp.bottom, tp.top);
-          this.audio.sfx(res.ok ? "build" : "error");
-          if (!res.ok && res.reason) this.ui.toast(res.reason, "bad");
+        if (tp) {
+          if (tp.valid) {
+            const res = this.sim.buildTransport(tp.kind, tp.x, tp.bottom, tp.top);
+            this.audio.sfx(res.ok ? "build" : "error");
+            if (!res.ok && res.reason) this.ui.toast(res.reason, "bad");
+          } else {
+            // Explain *why* it won't go here instead of failing silently.
+            this.audio.sfx("error");
+            this.ui.toast(this.transportReason(tp.kind, tp.x, tp.bottom, tp.top), "bad");
+          }
+          this.engine.transportPreview = null;
+        } else if (this.transportStart) {
+          // Pressed without dragging — teach the drag-to-size gesture.
+          this.ui.toast(`Drag up or down to set the ${FACILITIES[this.tool.kind].name.toLowerCase()}'s height.`, "info");
         }
-        this.engine.transportPreview = null;
       }
       this.transportStart = null;
     };
@@ -476,6 +485,15 @@ class GameApp {
       this.audio.sfx("error");
       this.ui.toast(res.reason, "bad");
     }
+  }
+
+  /** Human-readable reason an elevator/stairs span can't be placed. */
+  private transportReason(kind: FacilityKind, x: number, bottom: number, top: number): string {
+    if (!this.sim.isUnlocked(kind)) {
+      return `${FACILITIES[kind].name} unlocks at ${FACILITIES[kind].minStar}★.`;
+    }
+    const v = this.sim.tower.validateTransport(kind, x, bottom, top);
+    return v.reason ?? "A shaft can't go here — leave a clear column through built floors.";
   }
 
   /**

@@ -50,6 +50,16 @@ describe("Simulation economy", () => {
     expect(r.ok).toBe(false);
   });
 
+  it("rejects floating overhangs above ground (no diagonal stacking)", () => {
+    const sim = Simulation.newGame(7);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let i = 0; i < 30; i++) sim.tower.place("floor", 2, x0 + i);
+    // Office on floor 3 sitting fully on floor 2 → fine (auto-floors level 3).
+    expect(sim.build("office", 3, x0).ok).toBe(true);
+    // Office on floor 3 hanging off the right end of floor 2 → rejected.
+    expect(sim.canBuild("office", 3, x0 + 28).ok).toBe(false);
+  });
+
   it("blocks building when unaffordable", () => {
     const sim = Simulation.newGame();
     sim.money = 100;

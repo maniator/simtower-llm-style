@@ -116,7 +116,11 @@ export class Simulation {
     const hgt = facilityFloors(kind);
     const missing = this.tower.missingFloorCount(floor, x, f.width, hgt);
     if (missing > 0 && !this.tower.spanConnects(floor, x, f.width, hgt)) {
-      return { ok: false, reason: "Build next to the tower — you can't build in midair.", cost: f.cost };
+      const reason =
+        floor >= 2
+          ? "Rooms must sit on the floor below — no floating overhangs."
+          : "Build next to the tower — you can't build in midair.";
+      return { ok: false, reason, cost: f.cost };
     }
     const cost = f.cost + missing * FACILITIES.floor.cost;
     const afford = this.money >= cost;

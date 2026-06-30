@@ -234,9 +234,20 @@ export class Tower {
     return n;
   }
 
-  /** True if a room's footprint touches the existing tower (i.e. not midair). */
+  /**
+   * True if a room may be supported here. Above ground a room must sit fully on
+   * the floor directly below it (no floating overhangs / diagonal stacking).
+   * The ground floor rests on the earth, and basements hang off the level above,
+   * so those connect by simply touching the existing tower.
+   */
   spanConnects(floor: number, x: number, width: number, hgt: number): boolean {
     if (this.units.length === 0) return false;
+    if (floor >= 2) {
+      for (let i = 0; i < width; i++) {
+        if (!this.structure.has(this.key(floor - 1, x + i))) return false;
+      }
+      return true;
+    }
     for (let fl = floor; fl < floor + hgt; fl++) {
       for (let i = -1; i <= width; i++) if (this.structure.has(this.key(fl, x + i))) return true;
     }

@@ -83,6 +83,7 @@ export class TowerEngine {
   private gesture: "pan" | "action" | null = null;
   private pinch: { dist: number } | null = null;
   private moved = 0;
+  private downTouch = false;
   private lastSx = 0;
   private lastSy = 0;
 
@@ -201,6 +202,7 @@ export class TowerEngine {
     this.lastSy = ev.screenPos.y;
     this.moved = 0;
     const touch = ev.pointerType === "Touch";
+    this.downTouch = touch;
     const space = this.engine.input.keyboard.isHeld(ex.Keys.Space);
     this.gesture = this.classifyDown ? this.classifyDown(buttonNum(ev), touch, space) : "pan";
     if (this.gesture === "action") {
@@ -245,7 +247,10 @@ export class TowerEngine {
     }
     const { tile, floor } = this.tf(ev);
     if (this.gesture === "pan") {
-      if (this.moved < 5) this.onTap?.(tile, floor, ev.pointerType === "Touch", this.pickEntityAt(ev.worldPos));
+      // Touch taps jitter more than mouse clicks, so allow a larger slop.
+      if (this.moved < (this.downTouch ? 14 : 5)) {
+        this.onTap?.(tile, floor, ev.pointerType === "Touch", this.pickEntityAt(ev.worldPos));
+      }
     } else if (this.gesture === "action") {
       this.onActionUp?.(tile, floor, this.pickEntityAt(ev.worldPos));
     }
@@ -592,6 +597,7 @@ export class TowerEngine {
       z: -1,
     });
     a.graphics.use(u.kind === "lobby" ? this.lobbyGfx : this.floorGfx);
+    a.collider.set(ex.Shape.Box(TILE, FLOOR, ex.vec(0, 0)));
     this.engine.add(a);
     this.structActors.set(u.id, a);
   }
@@ -614,6 +620,7 @@ export class TowerEngine {
     });
     const a = new ex.Actor({ pos: ex.vec(this.worldX(u.x), this.worldYTop(u.floor, hgt)), width: w, height: h, anchor: ex.vec(0, 0), z: 0 });
     a.graphics.use(cv);
+    a.collider.set(ex.Shape.Box(w, h, ex.vec(0, 0)));
     this.engine.add(a);
     this.roomActors.set(u.id, a);
   }
@@ -632,6 +639,7 @@ export class TowerEngine {
     });
     const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), this.worldYTop(t.top)), width: w, height: h, anchor: ex.vec(0, 0), z: 1 });
     a.graphics.use(cv);
+    a.collider.set(ex.Shape.Box(w, h, ex.vec(0, 0)));
     this.engine.add(a);
     this.transportActors.set(t.id, a);
   }
