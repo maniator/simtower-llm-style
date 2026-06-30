@@ -27,11 +27,13 @@ export class EventSystem {
     return { lastSantaYear: this.lastSantaYear, rngState: this.extra.seed };
   }
 
-  /** Restore seasonal-event state from a save (no-op for older saves). */
+  /** Restore seasonal-event state from a save (no-op for older saves). Coerces
+   * the fields, since saves are untrusted and may be hand-edited or stale. */
   loadState(state?: { lastSantaYear: number; rngState: number }): void {
     if (!state) return;
-    this.lastSantaYear = state.lastSantaYear;
-    this.extra = new RNG(state.rngState);
+    const num = (v: unknown, fallback: number) => (typeof v === "number" && Number.isFinite(v) ? v : fallback);
+    this.lastSantaYear = num(state.lastSantaYear, -1);
+    this.extra = new RNG(num(state.rngState, 1) >>> 0 || 1);
   }
 
   /** Number of units currently on fire (for the UI / stats). */

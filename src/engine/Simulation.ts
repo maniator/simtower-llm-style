@@ -631,8 +631,12 @@ export class Simulation implements SimContext {
       units: this.tower.units.map((u) => ({ ...u })),
       transports: this.tower.transports.map((t) => ({
         ...t,
+        // Deep-copy every per-car/array field so a retained snapshot can't be
+        // mutated later by in-place updates (carLoad is written each tick).
         carPositions: [...t.carPositions],
         carDir: [...t.carDir],
+        carLoad: t.carLoad ? [...t.carLoad] : undefined,
+        skipFloors: t.skipFloors ? [...t.skipFloors] : undefined,
       })),
       nextId: this.tower.getNextId(),
       towerName: this.tower.towerName,
