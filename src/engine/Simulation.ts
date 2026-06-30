@@ -104,9 +104,10 @@ export class Simulation implements SimContext {
    * clear, sometimes cloudy, occasionally rainy.
    */
   static weatherFor(day: number): WeatherKind {
-    let h = (day * 2654435761) >>> 0;
+    // 32-bit integer mixing via Math.imul (plain * would lose precision past 2^53).
+    let h = Math.imul(day | 0, 2654435761) >>> 0;
     h ^= h >>> 13;
-    h = (h * 1274126177) >>> 0;
+    h = Math.imul(h, 1274126177) >>> 0;
     const r = ((h >>> 8) & 0xffff) / 0x10000;
     return r < 0.62 ? "clear" : r < 0.85 ? "cloudy" : "rain";
   }

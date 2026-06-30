@@ -39,8 +39,9 @@ export class EventSystem {
     return this.active.size;
   }
 
-  /** Re-arm ongoing fires after loading a save. */
+  /** Re-arm ongoing fires after loading a save (idempotent — replaces, not adds). */
   restore(unitIds: Iterable<number>): void {
+    this.active.clear();
     for (const id of unitIds) this.active.add(id);
   }
 
