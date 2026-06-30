@@ -62,15 +62,17 @@ describe("Crowd: routing and movement", () => {
     expect(r!.floors).toContain(15);
   });
 
-  it("never routes over carless stairs or escalators", () => {
+  it("routes a short hop over stairs on foot (no car needed)", () => {
     const tower = new Tower();
     for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
     for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
-    tower.placeTransport("stairs", 4, 1, 2); // a stair has no cars to board
+    const s = tower.placeTransport("stairs", 4, 1, 2);
     const crowd = new Crowd();
-    // Floor 2 is reachable on foot via the stairs, but our riders only board
-    // real elevator cars — so there is no boardable route for them.
-    expect(crowd.route(tower, 1, 2)).toBeNull();
+    // Floor 2 is reachable on foot via the stairs — a single climbing leg.
+    const r = crowd.route(tower, 1, 2);
+    expect(r).not.toBeNull();
+    expect(r!.floors).toEqual([1, 2]);
+    expect(r!.shafts).toEqual([s.transportId]);
   });
 
   it("spawns and advances commuters, reporting stress in [0,1]", () => {

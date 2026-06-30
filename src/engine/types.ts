@@ -99,6 +99,9 @@ export interface Unit {
   everOccupied: boolean;
   /** Accumulated income not yet collected (offices/condos). */
   pendingIncome: number;
+  /** Player-set price for this unit — office quarterly rent, hotel nightly
+   *  rate, or condo sale price. Undefined falls back to the kind's default. */
+  rent?: number;
   /** Name shown when inspected (e.g. tenant company / guest). */
   label: string;
   /** Game-clock minute at which construction finishes (for the build phase). */

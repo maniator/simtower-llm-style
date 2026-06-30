@@ -19,7 +19,8 @@
     "test:coverage": "vitest run --coverage",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
-    "screenshots": "vite build && node scripts/serve-and-shoot.mjs"
+    "screenshots": "vite build && node scripts/serve-and-shoot.mjs",
+    "screenshots:docker": "bash scripts/shoot-docker.sh"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
