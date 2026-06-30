@@ -11,5 +11,5 @@ project_knowledge: "{project-root}/docs"
 primary_platform: '["unity", "unreal", "godot", "other"]'
 
 # Core Configuration Values
-user_name: Naftali
+user_name: BMad
 output_folder: _bmad-output

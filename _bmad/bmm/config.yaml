@@ -9,5 +9,5 @@ implementation_artifacts: "{project-root}/_bmad-output/implementation-artifacts"
 project_knowledge: "{project-root}/docs"
 
 # Core Configuration Values
-user_name: Naftali
+user_name: BMad
 output_folder: _bmad-output

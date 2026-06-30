@@ -1,0 +1,3 @@
+# Personal, user-scoped install answers (e.g. user_name). Never commit —
+# keep your name local. The team-shared, committed config is config.toml.
+/config.user.toml
