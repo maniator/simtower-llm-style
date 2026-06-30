@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Simulation, ECON } from "../engine/Simulation";
-import { GRID } from "../engine/facilities";
+import { FACILITIES, GRID } from "../engine/facilities";
 
 /** Build a serviced office tower with `n` offices on floor 2. */
 function builtTower(seed = 7): Simulation {
@@ -28,6 +28,26 @@ describe("Simulation economy", () => {
     expect(sim.money).toBe(before - 500);
     sim.sellAt(2, Math.floor(GRID.width / 2) - 20);
     expect(sim.money).toBe(before - 500 + 250);
+  });
+
+  it("auto-lays a room's floor when placed against the tower", () => {
+    const sim = Simulation.newGame(7); // starter lobby on floor 1
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    const before = sim.money;
+    // No floor on level 2 yet — drop an office straight above the lobby.
+    const r = sim.build("office", 2, x0);
+    expect(r.ok).toBe(true);
+    expect(sim.tower.unitAt(2, x0)?.kind).toBe("office");
+    expect(sim.tower.hasStructure(2, x0)).toBe(true); // floor was created
+    // Charged for the office plus the floor tiles it laid.
+    const cost = FACILITIES.office.cost + FACILITIES.office.width * FACILITIES.floor.cost;
+    expect(before - sim.money).toBe(cost);
+  });
+
+  it("won't build a room floating in midair", () => {
+    const sim = Simulation.newGame(7);
+    const r = sim.build("office", 6, 5); // far from the starter lobby
+    expect(r.ok).toBe(false);
   });
 
   it("blocks building when unaffordable", () => {

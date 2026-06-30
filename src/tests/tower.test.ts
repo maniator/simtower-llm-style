@@ -56,6 +56,16 @@ describe("Tower placement", () => {
     expect(tower.canPlace("office", 3, 0).ok).toBe(false);
   });
 
+  it("restricts lobbies to the ground floor and every 15th floor", () => {
+    for (let i = 0; i < 20; i++) tower.place("lobby", 1, i);
+    for (let f = 2; f <= 14; f++) for (let i = 0; i < 20; i++) tower.place("floor", f, i);
+    // Floor 15 is a valid sky-lobby floor (and empty, supported by floor 14).
+    expect(tower.canPlace("lobby", 15, 0).ok).toBe(true);
+    // Arbitrary floors are not.
+    expect(tower.canPlace("lobby", 5, 0).ok).toBe(false);
+    expect(tower.canPlace("lobby", 16, 0).ok).toBe(false);
+  });
+
   it("keeps floors connected to existing structure", () => {
     for (let i = 0; i < 5; i++) tower.place("lobby", 1, i);
     // Floating floor far away is unsupported.

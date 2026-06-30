@@ -42,6 +42,8 @@ interface Walker {
   phase: number;
   impatient: boolean;
   red: boolean;
+  /** 0..1 position in the crowd; shown only when the tower is busy enough. */
+  rank: number;
 }
 
 /**
@@ -491,7 +493,7 @@ export class TowerEngine {
       const label = f >= 1 ? `${f}` : `B${1 - f}`;
       ctx.fillStyle = "rgba(0,0,0,0.45)";
       ctx.fillRect(0, sy - 7, 22, 14);
-      ctx.fillStyle = f % 15 === 1 ? "#ffd24a" : "#cfcfcf";
+      ctx.fillStyle = f === 1 || f % 15 === 0 ? "#ffd24a" : "#cfcfcf";
       ctx.fillText(label, 3, sy);
     }
     ctx.textBaseline = "alphabetic";
@@ -693,7 +695,8 @@ export class TowerEngine {
         const x1w = this.worldX(run.x1 + 1) - 3;
         for (let i = 0; i < count && budget > 0; i++, budget--) {
           const seed = (floor * 131 + run.x0 * 7 + i * 53) | 0;
-          this.spawnWalker(x0w, x1w, foot, foot, seed, 7 + (Math.abs(seed) % 6));
+          // Rank within the run; only the first few show until the tower fills.
+          this.spawnWalker(x0w, x1w, foot, foot, seed, 7 + (Math.abs(seed) % 6), (i + 0.5) / count);
         }
       }
     }
@@ -706,12 +709,12 @@ export class TowerEngine {
       const n = t.kind === "escalator" ? 3 : 2;
       for (let i = 0; i < n; i++) {
         const seed = (t.id * 17 + i * 29) | 0;
-        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7);
+        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7, 0.15 + i * 0.25);
       }
     }
   }
 
-  private spawnWalker(x0w: number, x1w: number, y0w: number, y1w: number, seed: number, speed: number): void {
+  private spawnWalker(x0w: number, x1w: number, y0w: number, y1w: number, seed: number, speed: number, rank: number): void {
     const gfx = this.personGfx[Math.abs(seed) % this.personGfx.length];
     const a = new ex.Actor({ pos: ex.vec(x0w, y0w), width: 8, height: 14, anchor: ex.vec(0.5, 1), z: 0.4 });
     a.graphics.use(gfx);
@@ -728,6 +731,7 @@ export class TowerEngine {
       phase: (Math.abs(seed) % 100) / 100,
       impatient: (((seed >>> 8) & 0xff) / 255) < 0.5,
       red: false,
+      rank,
     });
   }
 
@@ -747,7 +751,14 @@ export class TowerEngine {
       tr.actor.pos = ex.vec(this.worldX(tr.u.x) + 3 + offset, this.worldYTop(tr.u.floor) + FLOOR - 15);
     }
     const stress = this.d.stress ?? 0;
+    // How busy the building looks right now: scales with population so an empty
+    // tower has an empty lobby, and thins out overnight.
+    const night = this.sim.clock.isNight();
+    const crowd = Math.min(1, this.sim.population / 350) * (night ? 0.35 : 1);
     for (const w of this.walkers) {
+      const visible = w.rank <= crowd;
+      if (w.actor.graphics.visible !== visible) w.actor.graphics.visible = visible;
+      if (!visible) continue;
       let p = w.phase + anim * w.speed * 0.03;
       p -= Math.floor(p);
       const tt = w.dir > 0 ? p : 1 - p;

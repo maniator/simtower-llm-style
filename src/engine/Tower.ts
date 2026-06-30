@@ -12,6 +12,11 @@ function isStructural(kind: FacilityKind): boolean {
   return kind === "floor" || kind === "lobby";
 }
 
+/** The ground floor (1) and every 15th floor above host a (sky) lobby. */
+function isLobbyFloor(floor: number): boolean {
+  return floor === 1 || (floor > 1 && floor % GRID.lobbyInterval === 0);
+}
+
 /**
  * The Tower owns the spatial model. Cells have two layers: a structural layer
  * (floor / lobby tiles) and a room layer (offices, shops, …). A room is built
@@ -155,6 +160,9 @@ export class Tower {
     }
 
     if (isStructural(kind)) {
+      if (kind === "lobby" && !isLobbyFloor(floor)) {
+        return { ok: false, reason: "Lobbies only go on the ground floor and every 15th floor (15, 30, 45…)." };
+      }
       if (!this.structureSpanFree(floor, x, f.width)) {
         return { ok: false, reason: "Structure already here." };
       }
@@ -191,6 +199,85 @@ export class Tower {
       }
     }
     return { ok: true };
+  }
+
+  /**
+   * Like {@link canPlace} for a room, but does NOT require the floor to already
+   * exist — used when a room auto-lays its own floor on placement.
+   */
+  canPlaceRoomIgnoringFloor(kind: FacilityKind, floor: number, x: number): PlaceResult {
+    const f = FACILITIES[kind];
+    if (isStructural(kind) || f.transport) return { ok: false, reason: "Not a room." };
+    if (floor < GRID.minFloor || floor > GRID.maxFloor) return { ok: false, reason: "Outside the buildable range." };
+    if (x < 0 || x + f.width > GRID.width) return { ok: false, reason: "Off the edge of the lot." };
+    if (kind === "weddingHall" && floor !== GRID.maxFloor) {
+      return { ok: false, reason: "The wedding hall can only crown floor 100." };
+    }
+    const hgt = facilityFloors(kind);
+    if (floor + hgt - 1 > GRID.maxFloor) return { ok: false, reason: "Not enough floors above for this facility." };
+    if (f.basement && floor + hgt - 1 >= 1) return { ok: false, reason: `${f.name} can only be built in the basement.` };
+    for (let fl = floor; fl < floor + hgt; fl++) {
+      if (!this.roomSpanFree(fl, x, f.width)) return { ok: false, reason: "Something is already here." };
+      if (this.spanHasLobby(fl, x, f.width)) {
+        return { ok: false, reason: "Lobbies are transit-only — build rooms on a standard floor." };
+      }
+    }
+    return { ok: true };
+  }
+
+  /** How many floor tiles under a room's footprint don't yet exist. */
+  missingFloorCount(floor: number, x: number, width: number, hgt: number): number {
+    let n = 0;
+    for (let fl = floor; fl < floor + hgt; fl++) {
+      for (let i = 0; i < width; i++) if (!this.structure.has(this.key(fl, x + i))) n++;
+    }
+    return n;
+  }
+
+  /** True if a room's footprint touches the existing tower (i.e. not midair). */
+  spanConnects(floor: number, x: number, width: number, hgt: number): boolean {
+    if (this.units.length === 0) return false;
+    for (let fl = floor; fl < floor + hgt; fl++) {
+      for (let i = -1; i <= width; i++) if (this.structure.has(this.key(fl, x + i))) return true;
+    }
+    for (let i = 0; i < width; i++) {
+      if (this.structure.has(this.key(floor - 1, x + i)) || this.structure.has(this.key(floor + hgt, x + i))) return true;
+    }
+    return false;
+  }
+
+  /**
+   * Auto-lay the floor tiles under a room's footprint, building outward so each
+   * new tile stays supported. Returns the number of tiles created, or fails
+   * (rolling back) if the footprint can't be connected to the tower.
+   */
+  ensureFloorUnder(floor: number, x: number, width: number, hgt: number): { ok: boolean; reason?: string; count: number } {
+    let remaining: { fl: number; x: number }[] = [];
+    for (let fl = floor; fl < floor + hgt; fl++) {
+      for (let i = 0; i < width; i++) if (!this.structure.has(this.key(fl, x + i))) remaining.push({ fl, x: x + i });
+    }
+    if (remaining.length === 0) return { ok: true, count: 0 };
+    const placed: number[] = [];
+    let progress = true;
+    while (remaining.length > 0 && progress) {
+      progress = false;
+      const still: { fl: number; x: number }[] = [];
+      for (const m of remaining) {
+        const r = this.place("floor", m.fl, m.x);
+        if (r.ok && r.unitId !== undefined) {
+          placed.push(r.unitId);
+          progress = true;
+        } else {
+          still.push(m);
+        }
+      }
+      remaining = still;
+    }
+    if (remaining.length > 0) {
+      for (const id of placed) this.removeUnit(id);
+      return { ok: false, reason: "Build next to the tower — you can't build in midair.", count: 0 };
+    }
+    return { ok: true, count: placed.length };
   }
 
   /** Floors connect if adjacent to existing structure, above/below it, or first. */

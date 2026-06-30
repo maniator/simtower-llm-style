@@ -8,7 +8,7 @@ import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
 
 /** Game speeds → in-game minutes advanced per real second. */
-const SPEEDS = [0, 30, 120, 480];
+const SPEEDS = [0, 10, 30, 120];
 
 /**
  * The game controller. Excalibur (via {@link TowerEngine}) owns the render
@@ -211,10 +211,9 @@ class GameApp {
       this.engine.preview = { kind, floor, x, valid: this.sim.isUnlocked(kind) };
     } else {
       const x = this.snapX(kind, tile);
-      const valid =
-        this.sim.isUnlocked(kind) &&
-        this.sim.tower.canPlace(kind, floor, x).ok &&
-        this.sim.money >= FACILITIES[kind].cost;
+      // Rooms auto-lay their own floor, so validity comes from canBuild (which
+      // accounts for the floor tiles and their cost), not raw canPlace.
+      const valid = this.sim.canBuild(kind, floor, x).ok;
       this.engine.preview = { kind, floor, x, valid };
       this.engine.transportPreview = null;
     }
