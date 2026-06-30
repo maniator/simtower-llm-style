@@ -194,9 +194,8 @@ export class EventSystem {
     if (dayOfYear < 340 || this.sim.star < 3 || year === this.lastSantaYear) return;
     if (!this.extra.chance(0.4)) return; // not every holiday day
     this.lastSantaYear = year;
-    const gift = 50_000 + this.extra.int(0, 100_000);
-    this.sim.money += gift;
-    this.sim.emit(`🎅 Santa visited your tower for the holidays and left a $${gift.toLocaleString()} gift!`, "money");
+    // Canon: Santa is a seasonal cameo only — "No presents, sorry." (No cash.)
+    this.sim.emit("🎅 Santa was spotted crossing the sky above your tower for the holidays!", "good");
   }
 
   /**
@@ -225,14 +224,29 @@ export class EventSystem {
     }
     const fine = 15_000 + this.sim.rng.int(0, 15_000);
     this.sim.money -= fine;
+    // Canon: an undetected bomb levels roughly five floors. Pick an epicentre and
+    // destroy every room within ±2 floors of it — a genuine catastrophe, not the
+    // loss of a single room — so leaving the tower unguarded is dangerous.
     const targets = this.flammableUnits();
+    let destroyed = 0;
     if (targets.length > 0) {
-      const u = this.sim.rng.pick(targets);
-      u.state = "empty";
-      u.occupants = 0;
-      u.everOccupied = false;
-      u.label = FACILITIES[u.kind].name;
+      const epicentre = this.sim.rng.pick(targets).floor;
+      for (const u of this.sim.tower.units) {
+        if (
+          Math.abs(u.floor - epicentre) <= 2 &&
+          u.kind !== "floor" &&
+          u.kind !== "lobby" &&
+          u.state !== "construction"
+        ) {
+          u.state = "empty";
+          u.occupants = 0;
+          u.everOccupied = false;
+          u.label = FACILITIES[u.kind].name;
+          this.active.delete(u.id); // a burning unit caught in the blast is cleared
+          destroyed++;
+        }
+      }
     }
-    this.sim.emit(`💣 A bomb threat caused chaos! With no security office the panic and damage cost $${fine.toLocaleString()} — build Security.`, "bad");
+    this.sim.emit(`💣 A bomb detonated with no security to stop it — ${destroyed} room(s) across ~5 floors were destroyed, plus a $${fine.toLocaleString()} fine. Build Security!`, "bad");
   }
 }

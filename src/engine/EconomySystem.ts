@@ -42,10 +42,16 @@ export class EconomySystem {
         continue;
       }
       u.state = "occupied";
+      // Rain keeps shoppers away (canon) — it bites fast food hardest; a metro
+      // (underground visitors) softens the blow. Cosmetic-only on non-rainy days.
+      const rainMult =
+        this.sim.weather === "rain"
+          ? (this.sim.hasAny("metro") ? 0.7 : 0.5) * (u.kind === "fastFood" ? 0.6 : 1)
+          : 1;
       // Spread the headline DAILY take across the venue's actual open hours so a
       // full day earns ≈ `daily * appeal`, not a per-hour multiple of it. (Before,
       // dividing by a flat 8 while open 9–15 h/day inflated income 2–3x.)
-      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * (0.6 + this.sim.rng.next() * 0.4);
+      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * rainMult * (0.6 + this.sim.rng.next() * 0.4);
       u.pendingIncome += hourly;
       if (u.pendingIncome >= 1) {
         const earned = Math.floor(u.pendingIncome);
@@ -126,6 +132,11 @@ export class EconomySystem {
       // for a premium sale (scales with the asking price).
       if (u.kind === "condo" && !u.everOccupied && u.state !== "construction" && u.state !== "fire") {
         cost += Math.ceil(rentOf(u) * ECON.condoMonthlyTaxRate);
+      }
+      // A cinema must book films to show (canon: ~150k average / 300k blockbuster);
+      // modelled as a monthly booking cost, so a theatre isn't free money.
+      if (u.kind === "cinema" && u.state !== "construction" && u.state !== "fire") {
+        cost += ECON.cinemaBookingMonthly;
       }
     }
     if (cost > 0) {

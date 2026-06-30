@@ -135,3 +135,66 @@ describe("VIP stay (FAQ): only in a suite, gates the favorable review", () => {
     expect(sim.vipFavorable).toBe(true);
   });
 });
+
+describe("Events & amounts (FAQ Cluster B)", () => {
+  it("rain depresses commercial income vs a clear day", () => {
+    function dayIncome(weather: "clear" | "rain"): number {
+      const sim = Simulation.newGame(7);
+      sim.money = 1e12;
+      sim.star = 3;
+      lay(sim, "lobby", 1);
+      lay(sim, "floor", 2);
+      sim.buildTransport("elevatorStandard", C, 1, 2);
+      const r = sim.tower.place("fastFood", 2, 0);
+      sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+      sim.weather = weather; // stays fixed within the day (no day boundary crossed)
+      const before = sim.money;
+      for (let i = 0; i < 10; i++) sim.tick(60); // 07:00→17:00, fast food open
+      return sim.money - before;
+    }
+    expect(dayIncome("rain")).toBeLessThan(dayIncome("clear"));
+  });
+
+  it("a cinema carries a monthly film-booking cost", () => {
+    const sim = Simulation.newGame(8);
+    sim.money = 1e9;
+    sim.star = 3;
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    lay(sim, "floor", 3);
+    expect(sim.tower.place("cinema", 2, 0).ok).toBe(true); // spans floors 2–3
+    const before = sim.money;
+    sim.tick(60 * 24); // crosses the first day → monthly maintenance runs
+    expect(before - sim.money).toBeGreaterThanOrEqual(150_000);
+  });
+
+  it("an unguarded bomb levels several rooms across ~5 floors", () => {
+    const sim = Simulation.newGame(9);
+    sim.money = 1e9;
+    sim.star = 4;
+    const x0 = C - 20;
+    for (let f = 2; f <= 8; f++) {
+      lay(sim, "floor", f);
+      for (let i = 0; i < 4; i++) {
+        const r = sim.tower.place("office", f, x0 + i * 9);
+        if (r.ok) sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+      }
+    }
+    const liveBefore = sim.tower.units.filter((u) => u.kind === "office" && u.state === "occupied").length;
+    sim.bombThreat(); // no security built
+    const liveAfter = sim.tower.units.filter((u) => u.kind === "office" && u.state === "occupied").length;
+    expect(liveBefore - liveAfter).toBeGreaterThan(1); // more than a single room destroyed
+  });
+
+  it("buried treasure is worth about half a million", () => {
+    const sim = Simulation.newGame(42);
+    sim.money = 1e9;
+    sim.star = 3;
+    for (let x = 0; x < 60; x++) sim.tower.place("floor", 0, C - 30 + x);
+    for (let i = 0; i + 6 <= 60; i += 6) sim.build("parking", 0, C - 30 + i); // distinct fresh tiles
+    const treasure = sim.log.find((e) => e.text.toLowerCase().includes("treasure"));
+    expect(treasure).toBeDefined();
+    const amount = Number(treasure!.text.replace(/[^0-9]/g, ""));
+    expect(amount).toBeGreaterThanOrEqual(400_000);
+  });
+});

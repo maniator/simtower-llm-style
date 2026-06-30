@@ -264,7 +264,7 @@ export class Simulation implements SimContext {
         }
       }
       if (freshGround && this.rng.chance(0.18)) {
-        const gold = 50_000 + this.rng.int(0, 150_000);
+        const gold = 400_000 + this.rng.int(0, 200_000); // ~half a million, per the FAQ
         this.money += gold;
         this.emit(`💰 Excavation crews unearthed buried treasure worth $${gold.toLocaleString()}!`, "money");
       }
