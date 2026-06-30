@@ -11,6 +11,11 @@ export const ECON = {
   maintenancePerCarMonthly: 600,
   /** Cost to extend an elevator shaft by one floor (click or drag handle). */
   transportFloorCost: 5_000,
+  /** Monthly property tax on an UNSOLD condo, as a fraction of its asking
+   *  price. Gives premium pricing a real carrying cost — holding out for a
+   *  higher sale costs money each month (and the higher the price, the more
+   *  tax), so max-pricing is no longer a free, strictly-dominant choice. */
+  condoMonthlyTaxRate: 0.015,
   /** Player-adjustable price ranges (per the original's rent dropdown). The
    *  `default` is what an un-set unit charges; income, move-in odds and tenant
    *  satisfaction all key off how far the chosen price sits from it. */

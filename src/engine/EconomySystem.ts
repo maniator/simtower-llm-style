@@ -122,6 +122,11 @@ export class EconomySystem {
     for (const u of this.sim.tower.units) {
       const m = ECON.serviceMaintenanceMonthly[u.kind];
       if (m) cost += m;
+      // Property tax on an unsold condo: a real carrying cost for holding out
+      // for a premium sale (scales with the asking price).
+      if (u.kind === "condo" && !u.everOccupied && u.state !== "construction" && u.state !== "fire") {
+        cost += Math.ceil(rentOf(u) * ECON.condoMonthlyTaxRate);
+      }
     }
     if (cost > 0) {
       this.sim.money -= cost;
