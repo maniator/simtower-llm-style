@@ -683,8 +683,25 @@ export class Simulation implements SimContext {
 
   // ---- Move-ins ----------------------------------------------------------
 
+  /** True when the tower is 3★+ and lacks enough parking for its office workforce
+   * (each parking space serves ~12 workers) — offices then demand parking. */
+  private officeParkingShort(): boolean {
+    if (this.star < 3) return false;
+    let officePop = 0;
+    let spots = 0;
+    for (const u of this.tower.units) {
+      if (u.kind === "office" && u.state === "occupied") officePop += FACILITIES.office.population;
+      else if (u.kind === "parking" && u.state !== "construction" && u.state !== "fire") spots++;
+    }
+    return spots * 12 < officePop;
+  }
+
   private attemptMoveIns(): void {
     const weekend = this.clock.isWeekend;
+    // From 3★, office workers demand parking (canon). When the tower is short on
+    // parking, fewer firms will move in — demand pressure, not eviction, so it
+    // never destabilizes a built-out tower.
+    const parkingPenalty = this.officeParkingShort() ? 0.5 : 1;
     for (const u of this.tower.units) {
       if (u.state !== "empty") continue;
       const f = FACILITIES[u.kind];
@@ -693,7 +710,7 @@ export class Simulation implements SimContext {
 
       const demand = this.demandFactor(u);
       if (u.kind === "office") {
-        if (!weekend && this.rng.chance(0.25 * demand)) this.moveIn(u);
+        if (!weekend && this.rng.chance(0.25 * demand * parkingPenalty)) this.moveIn(u);
       } else if (u.kind === "condo") {
         if (this.rng.chance(0.18 * demand)) this.moveIn(u);
       } else if (isHotelKind(u.kind)) {

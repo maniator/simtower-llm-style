@@ -198,3 +198,31 @@ describe("Events & amounts (FAQ Cluster B)", () => {
     expect(amount).toBeGreaterThanOrEqual(400_000);
   });
 });
+
+describe("Office parking demand (FAQ): offices want parking from 3★", () => {
+  function occupiedFill(withParking: boolean): number {
+    const sim = Simulation.newGame(123);
+    sim.money = 1e12;
+    lay(sim, "lobby", 1);
+    for (let f = 2; f <= 4; f++) lay(sim, "floor", f);
+    sim.buildTransport("elevatorStandard", W - 6, 1, 4);
+    sim.tower.setCars(sim.tower.transports[0].id, 8);
+    // Pre-occupy a block of offices on floor 2 to create real parking demand.
+    for (let x = 0; x + 9 <= 180; x += 9) {
+      const r = sim.tower.place("office", 2, x);
+      if (r.ok) sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+    }
+    // Empty offices on floors 3–4 are the ones that will (or won't) fill.
+    for (let f = 3; f <= 4; f++) for (let x = 0; x + 9 <= 180; x += 9) sim.tower.place("office", f, x);
+    sim.star = 3;
+    if (withParking) {
+      lay(sim, "floor", 0);
+      for (let x = 0; x + 6 <= W; x += 6) sim.tower.place("parking", 0, x); // ample parking
+    }
+    for (let i = 0; i < 12; i++) sim.tick(60); // a Monday's working hours
+    return sim.tower.units.filter((u) => u.kind === "office" && u.floor >= 3 && u.state === "occupied").length;
+  }
+  it("ample parking fills new offices faster than none (same seed)", () => {
+    expect(occupiedFill(true)).toBeGreaterThan(occupiedFill(false));
+  });
+});
