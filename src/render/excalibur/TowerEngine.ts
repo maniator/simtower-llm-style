@@ -87,6 +87,17 @@ export class TowerEngine {
   onActionMove: ((tile: number, floor: number, picked: Picked | null) => void) | null = null;
   onActionUp: ((tile: number, floor: number, picked: Picked | null) => void) | null = null;
   onHover: ((tile: number, floor: number, picked: Picked | null) => void) | null = null;
+  /** Right-click: inspect whatever is under the cursor, regardless of tool. */
+  onSecondary: ((picked: Picked | null) => void) | null = null;
+  /** Drag/click an in-world extend arrow on the selected elevator (#12).
+   *  onExtendTo grows/shrinks the dragged end toward a target floor; onExtendEnd
+   *  marks the gesture done so cost accounting can reset. */
+  onExtendTo: ((end: "up" | "down", targetFloor: number) => void) | null = null;
+  onExtendEnd: (() => void) | null = null;
+  /** Screen rects of the selected elevator's extend arrows, for hit-testing. */
+  private arrowHit: { up?: ScreenRect; down?: ScreenRect } = {};
+  /** Active extend-arrow drag (which end of the shaft is being dragged). */
+  private arrowDrag: { end: "up" | "down" } | null = null;
 
   // Excalibur pointer gesture state.
   private pointers = new Map<number, { sx: number; sy: number }>();
@@ -226,6 +237,27 @@ export class TowerEngine {
     const touch = ev.pointerType === "Touch";
     this.downTouch = touch;
     const space = this.engine.input.keyboard.isHeld(ex.Keys.Space);
+    // Left-click on a selected elevator's extend arrow grows the shaft.
+    if (buttonNum(ev) === 0 && this.onExtendTo) {
+      const ps = ev.screenPos;
+      const inRect = (r?: ScreenRect) =>
+        !!r && ps.x >= r.x && ps.x <= r.x + r.w && ps.y >= r.y && ps.y <= r.y + r.h;
+      const end = inRect(this.arrowHit.up) ? "up" : inRect(this.arrowHit.down) ? "down" : null;
+      if (end) {
+        // Begin a drag: a plain click extends one floor (on pointer-up), while
+        // dragging up/down grows or shrinks the shaft floor-by-floor.
+        this.arrowDrag = { end };
+        this.gesture = null;
+        return;
+      }
+    }
+    // Right-click always inspects what's under the cursor, whatever tool is
+    // active — it never pans or builds.
+    if (buttonNum(ev) === 2 && this.onSecondary) {
+      this.onSecondary(this.pickEntityAt(ev.worldPos));
+      this.gesture = null;
+      return;
+    }
     this.gesture = this.classifyDown ? this.classifyDown(buttonNum(ev), touch, space) : "pan";
     if (this.gesture === "action") {
       const { tile, floor } = this.tf(ev);
@@ -243,6 +275,12 @@ export class TowerEngine {
       const my = (pts[0].sy + pts[1].sy) / 2;
       if (this.pinch.dist > 0) this.zoomAt(dist / this.pinch.dist, mx, my);
       this.pinch.dist = dist;
+      return;
+    }
+    if (this.arrowDrag) {
+      this.moved += Math.abs(ev.screenPos.y - this.lastSy);
+      this.lastSy = ev.screenPos.y;
+      this.onExtendTo?.(this.arrowDrag.end, this.screenToFloor(ev.screenPos.y));
       return;
     }
     const { tile, floor } = this.tf(ev);
@@ -264,6 +302,20 @@ export class TowerEngine {
     this.pointers.delete(ev.pointerId);
     if (this.pinch) {
       if (this.pointers.size < 2) this.pinch = null;
+      this.gesture = null;
+      return;
+    }
+    if (this.arrowDrag) {
+      // A press without a drag extends a single floor.
+      if (this.moved < 5) {
+        const t = this.sim.tower.transports.find((x) => x.id === this.selectedId);
+        if (t) {
+          const target = this.arrowDrag.end === "up" ? t.top + 1 : t.bottom - 1;
+          this.onExtendTo?.(this.arrowDrag.end, target);
+        }
+      }
+      this.onExtendEnd?.();
+      this.arrowDrag = null;
       this.gesture = null;
       return;
     }
@@ -350,7 +402,9 @@ export class TowerEngine {
     const riding = p.state === "riding";
     if (rec.actor.graphics.visible !== !riding) rec.actor.graphics.visible = !riding;
     if (riding) return;
-    rec.actor.pos = ex.vec(this.worldX(p.x), this.worldYTop(p.floor) + FLOOR - 3);
+    // Use the continuous floor (fy) so a stair/escalator climber animates
+    // smoothly between floors; for every other state fy equals the floor.
+    rec.actor.pos = ex.vec(this.worldX(p.x), this.worldYTop(p.fy) + FLOOR - 3);
     // Long waits redden the figure, the original's "this tenant is fed up" cue.
     const red = p.wait > 25;
     if (red !== rec.red) {
@@ -601,15 +655,67 @@ export class TowerEngine {
   }
 
   private drawSelection(ctx: CanvasRenderingContext2D): void {
+    this.arrowHit = {};
     if (this.selectedId == null) return;
     const u = this.sim.tower.units.find((x) => x.id === this.selectedId);
-    if (!u) return;
-    const hgt = facilityFloors(u.kind);
-    const sx = this.worldToScreenX(u.x);
-    const sy = this.worldToScreenY(u.floor + hgt - 1);
+    if (u) {
+      const hgt = facilityFloors(u.kind);
+      const sx = this.worldToScreenX(u.x);
+      const sy = this.worldToScreenY(u.floor + hgt - 1);
+      ctx.strokeStyle = "#ffd24a";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(sx - 1, sy - 1, u.width * TILE * this.cam.zoom + 2, hgt * FLOOR * this.cam.zoom + 2);
+      return;
+    }
+    const t = this.sim.tower.transports.find((x) => x.id === this.selectedId);
+    if (t) this.drawTransportSelection(ctx, t);
+  }
+
+  /** Outline the selected shaft and, for elevators, draw clickable extend
+   *  arrows above the top and below the bottom (as in the original). */
+  private drawTransportSelection(ctx: CanvasRenderingContext2D, t: Transport): void {
+    const z = this.cam.zoom;
+    const sx = this.worldToScreenX(t.x);
+    const sw = t.width * TILE * z;
+    const top = this.worldToScreenY(t.top);
+    const bottom = top + (t.top - t.bottom + 1) * FLOOR * z;
     ctx.strokeStyle = "#ffd24a";
     ctx.lineWidth = 2;
-    ctx.strokeRect(sx - 1, sy - 1, u.width * TILE * this.cam.zoom + 2, hgt * FLOOR * this.cam.zoom + 2);
+    ctx.strokeRect(sx - 1, top - 1, sw + 2, bottom - top + 2);
+    if (!isElevatorKind(t.kind)) return; // only lifts extend by a tappable arrow
+
+    // Small, subtle tabs centered on the shaft — discoverable without dominating
+    // the view. The hit rect is a touch larger than the drawn tab for easy use.
+    const cx = sx + sw / 2;
+    const tabW = Math.min(sw, 18);
+    const tabH = 11;
+    const up: ScreenRect = { x: cx - tabW / 2, y: top - tabH - 3, w: tabW, h: tabH };
+    const down: ScreenRect = { x: cx - tabW / 2, y: bottom + 3, w: tabW, h: tabH };
+    this.arrowHit = {
+      up: { x: up.x - 4, y: up.y - 4, w: up.w + 8, h: up.h + 8 },
+      down: { x: down.x - 4, y: down.y - 4, w: down.w + 8, h: down.h + 8 },
+    };
+    const drawArrow = (r: ScreenRect, dir: "up" | "down") => {
+      ctx.fillStyle = "rgba(20,24,32,0.6)";
+      ctx.fillRect(r.x, r.y, r.w, r.h);
+      ctx.fillStyle = "#ffd24a";
+      const my = r.y + r.h / 2;
+      const a = 4;
+      ctx.beginPath();
+      if (dir === "up") {
+        ctx.moveTo(cx, my - a);
+        ctx.lineTo(cx - a, my + a - 1);
+        ctx.lineTo(cx + a, my + a - 1);
+      } else {
+        ctx.moveTo(cx, my + a);
+        ctx.lineTo(cx - a, my - a + 1);
+        ctx.lineTo(cx + a, my - a + 1);
+      }
+      ctx.closePath();
+      ctx.fill();
+    };
+    drawArrow(up, "up");
+    drawArrow(down, "down");
   }
 
   private drawRuler(ctx: CanvasRenderingContext2D): void {
@@ -971,6 +1077,13 @@ export class TowerEngine {
   dispose(): void {
     this.engine.stop();
   }
+}
+
+interface ScreenRect {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
 }
 
 function buttonNum(ev: ex.PointerEvent): number {

@@ -1,5 +1,6 @@
 import { Simulation } from "./engine/Simulation";
-import { FACILITIES, GRID, MAX_CARS, isElevatorKind } from "./engine/facilities";
+import { FACILITIES, GRID, MAX_CARS, isElevatorKind, isHotelKind } from "./engine/facilities";
+import { ECON, rentConfig, rentOf } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
@@ -41,6 +42,9 @@ class GameApp {
   private paint: { tile: number; floor: number } | null = null;
   /** Currently selected facility for the edit panel. */
   private selected: { type: "unit" | "transport"; id: number } | null = null;
+  /** High-water mark of a shaft's extent during an extend-arrow drag, so a
+   *  back-and-forth wiggle is only charged for floors genuinely added. */
+  private extendHwm: { id: number; top: number; bottom: number } | null = null;
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
@@ -196,6 +200,15 @@ class GameApp {
       }
     };
 
+    // Right-click inspects whatever's under the cursor, whatever tool is held.
+    this.engine.onSecondary = (picked) => this.selectPicked(picked);
+    // In-world extend arrows on the selected elevator: drag an end to grow or
+    // shrink the shaft floor-by-floor.
+    this.engine.onExtendTo = (end, target) => this.extendSelectedTo(end, target);
+    this.engine.onExtendEnd = () => (this.extendHwm = null);
+    // Suppress the browser context menu so right-click is ours to use.
+    this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
+
     // Per-frame: advance the sim and (throttled) refresh DOM/audio.
     this.engine.onUpdate = (ms) => this.update(ms);
   }
@@ -316,7 +329,7 @@ class GameApp {
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
       if (!t) return this.clearSelection();
-      this.engine.selectedId = null;
+      this.engine.selectedId = t.id; // outlines the shaft + shows extend arrows
       this.ui.showEditor(this.transportEditorHtml(t));
     }
   }
@@ -326,18 +339,32 @@ class GameApp {
     const served = this.sim.tower.isFloorServed(u.floor);
     const floorLabel = u.floor >= 1 ? `Floor ${u.floor}` : `Basement ${1 - u.floor}`;
     const canRename = u.kind === "office" || u.kind === "condo";
+    const rcfg = rentConfig(u.kind);
     const rows: string[] = [
       `<span class="k">Location</span><span class="v">${floorLabel}</span>`,
       `<span class="k">Status</span><span class="v">${u.state}</span>`,
     ];
     if (f.population) rows.push(`<span class="k">Occupants</span><span class="v">${u.occupants}/${f.population}</span>`);
     rows.push(`<span class="k">Elevator access</span><span class="v" style="color:${served ? "var(--good)" : "var(--bad)"}">${served ? "Yes" : "No"}</span>`);
-    rows.push(`<span class="k">Satisfaction</span><span class="v">${Math.round(u.satisfaction * 100)}%</span>`);
+    const evalPct = Math.round(u.satisfaction * 100);
+    rows.push(
+      `<span class="k">Eval</span><span class="v"><span class="evalbar"><span style="width:${evalPct}%"></span></span> ${evalPct}%</span>`,
+    );
+    if (rcfg) {
+      const label = u.kind === "condo" ? "Sale price" : isHotelKind(u.kind) ? "Room rate" : "Quarterly rent";
+      const suffix = isHotelKind(u.kind) ? "/night" : "";
+      rows.push(`<span class="k">${label}</span><span class="v">$${rentOf(u).toLocaleString()}${suffix}</span>`);
+    }
     rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
 
     let actions = "";
     if (canRename) {
       actions += `<div class="ed-row"><input data-edit="noop" id="ed-name" value="${escapeAttr(u.label)}" /><button data-edit="rename">Rename</button></div>`;
+    }
+    // Price adjuster: offices/hotels any time, condos only while still unsold.
+    if (rcfg && !(u.kind === "condo" && u.everOccupied)) {
+      const what = u.kind === "condo" ? "price" : "rent";
+      actions += `<div class="ed-row"><button data-edit="rentDown">– ${what}</button><button data-edit="rentUp">+ ${what}</button></div>`;
     }
     actions += `<div class="ed-row"><button class="danger" data-edit="sell">Sell / Bulldoze</button></div>`;
 
@@ -396,6 +423,44 @@ class GameApp {
     });
   }
 
+  /** Drag-extend the selected shaft so `end` reaches `targetFloor`. Charges
+   *  $5,000 per floor, but only for floors beyond the drag's high-water mark
+   *  (so dragging out and back doesn't bill twice). Shrinking is free. */
+  private extendSelectedTo(end: "up" | "down", targetFloor: number): void {
+    if (!this.selected || this.selected.type !== "transport") return;
+    const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
+    if (!t || !isElevatorKind(t.kind)) return; // only lifts have extend handles / billing
+    if (!this.extendHwm || this.extendHwm.id !== t.id) {
+      this.extendHwm = { id: t.id, top: t.top, bottom: t.bottom };
+    }
+    let nb = t.bottom;
+    let nt = t.top;
+    if (end === "up") nt = Math.max(t.bottom + 1, targetFloor);
+    else nb = Math.min(t.top - 1, targetFloor);
+
+    // Bill only floors past the gesture's high-water mark, and clamp the growth
+    // to what the player can afford — so a fast drag grows the shaft as far as
+    // the budget allows (matching a slow drag) instead of being rejected, and a
+    // broke drag simply stops growing without spamming a toast every frame.
+    const PER_FLOOR = ECON.transportFloorCost;
+    const budgetFloors = Math.floor(this.sim.money / PER_FLOOR);
+    if (nt > this.extendHwm.top) nt = this.extendHwm.top + Math.min(nt - this.extendHwm.top, budgetFloors);
+    if (nb < this.extendHwm.bottom) nb = this.extendHwm.bottom - Math.min(this.extendHwm.bottom - nb, budgetFloors);
+    if (nb === t.bottom && nt === t.top) return; // nothing changed this step
+
+    const added = Math.max(0, nt - this.extendHwm.top) + Math.max(0, this.extendHwm.bottom - nb);
+    const res = this.sim.tower.resizeTransport(t.id, nb, nt);
+    if (res.ok) {
+      this.sim.money -= added * PER_FLOOR;
+      this.extendHwm.top = Math.max(this.extendHwm.top, nt);
+      this.extendHwm.bottom = Math.min(this.extendHwm.bottom, nb);
+      this.audio.sfx(added > 0 ? "build" : "click");
+      this.refreshEditor();
+    }
+    // A blocked step (cap reached, no structure, another shaft in the way) is
+    // silent so a drag doesn't spam toasts; the shaft simply stops growing.
+  }
+
   private handleEditAction(action: string, root: HTMLElement): void {
     if (!this.selected) return;
     if (this.selected.type === "unit") {
@@ -412,6 +477,11 @@ class GameApp {
         if (input) u.label = input.value.trim() || FACILITIES[u.kind].name;
         this.audio.sfx("click");
         this.refreshEditor();
+      } else if (action === "rentUp" || action === "rentDown") {
+        if (this.sim.adjustRent(u.id, action === "rentUp" ? 1 : -1) !== null) {
+          this.audio.sfx("click");
+          this.refreshEditor();
+        }
       }
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
@@ -443,7 +513,7 @@ class GameApp {
       } else if (action === "extendUp" || action === "extendDown") {
         const nb = action === "extendDown" ? t.bottom - 1 : t.bottom;
         const nt = action === "extendUp" ? t.top + 1 : t.top;
-        const cost = 5000;
+        const cost = ECON.transportFloorCost;
         if (this.sim.money < cost) {
           this.ui.toast("Not enough money.", "bad");
           return;

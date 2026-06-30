@@ -17,7 +17,7 @@ import { RNG } from "./rng";
  * pace regardless of the game-speed time compression.
  */
 
-export type PersonState = "toShaft" | "waiting" | "riding" | "toDest" | "done";
+export type PersonState = "toShaft" | "waiting" | "riding" | "climbing" | "toDest" | "done";
 
 export interface Person {
   id: number;
@@ -116,11 +116,10 @@ export class Crowd {
     if (this.adj && this.adjRev === tower.revision) return this.adj;
     const adj = new Map<number, { f: number; shaft: number }[]>();
     for (const t of tower.transports) {
-      // Only elevators carry our riders — they board real cars. Stairs and
-      // escalators have no cars, so routing through them would strand a
-      // commuter waiting forever for a car that never comes; their decorative
-      // climbers cover that movement instead.
-      if (!isElevatorKind(t.kind)) continue;
+      // Elevators carry riders in cars; stairs/escalators are walked (a
+      // "climbing" leg, no car). Both are real routing edges now, so short
+      // hops travel on foot and BFS still prefers a single long elevator ride
+      // (one transfer) over many stair flights for tall trips.
       const stops = this.stopsOf(tower, t);
       for (const a of stops) {
         let list = adj.get(a);
@@ -290,7 +289,7 @@ export class Crowd {
         continue;
       }
       this.step(p, dtSec, tower);
-      if (p.state === "waiting" || p.state === "riding" || p.state === "toShaft") {
+      if (p.state === "waiting" || p.state === "riding" || p.state === "toShaft" || p.state === "climbing") {
         travelling++;
         if (p.wait > STRESS_WAIT) frustrated++;
       }
@@ -313,8 +312,37 @@ export class Crowd {
         if (!shaft) return this.finish(p);
         const targetX = shaft.x + shaft.width / 2;
         if (this.walkTo(p, targetX, dt)) {
-          p.state = "waiting";
-          p.wait = 0;
+          // Elevators are boarded (wait for a car); stairs/escalators are
+          // simply climbed on foot.
+          if (isElevatorKind(shaft.kind)) {
+            p.state = "waiting";
+            p.wait = 0;
+          } else {
+            p.state = "climbing";
+            p.wait = 0; // climbing is on-foot, never "waiting" — don't inflate stress
+          }
+        }
+        break;
+      }
+      case "climbing": {
+        const shaft = this.shaftOf(tower, p.shaftId);
+        if (!shaft) return this.finish(p);
+        const dest = p.floors[p.leg + 1];
+        const dir = Math.sign(dest - p.fy) || 1;
+        // Escalators carry you a little faster than trudging up stairs.
+        const speed = shaft.kind === "escalator" ? 1.3 : 0.85; // floors/sec
+        p.fy += dir * speed * dt;
+        p.x = shaft.x + shaft.width / 2;
+        if ((dir > 0 && p.fy >= dest) || (dir < 0 && p.fy <= dest)) {
+          p.fy = dest;
+          p.floor = dest;
+          p.leg++;
+          if (p.leg >= p.shafts.length) {
+            p.state = "toDest";
+          } else {
+            p.shaftId = p.shafts[p.leg];
+            p.state = "toShaft";
+          }
         }
         break;
       }

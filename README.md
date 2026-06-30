@@ -85,6 +85,41 @@ sharing a playable build.
 - **Save anywhere:** autosave to `localStorage`, multiple save slots, plus JSON
   export/import.
 
+## Saving & loading
+
+**For players.** The game **autosaves** to your browser's `localStorage` and
+restores that slot on the next launch. You also get **3 named manual slots** so
+you can keep several towers, and **JSON export/import** for backups or sharing a
+tower with someone else. Saves are managed from the in-game saves panel; clearing
+your browser storage erases them.
+
+**How it works.** A save is a snapshot of the **headless simulation**, not the
+renderer. `Simulation.serialize()` writes the deterministic source of truth —
+money, star rating, the game clock, the RNG seed, every unit and transport, the
+event system (fires, seasonal events) and excavation history — into a plain
+`SerializedGame` object that `SaveGame` stores in `localStorage`
+(`src/storage/SaveGame.ts`). On load, `Simulation.deserialize()` rebuilds the
+model and the Excalibur scene is regenerated from it.
+
+> **Why not Excalibur's `Serializer`?** Excalibur ships a serializer, but it
+> targets the render layer — Actors, Components, the scene graph. In this project
+> those are *derived* view state, rebuilt from the simulation whenever the tower
+> changes; they hold none of the authoritative game state. Serializing them would
+> mean two save paths and a format coupled to the renderer, so the save system
+> deliberately serializes the headless `Simulation` instead.
+
+Saves are treated as **untrusted input**. `deserialize()` coerces non-finite
+numbers, drops units/transports with an unrecognized kind, and clamps car counts
+and shaft heights, so a hand-edited, corrupt, or foreign file degrades gracefully
+rather than crashing the game. A `version` field plus a `migrateSave()` seam
+gates loading: a save from a *newer* build loads best-effort instead of being
+discarded, and any future format change has a single place to add an upgrade
+step. The `serialize → deserialize → serialize` round-trip is covered by the
+Vitest suite.
+
+`.TWR` import of original SimTower saves has groundwork in place but is not yet
+wired up (see the parity table below).
+
 ## 1994 SimTower parity
 
 How the clone maps to the original's mechanics. Items marked ✅ are implemented
@@ -164,9 +199,10 @@ camera or raw pointer math directly.
 
 ## Tests
 
-106 Vitest unit tests cover placement rules, transport reachability, the economy
+The Vitest suite covers placement rules, transport reachability, the economy
 (rent, condo sales, maintenance), star promotion and its facility gates, the
-hotel housekeeping cycle, elevator editing, save/load round-trips, and the
+hotel housekeeping cycle, elevator editing, save/load round-trips (including
+serialize-deserialize stability and corrupt/forward-version saves), and the
 clock. Run with `npm test`.
 
 ---

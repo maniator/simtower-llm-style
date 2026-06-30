@@ -389,9 +389,8 @@ export class Tower {
     for (let fl = bottom; fl <= top; fl++) {
       let hasStructure = false;
       for (let i = 0; i < f.width; i++) {
-        if (this.rooms.has(this.key(fl, x + i))) {
-          return { ok: false, reason: "Transport would collide with a room." };
-        }
+        // Transport may share a cell with a room — the shaft simply draws in
+        // front of it (as in the original, where lifts overlap facilities).
         if (this.structure.has(this.key(fl, x + i))) hasStructure = true;
       }
       if (!hasStructure) {
@@ -485,10 +484,15 @@ export class Tower {
     // Validate only the floors that are being newly added.
     for (let fl = newBottom; fl <= newTop; fl++) {
       if (fl >= t.bottom && fl <= t.top) continue; // already served
+      // Every newly-served floor needs built structure under the shaft — the
+      // same invariant validateTransport enforces — so an extend can't float
+      // the shaft into empty sky. (Rooms no longer block; it draws in front.)
+      let hasStructure = false;
       for (let i = 0; i < t.width; i++) {
-        if (this.rooms.has(this.key(fl, t.x + i))) {
-          return { ok: false, reason: "A room blocks that floor." };
-        }
+        if (this.structure.has(this.key(fl, t.x + i))) hasStructure = true;
+      }
+      if (!hasStructure) {
+        return { ok: false, reason: "Transport must run through built floors — lay floors first." };
       }
       for (const other of this.transports) {
         if (other.id === t.id) continue;

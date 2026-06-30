@@ -2,6 +2,51 @@ import { describe, it, expect } from "vitest";
 import { Simulation, ECON } from "../engine/Simulation";
 import { FACILITIES, GRID } from "../engine/facilities";
 
+describe("Rent / price controls", () => {
+  it("steps and clamps a unit's price within its band", () => {
+    const sim = Simulation.newGame(1);
+    const x0 = Math.floor(GRID.width / 2);
+    for (let i = 0; i < 12; i++) sim.tower.place("floor", 2, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 2);
+    const r = sim.tower.place("office", 2, x0 + 1);
+    const id = r.unitId!;
+    expect(sim.adjustRent(id, 1)).toBe(ECON.rent.office.default + ECON.rent.office.step);
+    // Spamming up clamps to the band maximum, never beyond.
+    for (let i = 0; i < 50; i++) sim.adjustRent(id, 1);
+    expect(sim.tower.units.find((u) => u.id === id)!.rent).toBe(ECON.rent.office.max);
+    for (let i = 0; i < 50; i++) sim.adjustRent(id, -1);
+    expect(sim.tower.units.find((u) => u.id === id)!.rent).toBe(ECON.rent.office.min);
+  });
+
+  it("won't change a condo's price once it has sold", () => {
+    const sim = Simulation.newGame(1);
+    const x0 = Math.floor(GRID.width / 2);
+    for (let i = 0; i < 20; i++) sim.tower.place("floor", 2, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 2);
+    const r = sim.tower.place("condo", 2, x0 + 1);
+    const u = sim.tower.units.find((x) => x.id === r.unitId)!;
+    expect(sim.adjustRent(u.id, 1)).not.toBeNull(); // adjustable while unsold
+    u.everOccupied = true; // now sold
+    expect(sim.adjustRent(u.id, 1)).toBeNull();
+  });
+
+  it("over-pricing an office erodes its satisfaction vs the going rate (real retention cost)", () => {
+    const sim = builtTower(3); // serviced office tower (elevator to floor 2)
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.build("office", 2, x0); // charges the default rent
+    sim.build("office", 2, x0 + 10); // gouged to the cap
+    const ua = sim.tower.unitAt(2, x0)!;
+    const ub = sim.tower.unitAt(2, x0 + 10)!;
+    for (const u of [ua, ub]) {
+      u.state = "occupied";
+      u.satisfaction = 1;
+    }
+    ub.rent = ECON.rent.office.max;
+    for (let i = 0; i < 8; i++) sim.tick(60); // a handful of in-game hours
+    expect(ub.satisfaction).toBeLessThan(ua.satisfaction);
+  });
+});
+
 /** Build a serviced office tower with `n` offices on floor 2. */
 function builtTower(seed = 7): Simulation {
   const sim = Simulation.newGame(seed);
@@ -100,7 +145,7 @@ describe("Simulation economy", () => {
     // Force the resident in.
     const condo = sim.tower.units.find((u) => u.kind === "condo")!;
     (sim as any).moveIn(condo);
-    expect(sim.money).toBe(before + ECON.condoSalePrice);
+    expect(sim.money).toBe(before + ECON.rent.condo.default);
     expect(condo.everOccupied).toBe(true);
     // A second move-in does not re-sell.
     const mid = sim.money;
@@ -247,7 +292,7 @@ describe("Transport editing", () => {
     expect(t.cars).toBe(1); // clamped
   });
 
-  it("resizes a transport and validates collisions", () => {
+  it("resizes a transport; rooms no longer block extension (shaft overlaps them)", () => {
     const sim = base(2);
     const x0 = Math.floor(GRID.width / 2) - 20;
     sim.buildTransport("elevatorStandard", x0, 1, 6);
@@ -255,10 +300,31 @@ describe("Transport editing", () => {
     const ok = sim.tower.resizeTransport(t.id, 1, 8);
     expect(ok.ok).toBe(true);
     expect(t.top).toBe(8);
-    // A room directly in the shaft column blocks extension.
+    // A room directly in the shaft column used to block extension; it now
+    // overlaps and the shaft simply draws in front of it.
     sim.tower.place("office", 9, x0);
-    const blocked = sim.tower.resizeTransport(t.id, 1, 9);
-    expect(blocked.ok).toBe(false);
+    const overRoom = sim.tower.resizeTransport(t.id, 1, 9);
+    expect(overRoom.ok).toBe(true);
+    expect(t.top).toBe(9);
+  });
+
+  it("lets a new shaft be placed over a room", () => {
+    const sim = base(2);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.tower.place("office", 3, x0); // a room sitting in the shaft column
+    const res = sim.buildTransport("elevatorStandard", x0, 1, 6);
+    expect(res.ok).toBe(true);
+  });
+
+  it("won't extend a shaft into floors with no structure (no floating in sky)", () => {
+    const sim = base(2); // structure exists on floors 2..10 only
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    sim.buildTransport("elevatorStandard", x0, 1, 6);
+    const t = sim.tower.transports[0];
+    expect(sim.tower.resizeTransport(t.id, 1, 10).ok).toBe(true); // up to built structure
+    expect(t.top).toBe(10);
+    expect(sim.tower.resizeTransport(t.id, 1, 11).ok).toBe(false); // floor 11 is empty sky
+    expect(t.top).toBe(10); // unchanged
   });
 
   it("caps cars per elevator type", () => {

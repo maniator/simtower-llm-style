@@ -86,6 +86,31 @@ describe("SaveGame", () => {
     expect(SaveGame.hasSave()).toBe(false);
   });
 
+  it("round-trips serialize -> deserialize -> serialize without drift", () => {
+    const sim = sampleGame();
+    // The nested per-car arrays are where serialization drift hides, not the
+    // scalars — so assert they're populated before trusting the round-trip.
+    const t = sim.tower.transports[0];
+    expect(t.carPositions.length).toBeGreaterThan(0);
+
+    const first = sim.serialize();
+    const second = Simulation.deserialize(first).serialize();
+    expect(second).toEqual(first);
+    // And the deep-copied car arrays survive intact, value for value.
+    expect(second.transports[0].carPositions).toEqual(first.transports[0].carPositions);
+  });
+
+  it("loads a save from an unknown future version without throwing", () => {
+    const sim = sampleGame();
+    const data = sim.serialize();
+    // A save written by a newer build must degrade gracefully, not crash.
+    (data as { version: number }).version = 999;
+    expect(() => Simulation.deserialize(data)).not.toThrow();
+    const loaded = Simulation.deserialize(data);
+    expect(loaded.money).toBe(sim.money);
+    expect(loaded.tower.units.length).toBe(sim.tower.units.length);
+  });
+
   it("drops units with an unrecognized kind on load", () => {
     const sim = sampleGame();
     const data = sim.serialize();

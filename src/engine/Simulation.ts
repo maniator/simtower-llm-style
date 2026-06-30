@@ -1,7 +1,7 @@
 import { Clock } from "./Clock";
 import { Crowd } from "./Crowd";
 import { EconomySystem } from "./EconomySystem";
-import { ECON } from "./econConfig";
+import { ECON, rentOf, rentConfig } from "./econConfig";
 import { ElevatorDispatch } from "./ElevatorDispatch";
 import { EventSystem } from "./EventSystem";
 import type { SimContext } from "./SimContext";
@@ -23,6 +23,33 @@ import {
   isHotelKind,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit, WeatherKind } from "./types";
+
+/**
+ * Current save-format version. `serialize()` always stamps this; `deserialize()`
+ * routes every save through {@link migrateSave} first, so the field is read on
+ * load — not merely written — and a future format bump has exactly one place to
+ * grow.
+ */
+export const SAVE_VERSION = 1;
+
+/**
+ * Save-format migration seam. Runs before the field-level coercion in
+ * {@link Simulation.deserialize}. v1 is the only format today, so this is the
+ * identity transform — but it makes `version` an honest contract instead of a
+ * constant nobody reads, and gives the next format change a single anchor.
+ */
+function migrateSave(data: SerializedGame): SerializedGame {
+  // A missing/garbled version is normalized so the (future) upgrade chain has a
+  // number to branch on; deserialize()'s coercion still hardens every value.
+  const version = Number.isFinite(data.version) ? data.version : SAVE_VERSION;
+  const migrated: SerializedGame = data.version === version ? data : { ...data, version };
+  // Future upgrades chain here in order, each bumping migrated.version, e.g.:
+  //   if (migrated.version === 1) migrated = upgradeV1toV2(migrated);
+  // A save from a newer build (version > SAVE_VERSION) can't be downgraded, so
+  // it loads best-effort — the coercion below guards it — rather than throwing
+  // away the player's tower.
+  return migrated;
+}
 
 /**
  * Crowd time-base: one in-game minute is worth this many of the crowd's own
@@ -300,10 +327,16 @@ export class Simulation implements SimContext {
       // Decompose into ≤30-min sub-steps that never skip an hour boundary, so
       // onHour/onDay fire for EVERY elapsed hour/day and the integrators get a
       // bounded step — headless then matches the (pre-chunked) browser. (F4)
+      const EPS = 1e-6;
       let remaining = dtMinutes;
-      while (remaining > 0.0001) {
+      while (remaining > EPS) {
         const toNextHour = 60 - (this.clock.minuteOfDay % 60);
-        const step = Math.min(remaining, 30, toNextHour);
+        // Guarantee forward progress: when we're sitting essentially on an hour
+        // boundary (toNextHour ≈ 0, possible with fractional minutes from the
+        // browser loop's accumulator) take a normal step instead of a vanishing
+        // one, so the loop can't stall in tiny increments. (review/Copilot F4-2)
+        const cap = toNextHour > EPS ? Math.min(30, toNextHour) : 30;
+        const step = Math.min(remaining, cap);
         this.advanceStep(step);
         remaining -= step;
       }
@@ -461,6 +494,17 @@ export class Simulation implements SimContext {
       } else {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
       }
+      // Rent pressure: charging an office above the going rate erodes
+      // satisfaction (and so retention); undercutting it keeps tenants happy.
+      // The coefficient is tuned to exceed the +0.05 served-recovery near the
+      // top of the band, so a gouged office trends to a net-negative drift and
+      // eventually vacates — otherwise rent would be free money (fill cheap,
+      // then crank to max with no downside).
+      if (u.kind === "office" && served) {
+        const cfg = rentConfig("office")!;
+        const over = (rentOf(u) - cfg.default) / cfg.default; // <0 cheap, >0 pricey
+        u.satisfaction = Math.max(0, Math.min(1, u.satisfaction - over * 0.07));
+      }
       // NOTE: the individually-routed crowd's frustration is exposed read-only via
       // {@link crowdStress} for the HUD, but is deliberately NOT written back into
       // satisfaction — its value depends on frame/step cadence, so feeding it into
@@ -583,13 +627,23 @@ export class Simulation implements SimContext {
       }
     }
 
-    // Split each floor's travelling population across the shafts that serve it.
+    // Split each floor's travelling population across the shafts that serve it,
+    // **in proportion to each shaft's capacity** — riders prefer the higher-
+    // throughput shaft. This is the load-balancing a real bank does, and it is
+    // what makes adding ANY parallel shaft (even a weak one) strictly increase
+    // total capacity and therefore REDUCE a floor's congestion. (An equal split
+    // would wrongly route half the load onto a weak car and raise congestion.)
     const loadByShaft = new Map<number, number>();
     for (const [f, pop] of popByFloor) {
       const shafts = shaftsByFloor.get(f);
       if (!shafts || shafts.length === 0) continue; // unserved → handled by reachability
-      const share = (pop * relief) / shafts.length;
-      for (const s of shafts) loadByShaft.set(s.id, (loadByShaft.get(s.id) ?? 0) + share);
+      const totalCap = shafts.reduce((sum, s) => sum + s.cap, 0);
+      if (totalCap <= 0) continue;
+      const demand = pop * relief;
+      for (const s of shafts) {
+        const sShare = demand * (s.cap / totalCap);
+        loadByShaft.set(s.id, (loadByShaft.get(s.id) ?? 0) + sShare);
+      }
     }
 
     // Each floor's congestion is its worst serving shaft (loads ~balanced by the split).
@@ -623,13 +677,14 @@ export class Simulation implements SimContext {
       if (f.population === 0 && !isHotelKind(u.kind)) continue; // non-tenant facility
       if (!this.tower.isFloorServed(u.floor)) continue; // nobody moves to an unreachable floor
 
+      const demand = this.demandFactor(u);
       if (u.kind === "office") {
-        if (!weekend && this.rng.chance(0.25)) this.moveIn(u);
+        if (!weekend && this.rng.chance(0.25 * demand)) this.moveIn(u);
       } else if (u.kind === "condo") {
-        if (this.rng.chance(0.18)) this.moveIn(u);
+        if (this.rng.chance(0.18 * demand)) this.moveIn(u);
       } else if (isHotelKind(u.kind)) {
         // Hotel rooms fill in the evening only and must be clean.
-        if (this.clock.isEvening() && this.rng.chance(0.5)) {
+        if (this.clock.isEvening() && this.rng.chance(0.5 * demand)) {
           u.state = "asleep";
           u.everOccupied = true;
           this.moveInsToday.rooms++;
@@ -638,14 +693,36 @@ export class Simulation implements SimContext {
     }
   }
 
+  /** How a unit's chosen price shifts demand: 1 at the going rate, higher when
+   *  it undercuts, lower when it gouges (clamped). 1 for un-priced kinds. */
+  private demandFactor(u: Unit): number {
+    const cfg = rentConfig(u.kind);
+    if (!cfg) return 1;
+    const ratio = rentOf(u) / cfg.default;
+    return Math.max(0.15, Math.min(1.6, 2 - ratio));
+  }
+
+  /** Nudge a unit's price one step within its band — offices/hotels any time,
+   *  condos only while unsold. Returns the new price, or null if not adjustable. */
+  adjustRent(id: number, dir: 1 | -1): number | null {
+    const u = this.tower.units.find((x) => x.id === id);
+    if (!u) return null;
+    const cfg = rentConfig(u.kind);
+    if (!cfg) return null;
+    if (u.kind === "condo" && u.everOccupied) return null; // already sold
+    u.rent = Math.max(cfg.min, Math.min(cfg.max, rentOf(u) + dir * cfg.step));
+    return u.rent;
+  }
+
   private moveIn(u: Unit): void {
     u.state = "occupied";
     u.satisfaction = 1;
     if (u.kind === "condo" && !u.everOccupied) {
       u.everOccupied = true;
-      this.money += ECON.condoSalePrice;
+      const price = rentOf(u);
+      this.money += price;
       this.moveInsToday.condos++;
-      this.emit(`Condominium on ${this.floorLabel(u.floor)} sold for $${ECON.condoSalePrice.toLocaleString()}.`, "money");
+      this.emit(`Condominium on ${this.floorLabel(u.floor)} sold for $${price.toLocaleString()}.`, "money");
     }
     if (u.kind === "office") {
       u.everOccupied = true;
@@ -823,7 +900,7 @@ export class Simulation implements SimContext {
 
   serialize(): SerializedGame {
     return {
-      version: 1,
+      version: SAVE_VERSION,
       seed: this.rng.seed,
       money: this.money,
       star: this.star,
@@ -848,7 +925,9 @@ export class Simulation implements SimContext {
     };
   }
 
-  static deserialize(data: SerializedGame): Simulation {
+  static deserialize(raw: SerializedGame): Simulation {
+    // Run the save through the version seam first, then harden every field below.
+    const data = migrateSave(raw);
     const sim = new Simulation(data.seed);
     sim.money = data.money;
     sim.star = data.star;
@@ -873,6 +952,9 @@ export class Simulation implements SimContext {
         satisfaction: Math.max(0, Math.min(1, num(u.satisfaction, 1))),
         occupants: Math.max(0, num(u.occupants, 0)),
         pendingIncome: num(u.pendingIncome, 0),
+        // Coerce the optional player-set price too, so a corrupt save can't
+        // inject a non-number rent (which would poison income / rentOf math).
+        rent: u.rent === undefined ? undefined : num(u.rent, rentConfig(u.kind)?.default ?? 0),
       }));
     sim.tower.transports = (data.transports ?? [])
       .filter((t) => isFacilityKind(t.kind))

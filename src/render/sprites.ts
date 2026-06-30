@@ -562,9 +562,33 @@ export function drawTransport(
     ctx.fillStyle = "rgba(0,0,0,0.5)";
     ctx.fillRect(sx + 1, topY, 1, height);
     ctx.fillRect(sx + w - 2, topY, 1, height);
+    // Floor numbers painted on the shaft backing, as in the original — the car
+    // (a separate actor) rides over them, so only the empty shaft shows them.
+    // (fillStyle is set per-element inside the loop below.)
+    ctx.font = `bold ${Math.min(floorH - 4, 8)}px "MS Sans Serif", monospace`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
     for (let fl = 0; fl <= t.top - t.bottom; fl++) {
+      const fy = topY + fl * floorH;
       ctx.fillStyle = "rgba(255,255,255,0.05)";
-      ctx.fillRect(sx + 1, topY + fl * floorH, w - 2, 1);
+      ctx.fillRect(sx + 1, fy, w - 2, 1); // per-floor stop line
+      const num = t.top - fl; // band fl counts down from the top floor
+      const label = num >= 1 ? String(num) : `B${1 - num}`;
+      ctx.fillStyle = "rgba(255,255,255,0.28)";
+      ctx.fillText(label, sx + w / 2, fy + floorH / 2);
+    }
+    // Motor/machinery housings cap the shaft top and bottom, as in the original
+    // (where the extend-taller arrows also live — that interaction is a planned
+    // follow-up).
+    const mh = 5;
+    for (const my of [topY, topY + height - mh]) {
+      ctx.fillStyle = "#6b6f78";
+      ctx.fillRect(sx, my, w, mh);
+      ctx.fillStyle = "rgba(255,255,255,0.25)";
+      ctx.fillRect(sx, my, w, 1);
+      ctx.fillStyle = "rgba(0,0,0,0.45)";
+      ctx.fillRect(sx, my + mh - 1, w, 1);
+      for (let bx = sx + 2; bx < sx + w - 1; bx += 4) ctx.fillRect(bx, my + 2, 1, 1); // bolts
     }
   }
 }
@@ -573,13 +597,23 @@ export function drawTransport(
  *  `riders` passengers. The car is its own Excalibur Actor that the engine
  *  moves along the shaft (and swaps for an empty car when idle). */
 export function drawCar(ctx: CanvasRenderingContext2D, seed: number, w: number, floorH: number, riders: number): void {
-  ctx.fillStyle = "#d2d6dc";
+  // Cab frame, then the lit interior inset within it.
+  ctx.fillStyle = "#8e94a0";
+  ctx.fillRect(1, 1, w - 2, floorH - 2);
+  ctx.fillStyle = "#d8dce2";
   ctx.fillRect(2, 2, w - 4, floorH - 4);
-  ctx.fillStyle = "#a7adb6";
-  ctx.fillRect(2, 2, w - 4, 1);
-  ctx.fillStyle = "rgba(42,46,56,0.5)";
-  ctx.fillRect(w / 2 - 0.5, 3, 1, floorH - 6);
+  // Ceiling light strip.
+  ctx.fillStyle = "#f3f6fa";
+  ctx.fillRect(3, 2, w - 6, 2);
+  // Riders stand on the cab floor.
   for (let p = 0; p < riders; p++) {
     person(ctx, 3 + p * 3.5, floorH - 3, 1.0, (p * 13 + seed) | 0);
   }
+  // Door frames + the central seam, drawn over the riders so the cab reads as
+  // an enclosed car.
+  ctx.fillStyle = "rgba(40,44,54,0.22)";
+  ctx.fillRect(2, 2, 1, floorH - 4);
+  ctx.fillRect(w - 3, 2, 1, floorH - 4);
+  ctx.fillStyle = "rgba(40,44,54,0.5)";
+  ctx.fillRect(w / 2 - 0.5, 3, 1, floorH - 5);
 }
