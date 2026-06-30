@@ -69,8 +69,8 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     category: "hotel",
     name: "Double Room",
     width: 6,
-    cost: 40000,
-    minStar: 2,
+    cost: 50000,
+    minStar: 3,
     population: 2,
     color: "#e0a94e",
     description: "Hotel double room. Higher nightly income than a single.",
@@ -81,7 +81,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Suite",
     width: 12,
     cost: 100000,
-    minStar: 2,
+    minStar: 3,
     // A suite houses a larger party than a double — matching the 1994 original
     // (review F36).
     population: 3,
@@ -105,7 +105,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Restaurant",
     width: 16,
     cost: 200000,
-    minStar: 2,
+    minStar: 3,
     population: 0,
     color: "#d4564a",
     description: "Fine dining, busy at lunch and dinner. Needs good elevator access.",
@@ -116,7 +116,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Retail Shop",
     width: 12,
     cost: 100000,
-    minStar: 2,
+    minStar: 3,
     population: 0,
     color: "#b58ad6",
     description: "Retail. Earns from shoppers passing by. Thrives near lobbies and offices.",
@@ -162,7 +162,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Escalator",
     width: 4,
     cost: 20000,
-    minStar: 2,
+    minStar: 3,
     population: 0,
     color: "#c8c0a0",
     transport: true,
@@ -185,7 +185,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     category: "transport",
     name: "Service Elevator",
     width: 4,
-    cost: 150000,
+    cost: 100000,
     minStar: 2,
     population: 0,
     color: "#4a4a52",
@@ -210,7 +210,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Parking Space",
     width: 6,
     cost: 30000,
-    minStar: 2,
+    minStar: 3,
     population: 0,
     color: "#888888",
     basement: true,
@@ -258,7 +258,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     width: 20,
     floors: 2,
     cost: 500000,
-    minStar: 4,
+    minStar: 3,
     population: 0,
     color: "#7f9f5f",
     basement: true,
@@ -444,6 +444,6 @@ export const POOLED_CAPS: { kinds: FacilityKind[]; cap: number; label: string }[
 /** Maximum floors a transport may span. */
 export function maxSpanFor(kind: FacilityKind): number {
   if (kind === "stairs" || kind === "escalator") return 1;
-  if (kind === "elevatorExpress") return 60;
+  if (kind === "elevatorExpress") return 99; // canon: express has no length limit
   return 30;
 }

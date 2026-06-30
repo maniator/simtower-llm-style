@@ -232,23 +232,24 @@ mitigate problems. Each facility type unlocks at a minimum star rating
   that **sell once** for a lump sum of **$120,000** [`ECON.condoSalePrice`] and
   thereafter house permanent residents who count toward population.
 - **FR-13** — The player can place **Hotel** rooms — **Single** (width 4,
-  $20,000), **Double** (width 6, $40,000), **Suite** (width 12, $100,000),
-  unlocked at 2★ — that earn **nightly revenue** ($90 / $180 / $500
-  respectively) [`ECON.hotel`] when occupied, with guests checking in at night
-  and out in the morning.
+  $20,000, 2★), **Double** (width 6, $50,000, 3★), **Suite** (width 12,
+  $100,000, 3★) — that earn **nightly revenue** ($90 / $180 / $500 respectively)
+  [`ECON.hotel`] when occupied, with guests checking in at night and out in the
+  morning. (Double/Suite unlock at 3★ per the original; Suite houses 3.)
 - **FR-14** — Hotel rooms become dirty after checkout and must be cleaned by
   **Housekeeping** before they can be re-rented (a daily cycle).
 - **FR-15** — The player can place food/retail/entertainment rooms that earn
   **daily traffic income** scaled by foot traffic and open hours: **Fast Food**
-  ($2,000/day, 1★), **Restaurant** ($4,000/day, 2★), **Retail Shop**
-  ($2,500/day, 2★), **Cinema** ($8,000/day, 3★, 2 floors), **Party Hall**
-  ($3,000/day, 3★) [`ECON.dailyTrafficIncome`].
+  ($2,000/day, 1★), **Restaurant** ($4,000/day, 3★), **Retail Shop**
+  ($2,500/day, 3★), **Cinema** ($8,000/day, 3★, 2 floors), **Party Hall**
+  ($3,000/day, 3★) [`ECON.dailyTrafficIncome`]. (Restaurant/Shop unlock at 3★
+  per the original.)
 - **FR-16** — Food/retail/entertainment facilities keep **business hours** and
   display as **CLOSED** outside them; income accrues only while open
   [`isOpenAt`, `hasBusinessHours`].
-- **FR-17** — The player can place **Service** facilities — **Parking** (2★,
+- **FR-17** — The player can place **Service** facilities — **Parking** (3★,
   basement), **Security** (2★), **Medical Center** (3★), **Housekeeping** (2★),
-  **Recycling Center** (4★, basement, 2 floors) — which generate no income and
+  **Recycling Center** (3★, basement, 2 floors) — which generate no income and
   provide rating/mitigation effects. Security, Medical, Housekeeping, and
   Recycling each charge monthly maintenance [`ECON.serviceMaintenanceMonthly`];
   Parking carries only its build cost (no monthly service maintenance) and
@@ -285,7 +286,7 @@ transport network. Realizes **UJ-2**, **UJ-4**.
   [`maxSpanFor`, `TRANSPORT_CAPACITY`].
 - **FR-23** — The player can build **Standard** (1★, ≤30 floors, ≤8 cars, cap
   21/car), **Service** (2★, ≤30 floors, ≤4 cars, cap 16/car), and **Express**
-  (3★, ≤60 floors, ≤8 cars, cap 33/car) elevators by dragging vertically to set
+  (3★, ≤99 floors / effectively unlimited, ≤8 cars, cap 33/car) elevators by dragging vertically to set
   the served span [`maxSpanFor`, `MAX_CARS`, `TRANSPORT_CAPACITY`].
 - **FR-24** — The player can edit a placed elevator in-game: adjust its **car
   count** and its **per-floor stop configuration** (which floors a car serves /

@@ -378,7 +378,7 @@ export class Tower {
     if ((kind === "stairs" || kind === "escalator") && span > 1) {
       return { ok: false, reason: `${f.name} spans exactly one floor.` };
     }
-    const maxSpan = kind === "elevatorExpress" ? 60 : 30;
+    const maxSpan = kind === "elevatorExpress" ? 99 : 30;
     if (isElevatorKind(kind) && span > maxSpan) {
       return { ok: false, reason: `This elevator serves at most ${maxSpan} floors.` };
     }
@@ -478,7 +478,7 @@ export class Tower {
     if (newBottom < GRID.minFloor || newTop > GRID.maxFloor) {
       return { ok: false, reason: "Outside the buildable range." };
     }
-    const maxSpan = t.kind === "elevatorExpress" ? 60 : 30;
+    const maxSpan = t.kind === "elevatorExpress" ? 99 : 30;
     if (isElevatorKind(t.kind) && newTop - newBottom > maxSpan) {
       return { ok: false, reason: `This elevator serves at most ${maxSpan} floors.` };
     }

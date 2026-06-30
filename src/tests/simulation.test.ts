@@ -424,7 +424,7 @@ describe("Simulation events", () => {
 
   it("excavating basement rooms can unearth treasure", () => {
     const sim = Simulation.newGame(42);
-    sim.star = 2;
+    sim.star = 3; // parking unlocks at 3★ (canon)
     sim.money = 10_000_000;
     const x0 = Math.floor(GRID.width / 2) - 20;
     // Lay a wide B1 (floor 0) slab, then dig 20 parking rooms into it.
