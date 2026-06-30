@@ -12,7 +12,7 @@ supporting context for downstream architecture/UX work.
 | SimTower (1994) mechanic | Tower Tycoon realization | Divergence |
 | --- | --- | --- |
 | Build floors, then rooms; ground + sky lobbies every 15 floors | Two-layer grid; rooms auto-create floor beneath; lobbies at ground + every 15th | Faithful |
-| ~100 floors up, basements below | 100 up, 9 below (B1=floor 0), 200 tiles wide | Faithful (basement depth tuned) |
+| ~100 floors up, basements below | 100 up, 10 basement levels below (B1…B10, floor 0 = B1 down to floor −9), 200 tiles wide | Faithful (basement depth tuned) |
 | Offices, condos, hotel (single/double/suite), food, retail, cinema, party hall | All present with original cadences | Faithful |
 | Services: security, medical, housekeeping, recycling, parking | All present | Faithful |
 | Metro/subway brings visitors | Whole-basement Metro Station | Faithful |
