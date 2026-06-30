@@ -650,7 +650,7 @@ export class Simulation {
     sim.star = data.star;
     sim.clock = new Clock(data.minutes);
     sim.evaluatedTower = data.evaluatedTower;
-    // Reject any unit/transport with an unrecognised kind from untrusted saves.
+    // Reject any unit/transport with an unrecognized kind from untrusted saves.
     sim.tower.units = (data.units ?? [])
       .filter((u) => isFacilityKind(u.kind))
       .map((u) => ({ ...u }));

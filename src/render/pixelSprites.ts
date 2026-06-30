@@ -360,7 +360,7 @@ function shop(d: RoomCtx, u: Unit, x: number, y: number, w: number, h: number): 
     ctx.fillStyle = Math.floor((sx - x) / 10) % 2 === 0 ? "#FFFFFF" : accent;
     ctx.fillRect(sx, y, 5, band);
   }
-  // Two shelves of colourful goods.
+  // Two shelves of colorful goods.
   const goods = ["#e85d5d", "#5db4e8", "#6bd47a", "#e8c14a", "#b07fe0", "#e88f4a"];
   for (let row = 0; row < 2; row++) {
     const ry = y + h * 0.34 + row * (h * 0.22);

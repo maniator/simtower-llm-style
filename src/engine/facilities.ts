@@ -90,7 +90,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     kind: "fastFood",
     category: "food",
     name: "Fast Food",
-    width: 16,
+    width: 12,
     cost: 100000,
     minStar: 1,
     population: 0,
@@ -101,7 +101,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     kind: "restaurant",
     category: "food",
     name: "Restaurant",
-    width: 24,
+    width: 16,
     cost: 200000,
     minStar: 2,
     population: 0,
@@ -123,12 +123,13 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     kind: "cinema",
     category: "entertainment",
     name: "Cinema",
-    width: 31,
+    width: 24,
+    floors: 2,
     cost: 500000,
     minStar: 3,
     population: 0,
     color: "#8a6fd6",
-    description: "Movie theater. Draws large evening crowds; demands heavy transport capacity.",
+    description: "A two-story movie theater. Draws large evening crowds; demands heavy transport capacity.",
   },
   partyHall: {
     kind: "partyHall",
@@ -210,6 +211,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     minStar: 2,
     population: 0,
     color: "#888888",
+    basement: true,
     description: "Basement parking. Reduces tenant stress for those who drive.",
   },
   security: {
@@ -249,23 +251,28 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     kind: "recycling",
     category: "service",
     name: "Recycling Center",
-    width: 24,
+    width: 20,
+    floors: 2,
     cost: 500000,
     minStar: 4,
     population: 0,
     color: "#7f9f5f",
+    basement: true,
     description: "Basement facility that processes the tower's waste. Improves large-tower rating.",
   },
   metro: {
     kind: "metro",
     category: "special",
     name: "Metro Station",
-    width: 32,
+    // Spans an entire basement floor (full lot width = GRID.width).
+    width: 200,
+    floors: 1,
     cost: 1000000,
     minStar: 4,
     population: 0,
     color: "#9f7f5f",
-    description: "Deep-basement subway station. Brings huge numbers of visitors to your tower.",
+    basement: true,
+    description: "A whole-floor deep-basement subway station. Brings huge numbers of visitors to your tower.",
   },
   weddingHall: {
     kind: "weddingHall",
@@ -306,8 +313,11 @@ export const STAR_THRESHOLDS: Record<number, number> = {
 export const GRID = {
   /** Highest above-ground floor. */
   maxFloor: 100,
-  /** Deepest basement floor (negative). B10. */
-  minFloor: -10,
+  /**
+   * Floor numbering is continuous so basements sit directly under the ground
+   * floor: floor 1 = ground, floor 0 = B1, -1 = B2 … -9 = B10 (no gap at 0).
+   */
+  minFloor: -9,
   /** Total buildable width in tiles. */
   width: 200,
   /** Floors between required (sky) lobbies. */
@@ -316,6 +326,11 @@ export const GRID = {
 
 export function isHotelKind(kind: FacilityKind): boolean {
   return kind === "hotelSingle" || kind === "hotelDouble" || kind === "hotelSuite";
+}
+
+/** Height of a facility in floors (1 for ordinary single-story rooms). */
+export function facilityFloors(kind: FacilityKind): number {
+  return FACILITIES[kind].floors ?? 1;
 }
 
 /**

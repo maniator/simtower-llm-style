@@ -13,7 +13,7 @@ import type { SerializedGame } from "../engine/types";
  * elevator car schedules), so it is planned for a **v2**. This module already
  * establishes the pluggable seam: a single `parseTWR()` that maps the binary
  * into our {@link SerializedGame} schema, and `looksLikeTWR()` for the import
- * UI to route `.TWR` files here. Today it recognises the file and reports that
+ * UI to route `.TWR` files here. Today it recognizes the file and reports that
  * full conversion is coming, rather than silently failing.
  */
 
@@ -42,9 +42,9 @@ export function parseTWR(buffer: ArrayBuffer): SerializedGame {
   if (bytes.byteLength < 16) {
     throw new LegacyImportError("This file is too small to be a SimTower .TWR save.");
   }
-  // Recognised as a plausible legacy tower — but the decoder isn't built yet.
+  // Recognized as a plausible legacy tower — but the decoder isn't built yet.
   throw new LegacyNotYetSupported(
-    "Recognised an original SimTower .TWR file. Importing classic saves is planned " +
+    "Recognized an original SimTower .TWR file. Importing classic saves is planned " +
       "for a future update — for now, build fresh or import a Tower Tycoon JSON export.",
   );
 }

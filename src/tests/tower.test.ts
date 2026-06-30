@@ -51,6 +51,35 @@ describe("Tower placement", () => {
     expect(tower.canPlace("floor", GRID.minFloor - 1, 0).ok).toBe(false);
     expect(tower.canPlace("office", 1, GRID.width - 2).ok).toBe(false);
   });
+
+  it("requires every storey of a multi-floor facility", () => {
+    for (let i = 0; i < 30; i++) tower.place("lobby", 1, i);
+    // Cinema is two storeys: floors 2 AND 3 must exist as structure.
+    for (let i = 0; i < 30; i++) tower.place("floor", 2, i);
+    expect(tower.canPlace("cinema", 2, 0).ok).toBe(false); // floor 3 missing
+    for (let i = 0; i < 30; i++) tower.place("floor", 3, i);
+    expect(tower.canPlace("cinema", 2, 0).ok).toBe(true);
+    const r = tower.place("cinema", 2, 0);
+    expect(r.ok).toBe(true);
+    // It occupies both floors, blocking a room directly above it.
+    expect(tower.roomAt(2, 1)?.id).toBe(r.unitId);
+    expect(tower.roomAt(3, 1)?.id).toBe(r.unitId);
+  });
+
+  it("restricts basement facilities to underground floors", () => {
+    for (let i = 0; i < 40; i++) tower.place("lobby", 1, i);
+    // Basements use continuous numbering: floor 0 = B1, -1 = B2. Build them
+    // from the ground down so each connects to the structure above.
+    for (let f = 0; f >= -1; f--) for (let i = 0; i < 40; i++) tower.place("floor", f, i);
+    // Parking on the ground floor is rejected…
+    expect(tower.canPlace("parking", 1, 0).ok).toBe(false);
+    // …but allowed in the basement (B1 = floor 0).
+    expect(tower.canPlace("parking", 0, 0).ok).toBe(true);
+    // The metro spans a whole basement floor (full lot width).
+    for (let i = 40; i < GRID.width; i++) tower.place("floor", 0, i);
+    expect(tower.canPlace("metro", 0, 0).ok).toBe(true);
+    expect(tower.canPlace("metro", 1, 0).ok).toBe(false);
+  });
 });
 
 describe("Tower transport", () => {

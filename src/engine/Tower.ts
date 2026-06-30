@@ -1,4 +1,4 @@
-import { FACILITIES, GRID, MAX_CARS, isElevatorKind } from "./facilities";
+import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind } from "./facilities";
 import type {
   Facility,
   FacilityKind,
@@ -100,15 +100,21 @@ export class Tower {
 
   private register(unit: Unit): void {
     const map = isStructural(unit.kind) ? this.structure : this.rooms;
-    for (let i = 0; i < unit.width; i++) {
-      map.set(this.key(unit.floor, unit.x + i), unit.id);
+    const hgt = facilityFloors(unit.kind);
+    for (let fl = 0; fl < hgt; fl++) {
+      for (let i = 0; i < unit.width; i++) {
+        map.set(this.key(unit.floor + fl, unit.x + i), unit.id);
+      }
     }
   }
 
   private unregister(unit: Unit): void {
     const map = isStructural(unit.kind) ? this.structure : this.rooms;
-    for (let i = 0; i < unit.width; i++) {
-      map.delete(this.key(unit.floor, unit.x + i));
+    const hgt = facilityFloors(unit.kind);
+    for (let fl = 0; fl < hgt; fl++) {
+      for (let i = 0; i < unit.width; i++) {
+        map.delete(this.key(unit.floor + fl, unit.x + i));
+      }
     }
   }
 
@@ -145,11 +151,22 @@ export class Tower {
       return { ok: false, reason: "The wedding hall can only crown floor 100." };
     }
 
-    if (!this.roomSpanFree(floor, x, f.width)) {
-      return { ok: false, reason: "Something is already here." };
+    // Multi-story facilities (e.g. the cinema) occupy several floors upward.
+    const hgt = facilityFloors(kind);
+    if (floor + hgt - 1 > GRID.maxFloor) {
+      return { ok: false, reason: "Not enough floors above for this facility." };
     }
-    if (!this.spanHasFloor(floor, x, f.width)) {
-      return { ok: false, reason: "Build a floor here first." };
+    // Basement-only facilities must sit entirely underground (floors below 1).
+    if (f.basement && floor + hgt - 1 >= 1) {
+      return { ok: false, reason: `${f.name} can only be built in the basement.` };
+    }
+    for (let fl = floor; fl < floor + hgt; fl++) {
+      if (!this.roomSpanFree(fl, x, f.width)) {
+        return { ok: false, reason: "Something is already here." };
+      }
+      if (!this.spanHasFloor(fl, x, f.width)) {
+        return { ok: false, reason: "Build floors on every story first." };
+      }
     }
     return { ok: true };
   }

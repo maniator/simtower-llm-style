@@ -55,7 +55,7 @@ describe("SaveGame", () => {
     expect(SaveGame.hasSave()).toBe(false);
   });
 
-  it("drops units with an unrecognised kind on load", () => {
+  it("drops units with an unrecognized kind on load", () => {
     const sim = sampleGame();
     const data = sim.serialize();
     const before = data.units.length;

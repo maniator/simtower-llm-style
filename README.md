@@ -75,7 +75,7 @@ npm run screenshots  # build + headless-capture screenshots into docs/screenshot
   VIP TOWER evaluation.
 - **Location-aware soundtrack:** a procedural WebAudio synth crossfades between
   musical "scenes" (lobby muzak, office hum, hotel calm, food-court bustle,
-  cinema score, subway rumble…) based on what the camera is centred on, plus
+  cinema score, subway rumble…) based on what the camera is centered on, plus
   build/sell/promotion jingles.
 - **Save anywhere:** autosave to `localStorage`, plus JSON export/import.
 

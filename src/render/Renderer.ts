@@ -1,4 +1,4 @@
-import { GRID } from "../engine/facilities";
+import { GRID, facilityFloors } from "../engine/facilities";
 import type { Simulation } from "../engine/Simulation";
 import type { FacilityKind, Unit } from "../engine/types";
 import { drawTransport, drawUnit, type DrawCtx } from "./sprites";
@@ -173,8 +173,9 @@ export class Renderer {
       if (!runs) continue;
       for (const r of runs) this.drawRun(d, f, r);
     }
-    // Rooms.
-    for (let f = botF; f <= topF; f++) {
+    // Rooms. Start one floor lower so a multi-story unit whose bottom floor
+    // is just below the viewport still draws its upper floors.
+    for (let f = botF - 1; f <= topF; f++) {
       const arr = this.roomsByFloor.get(f);
       if (!arr) continue;
       for (const u of arr) this.drawUnitWorld(d, u);
@@ -213,8 +214,10 @@ export class Renderer {
     const sx = this.worldToScreenX(u.x);
     const w = u.width * TILE_W * this.cam.zoom;
     if (sx + w < 0 || sx > this.viewWidth) return;
-    const sy = this.worldToScreenY(u.floor);
-    drawUnit(d, u, sx, sy, w, FLOOR_H * this.cam.zoom);
+    // Multi-story facilities span several floors upward; draw their full height.
+    const hgt = facilityFloors(u.kind);
+    const sy = this.worldToScreenY(u.floor + hgt - 1);
+    drawUnit(d, u, sx, sy, w, hgt * FLOOR_H * this.cam.zoom);
   }
 
   private drawSky(sim: Simulation, W: number, H: number, night: boolean): void {
@@ -317,10 +320,11 @@ export class Renderer {
     if (this.preview) {
       const p = this.preview;
       const fac = sim.tower.facilityOf({ kind: p.kind } as never);
+      const hgt = facilityFloors(p.kind);
       const sx = this.worldToScreenX(p.x);
-      const sy = this.worldToScreenY(p.floor);
+      const sy = this.worldToScreenY(p.floor + hgt - 1);
       const w = fac.width * TILE_W * this.cam.zoom;
-      const h = FLOOR_H * this.cam.zoom;
+      const h = hgt * FLOOR_H * this.cam.zoom;
       ctx.globalAlpha = 0.5;
       ctx.fillStyle = p.valid ? fac.color : "#cc3333";
       ctx.fillRect(sx, sy, w, h);
@@ -352,10 +356,10 @@ export class Renderer {
     const topFloor = this.screenToFloor(0) + 1;
     const botFloor = this.screenToFloor(this.viewHeight) - 1;
     for (let f = botFloor; f <= topFloor; f++) {
-      if (f === 0) continue;
       const sy = this.worldToScreenY(f) + (FLOOR_H * this.cam.zoom) / 2;
       if (sy < 12 || sy > this.viewHeight - 2) continue;
-      const label = f > 0 ? `${f}` : `B${-f}`;
+      // Continuous numbering: floor 1 = ground, floor 0 = B1, -1 = B2 …
+      const label = f >= 1 ? `${f}` : `B${1 - f}`;
       ctx.fillStyle = "rgba(0,0,0,0.45)";
       ctx.fillRect(0, sy - 7, 22, 14);
       ctx.fillStyle = f % 15 === 1 ? "#ffd24a" : "#cfcfcf";
@@ -390,7 +394,7 @@ export class Renderer {
       }
     }
     if (dominant === "empty") {
-      // Fall back to structure: lobby if a lobby run is centred.
+      // Fall back to structure: lobby if a lobby run is centered.
       for (let f = f0; f <= f1; f++) {
         const runs = this.structByFloor.get(f);
         if (runs?.some((r) => r.kind === "lobby" && r.x1 >= t0 && r.x0 <= t1)) {

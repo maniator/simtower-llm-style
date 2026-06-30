@@ -106,7 +106,7 @@ describe("Simulation ratings", () => {
   it("gates 3 stars on having security", () => {
     const sim = Simulation.newGame(11);
     // Force a large population. Build in the connected region above the
-    // starter lobby (centred near width/2).
+    // starter lobby (centered near width/2).
     const x0 = Math.floor(GRID.width / 2) - 20;
     for (let f = 2; f <= 60; f++)
       for (let i = 0; i < 40; i++) sim.tower.place("floor", f, x0 + i);

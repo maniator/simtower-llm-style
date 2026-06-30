@@ -55,7 +55,7 @@ function buildDemoScript() {
   s.tower.placeTransport("stairs", left + 60, 1, 2);
 
   const fill = (f, kind) => {
-    const w = { office: 9, condo: 16, hotelDouble: 6, shop: 12, fastFood: 16, restaurant: 24 }[kind];
+    const w = { office: 9, condo: 16, hotelDouble: 6, shop: 12, fastFood: 12, restaurant: 16 }[kind];
     let x = left + 26;
     while (x + w <= left + 70) {
       const r = s.tower.place(kind, f, x);
@@ -76,11 +76,21 @@ function buildDemoScript() {
   for (let f = 2; f <= 14; f++) fill(f, "office");
   for (let f = 16; f <= 22; f++) fill(f, "condo");
   for (let f = 23; f <= 29; f++) fill(f, "office");
-  for (let f = 31; f <= 38; f++) fill(f, "hotelDouble");
-  fill(39, "shop");
-  fill(40, "restaurant");
+  for (let f = 31; f <= 36; f++) fill(f, "hotelDouble");
+  fill(37, "shop");
+  fill(38, "restaurant");
+  // A two-storey cinema spanning floors 39–40.
+  s.star = 5;
+  const cine = s.tower.place("cinema", 39, left + 26);
+  if (cine.ok) s.tower.units.find((u) => u.id === cine.unitId).state = "occupied";
   s.tower.place("security", 1, left + 26);
   s.tower.place("medical", 2, left);
+  // Two basement levels (B1 = floor 0, B2 = floor -1) with a whole-floor metro.
+  for (let x = 0; x < W; x++) s.tower.place("floor", 0, x);
+  for (let x = left; x < left + 70; x++) s.tower.place("floor", -1, x);
+  const metro = s.tower.place("metro", 0, 0);
+  if (metro.ok) s.tower.units.find((u) => u.id === metro.unitId).state = "occupied";
+  for (let x = left; x + 6 <= left + 70; x += 6) s.tower.place("parking", -1, x);
 
   s.evaluateStar();
   // Centre the camera on the mid tower (TILE_W=11, FLOOR_H=34).

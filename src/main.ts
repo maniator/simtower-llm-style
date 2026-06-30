@@ -337,7 +337,7 @@ class GameApp {
   private unitEditorHtml(u: import("./engine/types").Unit): string {
     const f = FACILITIES[u.kind];
     const served = this.sim.tower.isFloorServed(u.floor);
-    const floorLabel = u.floor > 0 ? `Floor ${u.floor}` : `Basement ${-u.floor}`;
+    const floorLabel = u.floor >= 1 ? `Floor ${u.floor}` : `Basement ${1 - u.floor}`;
     const canRename = u.kind === "office" || u.kind === "condo";
     const rows: string[] = [
       `<span class="k">Location</span><span class="v">${floorLabel}</span>`,
@@ -544,7 +544,7 @@ class GameApp {
       const served = this.sim.tower.isFloorServed(u.floor) ? "Yes" : "No";
       this.ui.showInspector(
         `<h4>${f.name}</h4>` +
-          `<div>${u.label !== f.name ? u.label + "<br>" : ""}Floor ${floor > 0 ? floor : "B" + -floor}</div>` +
+          `<div>${u.label !== f.name ? u.label + "<br>" : ""}${floor >= 1 ? "Floor " + floor : "B" + (1 - floor)}</div>` +
           `<div>Status: ${u.state}</div>` +
           (f.population ? `<div>Occupants: ${u.occupants}/${f.population}</div>` : "") +
           `<div>Served by elevator: ${served}</div>` +

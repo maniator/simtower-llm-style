@@ -1,7 +1,7 @@
 /**
  * Game clock. Tracks elapsed in-game minutes and exposes day/time helpers.
  *
- * SimTower runs Monday..Sunday with distinct weekday/weekend behaviour, a
+ * SimTower runs Monday..Sunday with distinct weekday/weekend behavior, a
  * morning rush, a lunch peak and an evening exodus. One in-game day is 24h.
  */
 export class Clock {

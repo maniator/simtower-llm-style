@@ -61,6 +61,8 @@ export interface Facility {
   name: string;
   /** Width in tiles. */
   width: number;
+  /** Height in floors (1 unless the facility spans several stories). */
+  floors?: number;
   /** Build cost in dollars. */
   cost: number;
   /** Star rating required to unlock (1..5). */
@@ -71,6 +73,8 @@ export interface Facility {
   color: string;
   /** True for vertical transport (occupies multiple floors). */
   transport?: boolean;
+  /** True if the facility may only be built underground (basement floors). */
+  basement?: boolean;
   description: string;
 }
 

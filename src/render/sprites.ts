@@ -19,8 +19,8 @@ const ROOM_KINDS = new Set<FacilityKind>([
  * Procedural sprite drawing. Rather than ship external image assets, every
  * facility is drawn from layered shapes — walls, floors, furniture, windows
  * and signage — to evoke the chunky, detailed pixel look of the 1994 original.
- * Per-unit colour variation (seeded by the unit id) keeps rows of identical
- * facilities from reading as one flat colour block. All drawing is in screen
+ * Per-unit color variation (seeded by the unit id) keeps rows of identical
+ * facilities from reading as one flat color block. All drawing is in screen
  * space.
  */
 
@@ -50,7 +50,7 @@ export interface DrawCtx {
   lit: boolean;
   /** Continuous animation time in seconds (for flicker / motion). */
   anim: number;
-  /** In-game hour 0..23, for time-of-day behaviour. */
+  /** In-game hour 0..23, for time-of-day behavior. */
   hour: number;
 }
 
@@ -204,7 +204,7 @@ function drawPartyHall(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.fillRect(x, y, w, h);
   ctx.fillStyle = "#3a2f4a"; // dance floor
   ctx.fillRect(x, y + h - 5, w, 5);
-  // Coloured spotlights washing the floor.
+  // Colored spotlights washing the floor.
   for (let i = 0; i < 5; i++) {
     ctx.fillStyle = ACCENTS[i % ACCENTS.length];
     ctx.globalAlpha = 0.4;
@@ -394,7 +394,7 @@ function drawParking(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: numbe
     ctx.lineTo(lx, y + h - 4);
     ctx.stroke();
   }
-  // A couple of parked cars in varied colours.
+  // A couple of parked cars in varied colors.
   for (let cx = x + 2; cx + 9 < x + w; cx += 12) {
     if (rand((u.id + cx) | 0) > 0.5) continue;
     ctx.fillStyle = ACCENTS[(u.id + cx) % ACCENTS.length];
@@ -531,7 +531,7 @@ export function drawTransport(
     for (let i = 0; i < t.cars; i++) {
       const pos = t.carPositions[i];
       const carY = topY + (t.top - pos) * floorH;
-      // Bright metal car with a centre-door seam.
+      // Bright metal car with a center-door seam.
       ctx.fillStyle = "#d2d6dc";
       ctx.fillRect(sx + 2, carY + 2, w - 4, floorH - 4);
       ctx.fillStyle = "#a7adb6";
