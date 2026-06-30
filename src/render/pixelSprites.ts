@@ -49,11 +49,13 @@ export interface RoomCtx {
   hour: number;
 }
 
+export { SHIRTS, SKIN };
+
 /**
  * The iconic SimTower sim: a solid silhouette. `s` is the unit pixel size
  * (figure is ~3*s wide head, ~6*s tall). Seated drops the legs.
  */
-function person(ctx: CanvasRenderingContext2D, x: number, footY: number, s: number, seed: number, seated = false): void {
+export function person(ctx: CanvasRenderingContext2D, x: number, footY: number, s: number, seed: number, seated = false): void {
   const head = Math.max(2, Math.round(2 * s));
   const bodyW = Math.max(2, Math.round(2.4 * s));
   const bodyH = Math.max(2, Math.round((seated ? 3 : 4) * s));

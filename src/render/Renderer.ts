@@ -2,6 +2,7 @@ import { GRID } from "../engine/facilities";
 import type { Simulation } from "../engine/Simulation";
 import type { FacilityKind, Unit } from "../engine/types";
 import { drawTransport, drawUnit, type DrawCtx } from "./sprites";
+import { person } from "./pixelSprites";
 
 export const TILE_W = 11;
 export const FLOOR_H = 34;
@@ -267,17 +268,17 @@ export class Renderer {
     }
   }
 
-  /** People walking along lobbies and busy corridors. */
+  /** People walking along lobbies and busy corridors (shared silhouettes). */
   private drawWalkers(sim: Simulation, botF: number, topF: number, anim: number): void {
     if (this.cam.zoom < 0.55) return; // skip when zoomed far out
     const ctx = this.ctx;
     const h = FLOOR_H * this.cam.zoom;
     const busy = sim.clock.isMorning() || sim.clock.isEvening() || sim.clock.isLunch();
-    const colors = ["#2a2f3e", "#5a3a3a", "#3a4a5a", "#4a3a52", "#3a4a3a"];
+    const s = 1.1 * this.cam.zoom;
     for (let f = botF; f <= topF; f++) {
       const runs = this.structByFloor.get(f);
       if (!runs) continue;
-      const sy = this.worldToScreenY(f) + h - 5 * this.cam.zoom;
+      const footY = this.worldToScreenY(f) + h - 3 * this.cam.zoom;
       for (const r of runs) {
         const isLobby = r.kind === "lobby";
         if (!isLobby && !busy) continue;
@@ -292,11 +293,7 @@ export class Renderer {
           const dir = seed % 2 === 0 ? 1 : -1;
           let px = ((i / count) * widthPx + dir * anim * speed) % widthPx;
           if (px < 0) px += widthPx;
-          const sx = x0 + px;
-          ctx.fillStyle = colors[seed % colors.length];
-          ctx.fillRect(sx, sy - 4, 2, 4);
-          ctx.fillStyle = "#e8c9a0";
-          ctx.fillRect(sx, sy - 5, 2, 1);
+          person(ctx, x0 + px, footY, s, seed);
         }
       }
     }
