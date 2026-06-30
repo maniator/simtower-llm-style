@@ -25,6 +25,33 @@ import {
 import type { FacilityKind, SerializedGame, Unit, WeatherKind } from "./types";
 
 /**
+ * Current save-format version. `serialize()` always stamps this; `deserialize()`
+ * routes every save through {@link migrateSave} first, so the field is read on
+ * load — not merely written — and a future format bump has exactly one place to
+ * grow.
+ */
+export const SAVE_VERSION = 1;
+
+/**
+ * Save-format migration seam. Runs before the field-level coercion in
+ * {@link Simulation.deserialize}. v1 is the only format today, so this is the
+ * identity transform — but it makes `version` an honest contract instead of a
+ * constant nobody reads, and gives the next format change a single anchor.
+ */
+function migrateSave(data: SerializedGame): SerializedGame {
+  // A missing/garbled version is normalized so the (future) upgrade chain has a
+  // number to branch on; deserialize()'s coercion still hardens every value.
+  const version = Number.isFinite(data.version) ? data.version : SAVE_VERSION;
+  const migrated: SerializedGame = data.version === version ? data : { ...data, version };
+  // Future upgrades chain here in order, each bumping migrated.version, e.g.:
+  //   if (migrated.version === 1) migrated = upgradeV1toV2(migrated);
+  // A save from a newer build (version > SAVE_VERSION) can't be downgraded, so
+  // it loads best-effort — the coercion below guards it — rather than throwing
+  // away the player's tower.
+  return migrated;
+}
+
+/**
  * Crowd time-base: one in-game minute is worth this many of the crowd's own
  * seconds (small, so a commute spans a few game-minutes and people zip through
  * trips at fast speed), and a single tick advances the crowd by at most this
@@ -684,7 +711,7 @@ export class Simulation implements SimContext {
 
   serialize(): SerializedGame {
     return {
-      version: 1,
+      version: SAVE_VERSION,
       seed: this.rng.seed,
       money: this.money,
       star: this.star,
@@ -709,7 +736,9 @@ export class Simulation implements SimContext {
     };
   }
 
-  static deserialize(data: SerializedGame): Simulation {
+  static deserialize(raw: SerializedGame): Simulation {
+    // Run the save through the version seam first, then harden every field below.
+    const data = migrateSave(raw);
     const sim = new Simulation(data.seed);
     sim.money = data.money;
     sim.star = data.star;
