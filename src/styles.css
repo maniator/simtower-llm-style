@@ -574,12 +574,13 @@ body {
     gap: 6px;
     order: 3;
     flex-basis: 100%;
-    overflow-x: auto;
+    /* Wrap the stats onto a second row instead of scrolling sideways — the bar
+     * shouldn't scroll, and every value stays visible. */
+    flex-wrap: wrap;
   }
   .stat {
-    /* Keep each box at its content width so #status scrolls (overflow-x:auto)
-     * instead of shrinking the boxes and clipping the value behind the opaque
-     * next box (DATE/FUND were truncated). */
+    /* Each box keeps its content width (no shrink → no clipping); wrapping in
+     * #status handles overflow rather than a horizontal scroll. */
     flex: none;
     padding: 2px 6px;
   }
