@@ -62,6 +62,8 @@ export class TowerEngine {
 
   private overlay!: ex.ScreenElement;
   private overlayCanvas!: ex.Canvas;
+  private sky!: ex.ScreenElement;
+  private skyCanvas!: ex.Canvas;
   private ground!: ex.Actor;
 
   constructor(canvas: HTMLCanvasElement, sim: Simulation) {
@@ -83,6 +85,7 @@ export class TowerEngine {
     await this.engine.start();
     this.engine.currentScene.camera.zoom = 0.9;
     this.makeGround();
+    this.makeSky();
     this.makeOverlay();
     this.center();
     this.rebuild();
@@ -289,6 +292,32 @@ export class TowerEngine {
     this.engine.add(sidewalk);
   }
 
+  /**
+   * The sun/moon live on a screen-space layer drawn *behind* the tower (a low
+   * z-index), so a celestial body is occluded by the building instead of
+   * floating in front of it — it sits in the sky where it belongs.
+   */
+  private makeSky(): void {
+    this.skyCanvas = new ex.Canvas({
+      width: this.viewWidth,
+      height: this.viewHeight,
+      cache: false,
+      draw: (ctx) => this.drawSky(ctx),
+    });
+    this.sky = new ex.ScreenElement({ x: 0, y: 0, z: -40 });
+    this.sky.graphics.use(this.skyCanvas);
+    this.engine.add(this.sky);
+  }
+
+  private drawSky(ctx: CanvasRenderingContext2D): void {
+    if (this.skyCanvas.width !== this.viewWidth || this.skyCanvas.height !== this.viewHeight) {
+      this.skyCanvas.width = this.viewWidth;
+      this.skyCanvas.height = this.viewHeight;
+    }
+    ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
+    this.drawSun(ctx);
+  }
+
   private makeOverlay(): void {
     this.overlayCanvas = new ex.Canvas({
       width: this.viewWidth,
@@ -308,7 +337,6 @@ export class TowerEngine {
       this.overlayCanvas.height = this.viewHeight;
     }
     ctx.clearRect(0, 0, this.viewWidth, this.viewHeight);
-    this.drawSun(ctx);
     this.drawPreview(ctx);
     this.drawSelection(ctx);
     this.drawRuler(ctx);

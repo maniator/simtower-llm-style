@@ -343,6 +343,29 @@ describe("Simulation events", () => {
     expect(exposed.money).toBeLessThanOrEqual(before2 - 15_000);
   });
 
+  it("elevator cars travel toward floors with passenger demand", () => {
+    const sim = Simulation.newGame(1);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let f = 2; f <= 10; f++) for (let i = 0; i < 12; i++) sim.tower.place("floor", f, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 10);
+    const t = sim.tower.transports[0];
+    // The only demand above the lobby is a busy office on floor 8.
+    const r = sim.tower.place("office", 8, x0);
+    sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+    // Park a car at the bottom heading up.
+    t.carPositions[0] = 1;
+    t.carDir[0] = 1;
+    let maxPos = 1;
+    for (let i = 0; i < 60; i++) {
+      sim.tick(1); // morning rush in the starter clock
+      maxPos = Math.max(maxPos, t.carPositions[0]);
+    }
+    // The car climbs to serve the floor-8 office rather than bouncing randomly,
+    // and never leaves its shaft.
+    expect(maxPos).toBeGreaterThan(6);
+    expect(maxPos).toBeLessThanOrEqual(8);
+  });
+
   it("excavating basement rooms can unearth treasure", () => {
     const sim = Simulation.newGame(42);
     sim.star = 2;

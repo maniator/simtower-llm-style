@@ -174,7 +174,7 @@ export class Simulation {
   /** Advance the world by `dtMinutes` of game time. */
   tick(dtMinutes: number): void {
     this.clock.advance(dtMinutes);
-    this.updateTransportAnimation(dtMinutes);
+    this.updateElevators(dtMinutes);
     this.finishConstruction();
 
     const hour = this.clock.hour;
@@ -674,23 +674,98 @@ export class Simulation {
     this.emit(`💣 A bomb threat caused chaos! With no security office the panic and damage cost $${fine.toLocaleString()} — build Security.`, "bad");
   }
 
-  // ---- Transport animation (cosmetic) -----------------------------------
+  // ---- Elevator dispatch -------------------------------------------------
 
-  private updateTransportAnimation(dt: number): void {
+  /** Transient per-car dwell timers (not serialized; rebuilt on demand). */
+  private carDwell = new Map<number, number[]>();
+
+  /**
+   * Per-floor travel demand right now: the population on a floor that's apt to
+   * move, plus the ground lobby acting as the building's entrance hub. Scaled
+   * by the time-of-day rush so cars cluster where people actually are.
+   */
+  private floorDemandMap(): Map<number, number> {
+    const m = new Map<number, number>();
+    for (const u of this.tower.units) {
+      if (u.state === "occupied" || u.state === "asleep") {
+        m.set(u.floor, (m.get(u.floor) ?? 0) + FACILITIES[u.kind].population);
+      }
+    }
+    const rush = this.rushFactor();
+    for (const [fl, v] of m) m.set(fl, v * rush);
+    // Ground and sky lobbies are transfer hubs people stream through.
+    for (const fl of this.tower.lobbyFloors()) m.set(fl, (m.get(fl) ?? 0) + 6 * rush);
+    return m;
+  }
+
+  /** Nearest stop strictly ahead (in `dir`) that has waiting demand. */
+  private nextDemandStop(stops: number[], pos: number, dir: number, demand: Map<number, number>): number | null {
+    let best: number | null = null;
+    let bestDist = Infinity;
+    for (const fl of stops) {
+      if (dir > 0 && fl <= pos + 0.05) continue;
+      if (dir < 0 && fl >= pos - 0.05) continue;
+      if ((demand.get(fl) ?? 0) <= 0) continue;
+      const dist = Math.abs(fl - pos);
+      if (dist < bestDist) {
+        bestDist = dist;
+        best = fl;
+      }
+    }
+    return best;
+  }
+
+  /**
+   * Move each elevator car like a real lift (a simplified SCAN algorithm):
+   * it continues in its current direction to the next floor that has waiting
+   * passengers, dwells briefly to load, then carries on — reversing when there
+   * is nothing more ahead. Cars therefore congregate where demand is, instead
+   * of bouncing at random. Stairs/escalators have no cars (their walkers are
+   * drawn directly), so they're skipped here.
+   */
+  private updateElevators(dt: number): void {
+    const demand = this.floorDemandMap();
     for (const t of this.tower.transports) {
       if (!isElevatorKind(t.kind)) continue;
+      const stops: number[] = [];
+      for (let fl = t.bottom; fl <= t.top; fl++) if (this.tower.stopsAt(t, fl)) stops.push(fl);
+      if (stops.length === 0) continue;
+
+      let dwell = this.carDwell.get(t.id);
+      if (!dwell || dwell.length !== t.cars) {
+        dwell = new Array(t.cars).fill(0);
+        this.carDwell.set(t.id, dwell);
+      }
+
+      const v = dt * 0.4; // floors travelled this step
       for (let i = 0; i < t.cars; i++) {
-        let dir = t.carDir[i];
-        if (dir === 0) dir = this.rng.chance(0.5) ? 1 : -1;
-        let pos = t.carPositions[i] + dir * dt * 0.4;
-        if (pos >= t.top) {
-          pos = t.top;
-          dir = -1;
-        } else if (pos <= t.bottom) {
-          pos = t.bottom;
-          dir = 1;
+        if (dwell[i] > 0) {
+          dwell[i] = Math.max(0, dwell[i] - dt);
+          continue;
         }
-        t.carPositions[i] = pos;
+        let pos = t.carPositions[i];
+        let dir = t.carDir[i] || 1;
+
+        let target = this.nextDemandStop(stops, pos, dir, demand);
+        if (target === null) {
+          dir = -dir; // nothing ahead — turn around
+          target = this.nextDemandStop(stops, pos, dir, demand);
+        }
+        if (target === null) {
+          // Idle tower: drift home to the lowest served floor and wait there.
+          target = stops[0];
+        }
+
+        if (Math.abs(target - pos) <= v) {
+          pos = target;
+          dwell[i] = 1.5; // pause to load / unload
+          if (pos >= t.top) dir = -1;
+          else if (pos <= t.bottom) dir = 1;
+        } else {
+          dir = target > pos ? 1 : -1;
+          pos += dir * v;
+        }
+        t.carPositions[i] = Math.max(t.bottom, Math.min(t.top, pos));
         t.carDir[i] = dir;
       }
     }
