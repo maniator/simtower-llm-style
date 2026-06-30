@@ -1,98 +1,77 @@
 # Copilot Instructions
 
+## Use BMAD-METHOD
+
+This repo ships **BMAD-METHOD** skills and agents that are available to you,
+GitHub Copilot, under `.agents/skills/` (89 skills) and `.github/agents/*.agent.md`
+(custom agents for BMM, CIS, and BMGD). **Default to BMAD for non-trivial work** —
+planning, design, building, and review — instead of ad-hoc edits. The full
+routing guide (which skill/agent for which phase, and the BMGD game-dev flow that
+fits this project) lives in [`AGENTS.md`](../AGENTS.md) under "Use BMAD-METHOD for
+non-trivial work." Start with the `bmad-help` agent if you're unsure where to begin.
+
 ## Project Context
 
-This is **SimTower LLM Style** - a collection of tower building simulation games created with AI-assisted development. The project contains three independent implementations showcasing different LLM approaches.
+This is **Tower Tycoon** — a from-scratch, browser-native clone of the classic
+**SimTower** (1994). Build a high-rise floor by floor, wire it with elevators,
+attract tenants, keep them happy, and climb the star ratings to a **TOWER**.
 
-## Code Organization
+It is a single **TypeScript** application (not multiple implementations) built on
+the **[Excalibur.js](https://excaliburjs.com/)** game engine, bundled with
+**Vite**, and tested with **Vitest**. Every sprite is drawn procedurally in code —
+there are no external art assets — and the soundtrack is generated via WebAudio.
 
-### Core Structure (all implementations)
-- **HTML files** - Game UI, controls, canvas/DOM for rendering
-- **main.js** - Game simulation engine with:
-  - Game state management (money, population, rating, time)
-  - Room and building logic
-  - Person/population simulation
-  - Event handling and user interactions
-  - Rendering and animation
-- **style.css** - Visual styling, layout, and responsive design
+## Architecture
 
-### Key Game Objects
-- `Room` - Represents a buildable room with type, cost, income, and population metrics
-- `Person` - Represents inhabitants moving through the tower
-- `Floor` - Array-based representation of tower structure
-- Game state variables: `money`, `population`, `rating`, `day`, `hour`
+The codebase is layered, and the layering is load-bearing — keep it intact:
 
-## Development Guidelines
+- `src/engine/` — **pure game simulation, no DOM or rendering.** Deterministic and
+  unit-tested. `Simulation` is the orchestrator; cohesive subsystems live in their
+  own modules (`ElevatorDispatch`, `EventSystem`, `EconomySystem`, `Crowd`,
+  `Tower`, `Clock`) and depend on the narrow `SimContext` interface so each is
+  testable in isolation. Facilities are defined in `facilities.ts`; the RNG
+  (`rng.ts`) is seeded for determinism — don't reach for `Math.random()` here.
+- `src/render/` — canvas rendering and pixel-art sprites (incl. `render/excalibur/`).
+  Reads engine state, **never mutates it.**
+- `src/ui/` — DOM controls (palette, status bar, dialogs); uses native `<dialog>`.
+- `src/audio/`, `src/storage/` — sound and save/load, independent of rendering.
+- `src/main.ts` — wires everything together (input, game loop).
+- `src/tests/` — Vitest suites covering the engine.
 
-### When Adding Features
+**Golden rule:** keep `src/engine/` free of DOM/rendering concerns so it stays
+deterministic and testable. Rendering and UI read engine state; they don't drive it.
 
-1. **Game Mechanics**: Modify core logic in `main.js`
-   - Update ROOM_TYPES for new room configurations
-   - Extend Room/Person classes for new behaviors
-   - Add simulation logic to game tick/update functions
+## Scripts
 
-2. **UI Updates**: Modify `index.html` and `style.css`
-   - Keep controls intuitive and visible
-   - Update stat displays when game state changes
-   - Maintain responsive design
+```bash
+npm run dev          # Vite dev server
+npm run build        # production build to dist/
+npm test             # Vitest suite
+npm run typecheck    # tsc --noEmit
+npm run lint         # eslint
+npm run build:single # single self-contained HTML build (dist-single/)
+npm run screenshots  # build + headless screenshot capture into docs/screenshots
+```
 
-3. **Consistency**: Maintain similar structure across all three implementations if making cross-implementation updates
+## Quality gates (run before pushing)
 
-### Best Practices
+```bash
+npm run typecheck && npm run lint && npm test && npm run build
+```
 
-- **Game Balance**: Consider click cost vs. daily income ratio when adjusting room values
-- **Performance**: Keep tick timing (~200ms base) for smooth simulation
-- **User Feedback**: Provide visual feedback for building placement and monetary transactions
-- **Accessibility**: Include meaningful labels for buttons and game elements
+CI (`.github/workflows/test.yml`) runs all of the above on every PR. When you push
+new commits to a PR, **re-request a Copilot review** — Copilot reviews are one-shot
+snapshots and won't pick up later commits on their own.
 
-## Common Tasks
+## Conventions
 
-### Adding a New Room Type
-1. Add entry to `ROOM_TYPES` object with: `name`, `cost`, `incomePerDay`, `pop`
-2. Add corresponding build button in HTML
-3. Add CSS styling if needed
-4. Update room handling logic in main.js
+- **American English everywhere** — code, comments, identifiers, strings, commit
+  messages, UI copy. Note: `story`/`stories` for floors (not `storey`/`storeys`).
+- Match the surrounding code's formatting, naming, and comment density.
+- Adding a facility/room type? Start in `src/engine/facilities.ts`, then thread it
+  through rendering and UI — don't special-case it in the render layer.
 
-### Adjusting Game Speed
-- Modify `TICK_MS` constant (base tick interval)
-- Adjust `FAST_MULTIPLIER` for fast-forward speed
-
-### Modifying Game Economy
-- Edit ROOM_TYPES values for cost/income balance
-- Adjust starting money if needed
-- Modify rating calculation thresholds
-
-### Improving Graphics/UI
-- Edit CSS in style.css (avoid hardcoded values when possible)
-- Update HTML structure if adding new UI elements
-- Ensure changes maintain mobile responsiveness
-
-## Testing Checklist
-
-- [ ] All buttons are clickable and functional
-- [ ] Game state updates correctly (money, population, time)
-- [ ] No console errors during gameplay
-- [ ] Buildings can be placed and generate income
-- [ ] Time controls (pause, play, fast) work as expected
-- [ ] UI is readable on different screen sizes
-- [ ] Population increases/decreases appropriately
-- [ ] Rating system reflects tower status
-
-## Resources & Context
-
-- Original SimTower (1994) inspired this project
-- Three implementations use different AI assistants - check each folder for variations
-- Consult the main README.md for project overview
-- Game tick: ~200ms per in-game update cycle
-
-## Asking for Help
-
-When requesting assistance:
-- Specify which implementation (copilot, gemini, github-copilot) you're working on
-- Include the specific behavior or feature you're implementing
-- Reference the game's economic balance if economy-related
-- Describe the user experience you're targeting
-
----
-
-*These instructions optimize AI-assisted development for maintaining and extending SimTower implementations.*
+[`AGENTS.md`](../AGENTS.md) is the canonical contributor guide (BMAD workflow,
+gameplay model, merge policy, code-review expectations). When this file and
+`AGENTS.md` disagree, **`AGENTS.md` wins** — prefer updating it over duplicating
+detail here.

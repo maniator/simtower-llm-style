@@ -1,0 +1,6 @@
+# Personal, user-scoped config. Never commit — keep your name/language local.
+# The team-shared, committed configs are config.toml / <module>/config.yaml.
+# Unanchored so it matches both the root file and module-local overrides
+# (e.g. _bmad/gds/config.user.yaml) that skill prompts tell you to create.
+config.user.toml
+config.user.yaml
