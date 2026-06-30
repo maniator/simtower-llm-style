@@ -467,8 +467,11 @@ export class Simulation implements SimContext {
       // the authoritative, persisted satisfaction would make the headless and
       // browser runs diverge. The aggregate congestion model above is the single
       // authoritative stress driver.
-      // Tenants abandon a unit that stays unbearable.
-      if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo")) {
+      // Tenants abandon a unit that stays unbearable — offices and condos move
+      // out, and hotel guests give up too (review F25). Commercial venues aren't
+      // listed here because their income already requires a served floor, so poor
+      // access starves them directly rather than via a separate move-out.
+      if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo" || isHotelKind(u.kind))) {
         this.vacate(u);
       }
     }

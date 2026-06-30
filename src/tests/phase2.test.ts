@@ -214,3 +214,33 @@ describe("F2 / Step 5 — honest v2 endgame: a served, well-zoned tower wins und
     expect(sim.star).toBe(6);
   });
 });
+
+describe("F25 / F27 / F36 — smaller review sweep", () => {
+  it("F25: a hotel on an unreachable floor churns out under stress", () => {
+    const sim = Simulation.newGame(5); // v2
+    for (let x = C; x < W; x++) sim.tower.place("lobby", 1, x);
+    for (let f = 2; f <= 5; f++) for (let x = C; x < W; x++) sim.tower.place("floor", f, x);
+    sim.star = 2;
+    const r = sim.tower.place("hotelDouble", 5, C); // floor 5, NO elevator → unserved
+    const room = sim.tower.units.find((u) => u.id === r.unitId)!;
+    room.state = "asleep";
+    room.satisfaction = 0.3;
+    for (let i = 0; i < 24; i++) sim.tick(60);
+    expect(room.state).toBe("empty"); // gave up due to poor access (hotels churn now)
+  });
+
+  it("F36: a hotel suite houses 3 (canon), more than a double", () => {
+    expect(FACILITIES.hotelSuite.population).toBe(3);
+    expect(FACILITIES.hotelSuite.population).toBeGreaterThan(FACILITIES.hotelDouble.population);
+  });
+
+  it("F27: idle cars rest at the shaft's lobby floor", () => {
+    const sim = Simulation.newGame(6);
+    for (let x = C; x < W; x++) sim.tower.place("lobby", 1, x);
+    for (let f = 2; f <= 10; f++) for (let x = C; x < W; x++) sim.tower.place("floor", f, x);
+    sim.buildTransport("elevatorStandard", C, 1, 10); // serves the ground lobby (floor 1)
+    for (let i = 0; i < 300; i++) sim.tick(1); // no demand
+    const t = sim.tower.transports[0];
+    expect(t.carPositions.every((p) => Math.abs(p - 1) < 0.5)).toBe(true); // rest at lobby (floor 1)
+  });
+});

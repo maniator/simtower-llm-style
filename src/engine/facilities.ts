@@ -82,7 +82,9 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     width: 12,
     cost: 100000,
     minStar: 2,
-    population: 2,
+    // A suite houses a larger party than a double — matching the 1994 original
+    // (review F36).
+    population: 3,
     color: "#d99a2e",
     description: "Luxury hotel suite. Best nightly income, demanding guests.",
   },

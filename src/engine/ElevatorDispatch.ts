@@ -45,6 +45,10 @@ export class ElevatorDispatch {
       const stops: number[] = [];
       for (let fl = t.bottom; fl <= t.top; fl++) if (tower.stopsAt(t, fl)) stops.push(fl);
       if (stops.length === 0) continue;
+      // Idle cars rest at the lowest LOBBY the shaft serves (the ground/sky lobby),
+      // not merely its lowest stop — review F27.
+      const lobbySet = new Set(tower.lobbyFloors());
+      const idleFloor = stops.find((s) => lobbySet.has(s)) ?? stops[0];
 
       let dwell = this.carDwell.get(t.id);
       if (!dwell || dwell.length !== t.cars) {
@@ -69,9 +73,8 @@ export class ElevatorDispatch {
           target = this.nextDemandStop(stops, pos, dir, demand);
         }
         if (target === null) {
-          // Nobody waiting: rest at the lowest served floor (the lobby) and
-          // stop dead rather than pacing the shaft.
-          target = stops[0];
+          // Nobody waiting: return to the lobby and stop dead rather than pacing.
+          target = idleFloor;
           if (Math.abs(pos - target) < 0.05) {
             t.carDir[i] = 0;
             t.carLoad[i] = 0; // everyone's stepped off
