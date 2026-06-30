@@ -1,6 +1,6 @@
 import { FACILITIES, isElevatorKind } from "../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../engine/types";
-import { drawRoom, person } from "./pixelSprites";
+import { drawRoom, person, SKIN } from "./pixelSprites";
 
 /** Facility kinds rendered by the faithful pixel-art room module. */
 const ROOM_KINDS = new Set<FacilityKind>([
@@ -201,18 +201,25 @@ function drawVacancy(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: numbe
 
 function drawPartyHall(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
   ctx.fillStyle = "#2a1f3a";
-  ctx.fillRect(x, y + 2, w, h - 5);
-  // Disco/spotlights.
+  ctx.fillRect(x, y, w, h);
+  ctx.fillStyle = "#3a2f4a"; // dance floor
+  ctx.fillRect(x, y + h - 5, w, 5);
+  // Coloured spotlights washing the floor.
   for (let i = 0; i < 5; i++) {
     ctx.fillStyle = ACCENTS[i % ACCENTS.length];
-    ctx.globalAlpha = 0.5;
-    ctx.fillRect(x + 6 + i * (w / 6), y + 4, 2, h - 8);
+    ctx.globalAlpha = 0.4;
+    ctx.fillRect(x + 6 + i * (w / 6), y + 3, 3, h - 8);
   }
   ctx.globalAlpha = 1;
-  ctx.fillStyle = "#ffd24a";
+  // Mirror ball.
+  ctx.fillStyle = "#cdd6e6";
   ctx.beginPath();
   ctx.arc(x + w / 2, y + 7, 3, 0, Math.PI * 2);
   ctx.fill();
+  // Dancers.
+  for (let px = x + 8; px < x + w - 5; px += 11) {
+    if (rand(px | 0) > 0.4) person(ctx, px, y + h - 3, 1.3, px | 0);
+  }
 }
 
 // ---- Services -----------------------------------------------------------
@@ -234,11 +241,13 @@ function drawSecurity(ctx: CanvasRenderingContext2D, x: number, y: number, w: nu
     ctx.fillStyle = "#6bd47a";
     ctx.fillRect(mx, fy - 2, 4, 3);
   }
+  // Seated guard behind the desk.
+  person(ctx, x + 7, fy + 6, 1.2, x | 0, true);
   // Badge.
-  star(ctx, x + 10, y + 9, 4, "#ffd24a");
+  star(ctx, x + 11, y + 9, 4, "#ffd24a");
   ctx.fillStyle = "#dfe6f2";
-  ctx.font = "7px sans-serif";
-  if (w > 40) ctx.fillText("SECURITY", x + 18, y + 11);
+  ctx.font = "7px system-ui, sans-serif";
+  if (w > 44) ctx.fillText("SECURITY", x + 18, y + 11);
 }
 
 function drawMedical(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
@@ -249,15 +258,18 @@ function drawMedical(ctx: CanvasRenderingContext2D, x: number, y: number, w: num
     cy = y + h / 2;
   ctx.fillRect(cx - 5, cy - 2, 10, 4);
   ctx.fillRect(cx - 2, cy - 5, 4, 10);
-  // Beds.
-  for (let bx = x + 22; bx + 8 < x + w - 3; bx += 12) {
+  // Beds with a resting patient + a standing nurse.
+  for (let bx = x + 24; bx + 8 < x + w - 3; bx += 16) {
     ctx.fillStyle = "#cfd6e0";
-    ctx.fillRect(bx, y + h - 8, 9, 5);
+    ctx.fillRect(bx, y + h - 8, 11, 5);
     ctx.fillStyle = "#9fb0c4";
     ctx.fillRect(bx, y + h - 8, 3, 5);
+    ctx.fillStyle = SKIN[bx % SKIN.length];
+    ctx.fillRect(bx + 8, y + h - 7, 2, 2); // patient head
+    person(ctx, bx - 4, y + h - 3, 1.2, (bx + 3) | 0); // nurse
   }
   ctx.fillStyle = "#2a3550";
-  ctx.font = "7px sans-serif";
+  ctx.font = "7px system-ui, sans-serif";
   if (w > 60) ctx.fillText("CLINIC", x + 22, y + 11);
 }
 
@@ -276,9 +288,11 @@ function drawHousekeeping(ctx: CanvasRenderingContext2D, x: number, y: number, w
   ctx.fillRect(x + 20, fy - 3, 1, 9);
   ctx.fillStyle = "#e8e0b0";
   ctx.fillRect(x + 18, fy + 5, 5, 2);
+  // A housekeeper by the cart.
+  person(ctx, x + 24, y + h - 3, 1.2, (x + 9) | 0);
   ctx.fillStyle = "#2a3a2a";
-  ctx.font = "7px sans-serif";
-  if (w > 50) ctx.fillText("HOUSEKEEPING", x + 26, y + 11);
+  ctx.font = "7px system-ui, sans-serif";
+  if (w > 60) ctx.fillText("HOUSEKEEPING", x + 32, y + 11);
 }
 
 function drawRecycling(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number) {
@@ -300,6 +314,8 @@ function drawRecycling(ctx: CanvasRenderingContext2D, x: number, y: number, w: n
   ctx.beginPath();
   ctx.arc(cx, cy, r, 0, Math.PI * 1.4);
   ctx.stroke();
+  // A plant worker.
+  person(ctx, x + Math.min(w - 16, 30), y + h - 3, 1.2, (x + 5) | 0);
 }
 
 function star(ctx: CanvasRenderingContext2D, cx: number, cy: number, r: number, color: string) {
