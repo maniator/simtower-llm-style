@@ -94,6 +94,18 @@ describe("Crowd: routing and movement", () => {
     }
   });
 
+  it("does not send commuters to unstaffed weekend offices", () => {
+    const tower = towerWithElevator(8);
+    const r = tower.place("office", 5, 0);
+    tower.units.find((uu) => uu.id === r.unitId)!.state = "occupied";
+    const crowd = new Crowd();
+    const saturday = new Clock(5 * 1440 + 8 * 60); // Sat 08:00
+    expect(saturday.isWeekend).toBe(true);
+    for (let i = 0; i < 400; i++) crowd.update(0.05, tower, saturday);
+    // With only an office (no homes/venues), weekends produce no trips.
+    expect(crowd.people.length).toBe(0);
+  });
+
   it("never strands a rider when their car is removed", () => {
     const tower = towerWithElevator(8);
     const r = tower.place("office", 5, 0);

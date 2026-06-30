@@ -188,7 +188,10 @@ export class Crowd {
     const morning = clock.isMorning();
     const evening = clock.isEvening();
     const day = !morning && !evening && !clock.isNight();
-    const offices = this.occupiedFloors(tower, (k) => k === "office");
+    // Offices are leased year-round but only staffed on weekdays (presence sets
+    // their occupants to 0 at weekends), so don't send commuters to empty
+    // offices on Sat/Sun — that would spawn phantom riders and fake stress.
+    const offices = clock.isWeekend ? [] : this.occupiedFloors(tower, (k) => k === "office");
     const homes = this.occupiedFloors(tower, (k) => k === "condo" || isHotelKind(k));
     const venues = this.occupiedFloors(tower, (k) => k === "shop" || k === "restaurant" || k === "fastFood" || k === "cinema");
 
@@ -237,19 +240,18 @@ export class Crowd {
     });
   }
 
-  /** A tile within the built structure of a floor (so people stand on solid
-   * ground, not in midair). Falls back to a sensible spot if the floor is bare. */
+  /** An actual built structural tile of a floor (so people stand on solid
+   * ground, never in a gap between separate corridor runs). Falls back to a
+   * sensible spot if the floor is bare. */
   private pickX(tower: Tower, floor: number, seed: number): number {
-    let min = Infinity;
-    let max = -Infinity;
+    const tiles: number[] = [];
     for (const u of tower.units) {
       if ((u.kind === "floor" || u.kind === "lobby") && u.floor === floor) {
-        if (u.x < min) min = u.x;
-        if (u.x + u.width - 1 > max) max = u.x + u.width - 1;
+        for (let i = 0; i < u.width; i++) tiles.push(u.x + i);
       }
     }
-    if (min === Infinity) return 2 + (Math.abs(seed) % 40);
-    return min + (Math.abs(seed) % (max - min + 1));
+    if (tiles.length === 0) return 2 + (Math.abs(seed) % 40);
+    return tiles[Math.abs(seed) % tiles.length];
   }
 
   // ---- Per-frame update ---------------------------------------------------
