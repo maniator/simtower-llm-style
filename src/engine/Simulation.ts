@@ -59,6 +59,14 @@ export class Simulation {
   evaluatedTower = false;
   log: LogEntry[] = [];
 
+  /**
+   * 0..1 frustration reported by the renderer's individually-routed {@link Crowd}
+   * — the fraction of real people stuck waiting too long for an elevator. It
+   * supplements the aggregate {@link congestion} signal with what's actually
+   * happening to the visible commuters. Stays 0 in headless runs (no renderer).
+   */
+  crowdStress = 0;
+
   /** Ids of units currently under construction (finalised on the global tick). */
   private constructing = new Set<number>();
   /** Ids of units currently ablaze (a fire emergency in progress). */
@@ -328,6 +336,13 @@ export class Simulation {
         u.satisfaction = Math.max(0, u.satisfaction - 0.04 * Math.min(3, cong - 1));
       } else {
         u.satisfaction = Math.min(1, u.satisfaction + 0.05);
+      }
+      // The real, individually-routed crowd shaves a little extra satisfaction
+      // when lots of commuters are visibly stuck waiting — but it never alone
+      // empties a unit (floored above the churn threshold), so the headless
+      // congestion model above stays the authoritative driver tests rely on.
+      if (this.crowdStress > 0.5) {
+        u.satisfaction = Math.max(0.05, u.satisfaction - 0.01 * Math.min(1, this.crowdStress));
       }
       // Tenants abandon a unit that stays unbearable.
       if (u.satisfaction <= 0 && (u.kind === "office" || u.kind === "condo")) {

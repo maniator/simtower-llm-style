@@ -4,6 +4,7 @@ import { GRID, facilityFloors, isElevatorKind } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
+import { Crowd, type Person } from "../../engine/Crowd";
 
 /** World pixels per tile / per floor. */
 export const TILE = 11;
@@ -100,6 +101,12 @@ export class TowerEngine {
   private builtRev = -1;
   private litState = false;
   private lastSyncHour = -1;
+
+  // Individually-routed commuters (SimTower's signature). The Crowd is pure and
+  // DOM-free; here we just draw each person and remove them as they despawn.
+  private crowd = new Crowd();
+  private crowdActors = new Map<number, { actor: ex.Actor; gfx: ex.Canvas; red: boolean }>();
+  private lastClockMinutes = -1;
 
   // Shared graphics so thousands of tiles/people cost almost nothing.
   private floorGfx!: ex.Canvas;
@@ -260,6 +267,7 @@ export class TowerEngine {
 
   setSim(sim: Simulation): void {
     this.disposeScene();
+    this.clearCrowd();
     this.sim = sim;
     this.builtRev = -1;
     this.center();
@@ -288,6 +296,69 @@ export class TowerEngine {
       this.builtRev = this.sim.tower.revision;
     }
     this.updateMotion();
+    this.updateCrowd(elapsed);
+  }
+
+  /**
+   * Advance and draw the individually-routed commuters. They move on real
+   * seconds (so they're watchable) but only while the game is actually running
+   * — when paused, the sim clock is frozen and so are the people. Their
+   * frustration feeds back into tenant satisfaction via `sim.crowdStress`.
+   */
+  private updateCrowd(elapsedMs: number): void {
+    const running = this.sim.clock.minutes !== this.lastClockMinutes;
+    this.lastClockMinutes = this.sim.clock.minutes;
+    if (running) {
+      const dtSec = Math.min(0.05, elapsedMs / 1000);
+      this.crowd.update(dtSec, this.sim.tower, this.sim.clock);
+      this.sim.crowdStress = this.crowd.stress;
+    }
+    this.reconcileCrowd();
+  }
+
+  /** Add/remove/position one actor per live person, by stable id. */
+  private reconcileCrowd(): void {
+    const seen = new Set<number>();
+    for (const p of this.crowd.people) {
+      seen.add(p.id);
+      let rec = this.crowdActors.get(p.id);
+      if (!rec) {
+        const gfx = this.personGfx[Math.abs(p.seed) % this.personGfx.length];
+        const a = new ex.Actor({ pos: ex.vec(0, 0), width: 8, height: 14, anchor: ex.vec(0.5, 1), z: 3 });
+        a.graphics.use(gfx);
+        this.engine.add(a);
+        rec = { actor: a, gfx, red: false };
+        this.crowdActors.set(p.id, rec);
+      }
+      this.positionPerson(p, rec);
+    }
+    for (const [id, rec] of this.crowdActors)
+      if (!seen.has(id)) {
+        rec.actor.kill();
+        this.crowdActors.delete(id);
+      }
+  }
+
+  private positionPerson(p: Person, rec: { actor: ex.Actor; gfx: ex.Canvas; red: boolean }): void {
+    // While riding, the person is inside a car — the cab's own rider count shows
+    // them, so we hide the standalone figure to avoid drawing them twice.
+    const riding = p.state === "riding";
+    if (rec.actor.graphics.visible !== !riding) rec.actor.graphics.visible = !riding;
+    if (riding) return;
+    rec.actor.pos = ex.vec(this.worldX(p.x), this.worldYTop(p.floor) + FLOOR - 3);
+    // Long waits redden the figure, the original's "this tenant is fed up" cue.
+    const red = p.wait > 25;
+    if (red !== rec.red) {
+      rec.red = red;
+      rec.actor.graphics.use(red ? this.personGfxRed : rec.gfx);
+    }
+  }
+
+  private clearCrowd(): void {
+    for (const rec of this.crowdActors.values()) rec.actor.kill();
+    this.crowdActors.clear();
+    this.crowd.reset();
+    this.lastClockMinutes = -1;
   }
 
   // ---- Coordinate math ----------------------------------------------------
