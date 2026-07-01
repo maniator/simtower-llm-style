@@ -1,6 +1,7 @@
 import { FACILITIES, isElevatorKind } from "../engine/facilities";
 import type { FacilityKind, Transport, Unit } from "../engine/types";
 import { drawRoom, person, SKIN } from "./pixelSprites";
+import type { CarArrow } from "./carIndicator";
 
 /** Facility kinds rendered by the faithful pixel-art room module. */
 const ROOM_KINDS = new Set<FacilityKind>([
@@ -581,9 +582,18 @@ export function drawTransport(
 }
 
 /** A single elevator car graphic, drawn at (0,0) into a w×floorH rect, carrying
- *  `riders` passengers. The car is its own Excalibur Actor that the engine
- *  moves along the shaft (and swaps for an empty car when idle). */
-export function drawCar(ctx: CanvasRenderingContext2D, seed: number, w: number, floorH: number, riders: number): void {
+ *  `riders` passengers. `arrow` is the direction lantern (null when idle) and
+ *  `full` flags a car at capacity. The car is its own Excalibur Actor that the
+ *  engine moves along the shaft (and swaps as it loads / changes direction). */
+export function drawCar(
+  ctx: CanvasRenderingContext2D,
+  seed: number,
+  w: number,
+  floorH: number,
+  riders: number,
+  arrow: CarArrow = null,
+  full = false,
+): void {
   // Cab frame, then the lit interior inset within it.
   ctx.fillStyle = "#8e94a0";
   ctx.fillRect(1, 1, w - 2, floorH - 2);
@@ -603,4 +613,28 @@ export function drawCar(ctx: CanvasRenderingContext2D, seed: number, w: number, 
   ctx.fillRect(w - 3, 2, 1, floorH - 4);
   ctx.fillStyle = "rgba(40,44,54,0.5)";
   ctx.fillRect(w / 2 - 0.5, 3, 1, floorH - 5);
+  // FULL: a red bar across the top edge when the cab is at capacity.
+  if (full) {
+    ctx.fillStyle = "#ff4d4d";
+    ctx.fillRect(2, 1, w - 4, 2);
+  }
+  // Direction lantern: a bright chevron near the top, only while the car moves.
+  if (arrow) {
+    const cxp = w / 2;
+    const s = Math.max(1.5, Math.min(3, w * 0.12));
+    const ty = full ? 4 : 2.5; // sit below the FULL bar when both show
+    ctx.fillStyle = arrow === "up" ? "#7be88a" : "#ffab5e";
+    ctx.beginPath();
+    if (arrow === "up") {
+      ctx.moveTo(cxp, ty);
+      ctx.lineTo(cxp - s, ty + s);
+      ctx.lineTo(cxp + s, ty + s);
+    } else {
+      ctx.moveTo(cxp, ty + s);
+      ctx.lineTo(cxp - s, ty);
+      ctx.lineTo(cxp + s, ty);
+    }
+    ctx.closePath();
+    ctx.fill();
+  }
 }

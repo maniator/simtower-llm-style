@@ -1,8 +1,9 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, TRANSPORT_CAPACITY, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
+import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt, transportCarCapacity } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
+import { carIndicator, type CarIndicator } from "../carIndicator";
 import { person, SHIRTS } from "../pixelSprites";
 import type { Person } from "../../engine/Crowd";
 import { clampCameraY } from "../cameraBounds";
@@ -22,6 +23,9 @@ export const MIN_ZOOM = 0.3;
 export const MAX_ZOOM = 3;
 const clampZoom = (z: number): number =>
   Number.isFinite(z) ? Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)) : MIN_ZOOM;
+
+/** The empty, idle cab state used to seed a fresh car's graphic. */
+const IDLE_CAR: CarIndicator = { riders: 0, arrow: null, full: false };
 
 /**
  * The crowd advances on *game* time, not real time, so the speed control only
@@ -137,7 +141,16 @@ export class TowerEngine {
   private transportActors = new Map<number, ex.Actor>();
   private transportSig = new Map<number, string>();
   // Engine-animated actors, regenerated when the layout changes.
-  private carActors: { actor: ex.Actor; t: Transport; i: number; gfx: ex.Canvas[]; shown: number }[] = [];
+  private carActors: {
+    actor: ex.Actor;
+    t: Transport;
+    i: number;
+    seed: number;
+    w: number;
+    /** Lazily-built cab graphics keyed by indicator state (riders:arrow:full). */
+    gfx: Map<string, ex.Canvas>;
+    shown: string;
+  }[] = [];
   private trainActors: { actor: ex.Actor; u: Unit; w: number }[] = [];
   private walkers: Walker[] = [];
   private builtRev = -1;
@@ -1031,6 +1044,30 @@ export class TowerEngine {
     this.walkers = [];
   }
 
+  /** Stable cache key for a cab graphic's indicator state. */
+  private carKey(ind: CarIndicator): string {
+    return `${ind.riders}:${ind.arrow ?? "x"}:${ind.full ? "f" : "e"}`;
+  }
+
+  /** Get-or-create the cab graphic for a given indicator state. Keying and
+   *  drawing both derive from the one {@link CarIndicator}, so the cache key and
+   *  the painted cab can't fall out of sync. */
+  private carGfx(entry: { seed: number; w: number; gfx: Map<string, ex.Canvas> }, ind: CarIndicator): ex.Canvas {
+    const key = this.carKey(ind);
+    let cv = entry.gfx.get(key);
+    if (!cv) {
+      const { seed, w } = entry;
+      cv = new ex.Canvas({
+        width: w,
+        height: FLOOR,
+        cache: true,
+        draw: (ctx) => drawCar(ctx, seed, w, FLOOR, ind.riders, ind.arrow, ind.full),
+      });
+      entry.gfx.set(key, cv);
+    }
+    return cv;
+  }
+
   private syncMotion(): void {
     this.clearMotion();
     for (const t of this.sim.tower.transports) {
@@ -1038,14 +1075,13 @@ export class TowerEngine {
       const w = t.width * TILE;
       for (let i = 0; i < t.cars; i++) {
         const seed = (i * 7 + t.id) | 0;
-        // One graphic per rider count 0..4, so the cab fills as it loads up.
-        const gfx = Array.from({ length: 5 }, (_, r) =>
-          new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, r) }),
-        );
+        // Cab graphics are built lazily and cached by indicator state (rider
+        // count, direction lantern, FULL) so we only ever draw each variant once.
+        const gfx = new Map<string, ex.Canvas>();
         const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), -t.carPositions[i] * FLOOR), width: w, height: FLOOR, anchor: ex.vec(0, 0), z: 2 });
-        a.graphics.use(gfx[0]);
+        a.graphics.use(this.carGfx({ seed, w, gfx }, IDLE_CAR));
         this.engine.add(a);
-        this.carActors.push({ actor: a, t, i, gfx, shown: 0 });
+        this.carActors.push({ actor: a, t, i, seed, w, gfx, shown: this.carKey(IDLE_CAR) });
       }
     }
     for (const u of this.sim.tower.units) {
@@ -1128,14 +1164,16 @@ export class TowerEngine {
     const anim = this.d.anim;
     for (const c of this.carActors) {
       c.actor.pos = ex.vec(this.worldX(c.t.x), -c.t.carPositions[c.i] * FLOOR);
-      // Show the actual fill as 0..4 buckets, scaled to THIS cab's capacity, so a
-      // big express cab doesn't read "full" at a fraction of its load (review F9).
+      // Indicator state (riders bucket scaled to capacity, direction lantern,
+      // FULL) is derived by the tested carIndicator helper; the cab graphic is
+      // cached per state so we only redraw when the state actually changes.
       const load = c.t.carLoad?.[c.i] ?? 0;
-      const cap = TRANSPORT_CAPACITY[c.t.kind] ?? 16;
-      const riders = Math.max(0, Math.min(4, Math.round((load / cap) * 4)));
-      if (riders !== c.shown) {
-        c.shown = riders;
-        c.actor.graphics.use(c.gfx[riders]);
+      const dir = c.t.carDir?.[c.i] ?? 0;
+      const ind = carIndicator(dir, load, transportCarCapacity(c.t.kind));
+      const key = this.carKey(ind);
+      if (key !== c.shown) {
+        c.shown = key;
+        c.actor.graphics.use(this.carGfx(c, ind));
       }
     }
     for (const tr of this.trainActors) {

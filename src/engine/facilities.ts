@@ -434,6 +434,18 @@ export const TRANSPORT_CAPACITY: Record<string, number> = {
   stairs: 8,
 };
 
+/**
+ * Per-car passenger capacity for a transport kind. The single source of truth
+ * for the whole engine — dispatch load-clamping, the simulation's capacity /
+ * congestion math, and the renderer's rider-fill / FULL indicator all route
+ * through here, so they can never disagree on the number (an unknown kind
+ * conservatively carries nobody). Distinct from `Simulation.transportCapacity`,
+ * which is the whole shaft's total: cars × this per-car number.
+ */
+export function transportCarCapacity(kind: FacilityKind): number {
+  return TRANSPORT_CAPACITY[kind] ?? 0;
+}
+
 /** Maximum cars allowed per shaft, by elevator type. */
 export const MAX_CARS: Record<string, number> = {
   elevatorStandard: 8,
