@@ -19,6 +19,8 @@ function makeCtx(tower: Tower, star: number, money = 1_000_000) {
       this.log.push(text);
     },
     hasAny: (kind: FacilityKind) => tower.units.some((u) => u.kind === kind),
+    hasOperational: (kind: FacilityKind) =>
+      tower.units.some((u) => u.kind === kind && u.state !== "construction" && u.state !== "fire"),
     floorLabel: (floor: number) => (floor >= 1 ? `floor ${floor}` : `B${1 - floor}`),
   };
 }

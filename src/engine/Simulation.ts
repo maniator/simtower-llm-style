@@ -1051,6 +1051,12 @@ export class Simulation implements SimContext {
     return this.events.controlChance(floor);
   }
 
+  /** Daily probability a new fire breaks out, after the fire-defense reductions
+   * from any operational Security / Medical center. */
+  fireIgnitionChance(): number {
+    return this.events.fireChance();
+  }
+
   // ---- Derived stats for UI ---------------------------------------------
 
   get population(): number {
