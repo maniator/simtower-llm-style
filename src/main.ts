@@ -3,6 +3,7 @@ import { UndoHistory, towerStateSig } from "./engine/UndoHistory";
 import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
 import { ECON, rentConfig, rentOf, resaleRefund, extendBill } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
+import { isOperational } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
@@ -765,9 +766,8 @@ class GameApp {
       vol.rent = `$${rentOf(u).toLocaleString()}${isHotelKind(u.kind) ? "/night" : ""}`;
     }
     if (u.kind === "cinema") {
-      const operational = u.state !== "construction" && u.state !== "fire";
-      // A mid-build / burning cinema books no film — show "—", not a fake feature.
-      vol.showing = !operational ? "—" : this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
+      // A mid-build / burning / gutted cinema books no film — show "—", not a fake feature.
+      vol.showing = !isOperational(u) ? "—" : this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
     }
     return vol;
   }
@@ -789,10 +789,16 @@ class GameApp {
       const label = u.kind === "condo" ? "Sale price" : isHotelKind(u.kind) ? "Room rate" : "Quarterly rent";
       rows.push(`<span class="k">${label}</span><span class="v" data-field="rent">${vol.rent}</span>`);
     }
-    if (u.kind === "cinema") {
+    if (u.kind === "cinema" && isOperational(u)) {
+      // A gutted/burning/under-construction cinema books no film — omit the row.
       rows.push(`<span class="k">Now showing</span><span class="v" data-field="showing">${vol.showing}</span>`);
     }
-    rows.push(`<span class="k">Resale value</span><span class="v">$${resaleRefund(f.kind).toLocaleString()}</span>`);
+    if (u.state === "gutted") {
+      rows.push(`<span class="k">Scrap value</span><span class="v">$0</span>`);
+      rows.push(`<span class="k">⚠</span><span class="v">Gutted — bulldoze and rebuild.</span>`);
+    } else {
+      rows.push(`<span class="k">Resale value</span><span class="v">$${resaleRefund(f.kind).toLocaleString()}</span>`);
+    }
 
     let actions = "";
     if (canRename) {
@@ -947,7 +953,8 @@ class GameApp {
           return;
         }
         this.sim.tower.removeUnit(u.id);
-        this.sim.money += resaleRefund(u.kind);
+        // A gutted shell has no salvage value; everything else refunds half.
+        this.sim.money += u.state === "gutted" ? 0 : resaleRefund(u.kind);
         this.audio.sfx("sell");
         this.commitUndo();
         return this.clearSelection();
@@ -1193,7 +1200,8 @@ class GameApp {
         return;
       }
       this.sim.tower.removeUnit(u.id);
-      this.sim.money += resaleRefund(u.kind);
+      // A gutted shell has no salvage value; everything else refunds half.
+      this.sim.money += u.state === "gutted" ? 0 : resaleRefund(u.kind);
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === p.id);
       if (!t) return;
@@ -1241,7 +1249,7 @@ class GameApp {
       // Silent rule: a parking space only works when it chains to a ramp. Skip
       // the verdict while it's still building (or on fire) — "Status" covers that.
       const parking =
-        u.kind === "parking" && u.state !== "construction" && u.state !== "fire"
+        u.kind === "parking" && isOperational(u)
           ? this.sim.tower.functionalParkingSet().has(u.id)
             ? `<div style="color:var(--good)">Ramp access: connected.</div>`
             : `<div style="color:var(--bad)">Ramp access: none — this space is dead (no relief). Chain it to a Parking Ramp.</div>`
