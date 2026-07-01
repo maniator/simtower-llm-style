@@ -767,6 +767,10 @@ export class TowerEngine {
 
   private syncScene(): void {
     const tower = this.sim.tower;
+    // Cached per revision; a parking space absent from this set is "dead" and
+    // gets a static red X. Included in the room signature so it re-bakes only
+    // when connectivity flips (build/bulldoze), never on the tick/lighting loop.
+    const parkingOK = tower.functionalParkingSet();
     const seenS = new Set<number>();
     const seenR = new Set<number>();
     for (const u of tower.units) {
@@ -782,7 +786,8 @@ export class TowerEngine {
         // dawn would wrongly stay shuttered all day until the next lighting flip.
         const open = hasBusinessHours(u.kind) ? (isOpenAt(u.kind, this.d.hour) ? "o" : "c") : "";
         const lateNight = u.kind === "condo" && (this.d.hour >= 23 || this.d.hour < 6) ? "s" : "";
-        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}`;
+        const dead = u.kind === "parking" && !parkingOK.has(u.id) ? "x" : "";
+        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}${dead}`;
         const a = this.roomActors.get(u.id);
         if (!a) {
           this.addRoom(u);
@@ -858,6 +863,19 @@ export class TowerEngine {
       draw: (ctx) => {
         this.d.ctx = ctx;
         drawUnit(this.d, u, 0, 0, w, h);
+        // Canon "red X" on a parking space that isn't chained to a ramp (dead —
+        // no relief). Static: baked into the sprite, re-baked only when the sig's
+        // dead-bit flips on build/bulldoze.
+        if (u.kind === "parking" && !this.sim.tower.functionalParkingSet().has(u.id)) {
+          ctx.strokeStyle = "#C24A3A";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(2, 2);
+          ctx.lineTo(w - 2, h - 2);
+          ctx.moveTo(w - 2, 2);
+          ctx.lineTo(2, h - 2);
+          ctx.stroke();
+        }
       },
     });
     const a = new ex.Actor({ pos: ex.vec(this.worldX(u.x), this.worldYTop(u.floor, hgt)), width: w, height: h, anchor: ex.vec(0, 0), z: 0 });

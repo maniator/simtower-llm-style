@@ -673,6 +673,21 @@ export class Tower {
    * back to a ramp is a dead X.
    */
   functionalParkingSpots(): number {
+    return this.functionalParkingSet().size;
+  }
+
+  private parkingSet?: Set<number>;
+  private parkingRev = -1;
+
+  /**
+   * The set of parking-SPACE unit ids that function — i.e. chain back to a ramp
+   * (see {@link functionalParkingSpots}). Memoised by {@link revision} like
+   * {@link servedFloorSet}, so the inspector, the dead-parking "red X" and the
+   * economy relief all share one cheap flood-fill. A space whose id is absent is
+   * a dead space (no relief).
+   */
+  functionalParkingSet(): ReadonlySet<number> {
+    if (this.parkingSet && this.parkingRev === this.revision) return this.parkingSet;
     const usable = (u?: Unit): boolean =>
       !!u && (u.kind === "parking" || u.kind === "parkingRamp") && u.state !== "construction" && u.state !== "fire";
     const stack: [number, number][] = [];
@@ -698,7 +713,9 @@ export class Tower {
       // them do NOT connect (they'd be dead Xs in the original).
       if (u!.kind === "parkingRamp") stack.push([f - 1, x], [f + 1, x]);
     }
-    return reached.size;
+    this.parkingSet = reached;
+    this.parkingRev = this.revision;
+    return reached;
   }
 
   facilityOf(unit: Unit): Facility {

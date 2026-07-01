@@ -1,5 +1,14 @@
 import type { Simulation } from "./Simulation";
+import type { Unit } from "./types";
 import { FACILITIES, isHotelKind } from "./facilities";
+
+/** An above-ground, currently-occupied, population-bearing tenant unit — the
+ *  shared "a real resident/worker/guest lives here" test used by both the
+ *  milestone served-check and the stranded-floors diagnostic, so the two can't
+ *  drift. (Hotels carry population, so they're included via `population > 0`.) */
+export function isTenantFloorUnit(u: Unit): boolean {
+  return u.floor >= 2 && (u.state === "occupied" || u.state === "asleep") && FACILITIES[u.kind].population > 0;
+}
 
 /**
  * Optional milestones — light, one-time goals that give the mid-late game texture
@@ -24,9 +33,7 @@ export interface Milestone {
 function everyOccupiedFloorServed(sim: Simulation): boolean {
   let sawOne = false;
   for (const u of sim.tower.units) {
-    if (u.floor < 2) continue;
-    if (u.state !== "occupied" && u.state !== "asleep") continue;
-    if (FACILITIES[u.kind].population <= 0) continue;
+    if (!isTenantFloorUnit(u)) continue;
     sawOne = true;
     if (!sim.tower.isFloorServed(u.floor)) return false;
   }
