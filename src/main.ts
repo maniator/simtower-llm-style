@@ -7,6 +7,7 @@ import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
 import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
+import { registerPWA } from "./pwa";
 
 /** Game speeds → in-game minutes advanced per real second. */
 const SPEEDS = [0, 10, 30, 120];
@@ -919,6 +920,17 @@ class GameApp {
     SaveGame.save(this.sim);
     if (!silent) this.ui.toast("Tower saved.", "good");
   }
+
+  /**
+   * Called by the PWA layer the instant a new version is ready, just before it
+   * reloads onto the new assets. Flush the tower to the autosave slot so the
+   * imminent reload can't cost the player any progress, and tell them what's
+   * happening through the existing toast rail.
+   */
+  onUpdateReady(): void {
+    this.save(true);
+    this.ui.toast("New version ready — saved your tower, updating…", "info");
+  }
   private load(): void {
     const loaded = SaveGame.load();
     if (loaded) {
@@ -993,6 +1005,9 @@ if (typeof document !== "undefined") {
       const app = new GameApp();
       // Expose for screenshot tooling / debugging.
       (window as unknown as { game: GameApp }).game = app;
+      // Register the service worker so the game is installable and offline-ready.
+      // On a new build: quick-save the tower, then swap to the latest assets.
+      registerPWA({ onUpdateReady: () => app.onUpdateReady() });
     } catch (err) {
       showBootMessage("Something went wrong starting the game: " + (err as Error).message);
       throw err;

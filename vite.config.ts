@@ -1,9 +1,62 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
+import { VitePWA } from "vite-plugin-pwa";
 
 export default defineConfig({
   root: "src",
   base: "./",
+  plugins: [
+    // Installable PWA via Workbox (vite-plugin-pwa) — no hand-rolled service
+    // worker. Registration is NOT auto-injected (`injectRegister: false`);
+    // only the game entry (main.ts → src/pwa.ts) registers, so the tooling
+    // pages (gallery/preview/excalibur) stay outside the app scope.
+    //
+    // `registerType: "prompt"` means a freshly built service worker waits
+    // instead of hijacking the tab. The game listens for that (src/pwa.ts):
+    // it forces a quick save, then activates the new worker so the player
+    // always ends up on the latest assets without ever losing their tower.
+    VitePWA({
+      registerType: "prompt",
+      injectRegister: false,
+      includeAssets: ["apple-touch-icon.png", "favicon.png"],
+      manifest: {
+        name: "Tower Tycoon",
+        short_name: "Tower Tycoon",
+        description: "A browser-native SimTower clone — build a high-rise floor by floor.",
+        theme_color: "#000080",
+        background_color: "#008080",
+        display: "standalone",
+        orientation: "any",
+        start_url: "./",
+        scope: "./",
+        icons: [
+          { src: "pwa-192x192.png", sizes: "192x192", type: "image/png" },
+          { src: "pwa-512x512.png", sizes: "512x512", type: "image/png" },
+          {
+            src: "pwa-maskable-512x512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "maskable",
+          },
+        ],
+      },
+      workbox: {
+        // Precache the game shell only. The dev/tooling entry points and their
+        // chunks are excluded so an install ships just the game.
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+        globIgnores: ["**/gallery*", "**/preview*", "**/excalibur*"],
+        navigateFallback: "index.html",
+        navigateFallbackDenylist: [/gallery/, /preview/, /excalibur/],
+        cleanupOutdatedCaches: true,
+        // Excalibur's bundle is comfortably large; lift the precache ceiling.
+        maximumFileSizeToCacheInBytes: 6 * 1024 * 1024,
+      },
+      devOptions: {
+        // Keep the service worker out of `vite dev` so it can't cache-poison HMR.
+        enabled: false,
+      },
+    }),
+  ],
   server: {
     port: 5173,
     open: false,
