@@ -311,6 +311,7 @@ export class AudioEngine {
   private ambFilter: Tone.Filter | null = null;
   private ambGain: Tone.Gain | null = null;
   private rainNoise: Tone.Noise | null = null;
+  private rainFilter: Tone.Filter | null = null;
   private rainGain: Tone.Gain | null = null;
 
   private repeatId: number | null = null;
@@ -397,10 +398,10 @@ export class AudioEngine {
 
       // Outdoor rain layer (kept dry to master).
       this.rainGain = new Tone.Gain(0).connect(this.master);
-      const rainFilter = new Tone.Filter({ type: "highpass", frequency: 900, Q: 0.5 }).connect(
+      this.rainFilter = new Tone.Filter({ type: "highpass", frequency: 900, Q: 0.5 }).connect(
         this.rainGain,
       );
-      this.rainNoise = new Tone.Noise({ type: "white", playbackRate: 1.3 }).connect(rainFilter);
+      this.rainNoise = new Tone.Noise({ type: "white", playbackRate: 1.3 }).connect(this.rainFilter);
       this.rainNoise.start();
 
       // One-shot action jingles.
@@ -652,6 +653,7 @@ export class AudioEngine {
       this.ambFilter,
       this.ambGain,
       this.rainNoise,
+      this.rainFilter,
       this.rainGain,
       this.padGain,
       this.bassGain,
@@ -671,7 +673,7 @@ export class AudioEngine {
     this.lead = this.sfxSynth = this.accentSynth = null;
     this.membrane = null;
     this.noiseAccent = this.ambNoise = this.rainNoise = null;
-    this.accentFilter = this.ambFilter = this.bedFilter = null;
+    this.accentFilter = this.ambFilter = this.rainFilter = this.bedFilter = null;
     this.accentGain = this.ambGain = this.rainGain = null;
     this.padGain = this.bassGain = this.musicGain = null;
     this.reverb = null;
