@@ -1069,8 +1069,8 @@ class GameApp {
   // ---- Undo / redo --------------------------------------------------------
 
   /** A cheap fingerprint of everything a *player action* can change (structure,
-   *  transport config, labels, rents, money) — but NOT time, so a press where
-   *  only the clock ticked doesn't register as a change. */
+   *  transport config, labels, rents, cinema booking policy, money) — but NOT
+   *  time, so a press where only the clock ticked doesn't register as a change. */
   private stateSig(): string {
     const t = this.sim.tower;
     const u = t.units
@@ -1110,6 +1110,7 @@ class GameApp {
   }
 
   private redo(): void {
+    this.commitUndo(); // finalize any in-flight gesture first (matches undo)
     const entry = this.redoStack.pop();
     if (!entry) return this.ui.toast("Nothing to redo.", "info");
     this.undoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
