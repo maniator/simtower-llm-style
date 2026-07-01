@@ -565,10 +565,12 @@ body {
     flex-wrap: wrap;
   }
   .brand {
-    font-size: 14px;
+    font-size: 13px;
   }
+  /* Show the brand NAME on mobile — it's the identity (was display:none, which
+     left only a bare icon). The top bar wraps, so it sits on the first row. */
   .brand span {
-    display: none;
+    display: inline;
   }
   #status {
     gap: 6px;
@@ -738,6 +740,10 @@ body {
 }
 .brand span {
   color: var(--r-title-fg);
+}
+.brand b {
+  color: #ffd24a; /* window-gold POLIS */
+  font-weight: 700;
 }
 #status {
   gap: 5px;

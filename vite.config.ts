@@ -20,8 +20,8 @@ export default defineConfig({
       injectRegister: false,
       includeAssets: ["apple-touch-icon.png", "favicon.png"],
       manifest: {
-        name: "Tower Tycoon",
-        short_name: "Tower Tycoon",
+        name: "Verticopolis",
+        short_name: "Verticopolis",
         description: "A browser-native SimTower clone — build a high-rise floor by floor.",
         theme_color: "#000080",
         background_color: "#008080",

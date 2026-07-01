@@ -1,8 +1,11 @@
-# 🏢 Tower Tycoon — a browser SimTower clone
+# 🏙️ Verticopolis — a browser SimTower clone
 
-A from-scratch, browser-native homage to the classic **SimTower** (1994). Build a
-high-rise floor by floor, wire it with elevators, attract tenants, keep them
-happy, and climb the star ratings all the way to a coveted **TOWER**.
+**Play it: [verticopolis.com](https://verticopolis.com)**
+
+A from-scratch, browser-native homage to the classic **SimTower** (1994) — a
+vertical metropolis you build floor by floor. Wire it with elevators, attract
+tenants, set the rents, keep everyone happy, and climb the star ratings all the
+way to a coveted **TOWER**.
 
 Written in **TypeScript** on the **[Excalibur.js](https://excaliburjs.com/)**
 game engine (camera, scene, culling, collision and the render loop), with a
@@ -33,7 +36,7 @@ npm run screenshots  # build + headless-capture screenshots into docs/screenshot
 
 The production build (`npm run build`) is an installable **Progressive Web App**.
 Open the served build in Chrome, Edge, or Safari and use **Install app** / **Add
-to Home Screen** to run Tower Tycoon in its own window, offline.
+to Home Screen** to run Verticopolis in its own window, offline.
 
 It's built on **[`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/)** (Workbox
 under the hood) — no hand-rolled service worker. A few details worth knowing:
