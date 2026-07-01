@@ -3,6 +3,7 @@ import type { Simulation } from "../../engine/Simulation";
 import { GRID, TRANSPORT_CAPACITY, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
+import { carIndicator, type CarArrow } from "../carIndicator";
 import { person, SHIRTS } from "../pixelSprites";
 import type { Person } from "../../engine/Crowd";
 import { clampCameraY } from "../cameraBounds";
@@ -131,7 +132,16 @@ export class TowerEngine {
   private transportActors = new Map<number, ex.Actor>();
   private transportSig = new Map<number, string>();
   // Engine-animated actors, regenerated when the layout changes.
-  private carActors: { actor: ex.Actor; t: Transport; i: number; gfx: ex.Canvas[]; shown: number }[] = [];
+  private carActors: {
+    actor: ex.Actor;
+    t: Transport;
+    i: number;
+    seed: number;
+    w: number;
+    /** Lazily-built cab graphics keyed by indicator state (riders:arrow:full). */
+    gfx: Map<string, ex.Canvas>;
+    shown: string;
+  }[] = [];
   private trainActors: { actor: ex.Actor; u: Unit; w: number }[] = [];
   private walkers: Walker[] = [];
   private builtRev = -1;
@@ -1002,6 +1012,33 @@ export class TowerEngine {
     this.walkers = [];
   }
 
+  /** Stable cache key for a cab graphic's indicator state. */
+  private carKey(riders: number, arrow: CarArrow, full: boolean): string {
+    return `${riders}:${arrow ?? "x"}:${full ? "f" : "e"}`;
+  }
+
+  /** Get-or-create the cab graphic for a given indicator state. */
+  private carGfx(
+    entry: { seed: number; w: number; gfx: Map<string, ex.Canvas> },
+    riders: number,
+    arrow: CarArrow,
+    full: boolean,
+  ): ex.Canvas {
+    const key = this.carKey(riders, arrow, full);
+    let cv = entry.gfx.get(key);
+    if (!cv) {
+      const { seed, w } = entry;
+      cv = new ex.Canvas({
+        width: w,
+        height: FLOOR,
+        cache: true,
+        draw: (ctx) => drawCar(ctx, seed, w, FLOOR, riders, arrow, full),
+      });
+      entry.gfx.set(key, cv);
+    }
+    return cv;
+  }
+
   private syncMotion(): void {
     this.clearMotion();
     for (const t of this.sim.tower.transports) {
@@ -1009,14 +1046,13 @@ export class TowerEngine {
       const w = t.width * TILE;
       for (let i = 0; i < t.cars; i++) {
         const seed = (i * 7 + t.id) | 0;
-        // One graphic per rider count 0..4, so the cab fills as it loads up.
-        const gfx = Array.from({ length: 5 }, (_, r) =>
-          new ex.Canvas({ width: w, height: FLOOR, cache: true, draw: (ctx) => drawCar(ctx, seed, w, FLOOR, r) }),
-        );
+        // Cab graphics are built lazily and cached by indicator state (rider
+        // count, direction lantern, FULL) so we only ever draw each variant once.
+        const gfx = new Map<string, ex.Canvas>();
         const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), -t.carPositions[i] * FLOOR), width: w, height: FLOOR, anchor: ex.vec(0, 0), z: 2 });
-        a.graphics.use(gfx[0]);
+        a.graphics.use(this.carGfx({ seed, w, gfx }, 0, null, false));
         this.engine.add(a);
-        this.carActors.push({ actor: a, t, i, gfx, shown: 0 });
+        this.carActors.push({ actor: a, t, i, seed, w, gfx, shown: this.carKey(0, null, false) });
       }
     }
     for (const u of this.sim.tower.units) {
@@ -1099,14 +1135,17 @@ export class TowerEngine {
     const anim = this.d.anim;
     for (const c of this.carActors) {
       c.actor.pos = ex.vec(this.worldX(c.t.x), -c.t.carPositions[c.i] * FLOOR);
-      // Show the actual fill as 0..4 buckets, scaled to THIS cab's capacity, so a
-      // big express cab doesn't read "full" at a fraction of its load (review F9).
+      // Indicator state (riders bucket scaled to capacity, direction lantern,
+      // FULL) is derived by the tested carIndicator helper; the cab graphic is
+      // cached per state so we only redraw when the state actually changes.
       const load = c.t.carLoad?.[c.i] ?? 0;
       const cap = TRANSPORT_CAPACITY[c.t.kind] ?? 16;
-      const riders = Math.max(0, Math.min(4, Math.round((load / cap) * 4)));
-      if (riders !== c.shown) {
-        c.shown = riders;
-        c.actor.graphics.use(c.gfx[riders]);
+      const dir = c.t.carDir?.[c.i] ?? 0;
+      const { riders, arrow, full } = carIndicator(dir, load, cap);
+      const key = this.carKey(riders, arrow, full);
+      if (key !== c.shown) {
+        c.shown = key;
+        c.actor.graphics.use(this.carGfx(c, riders, arrow, full));
       }
     }
     for (const tr of this.trainActors) {
