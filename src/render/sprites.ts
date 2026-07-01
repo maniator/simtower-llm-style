@@ -551,11 +551,15 @@ export function drawTransport(
     ctx.font = `bold ${Math.min(floorH - 4, 8)}px "MS Sans Serif", monospace`;
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
+    // Express elevators skip floors; like the original, a floor the car doesn't
+    // stop at shows no stop line and no number — the shaft just passes through.
+    const skip = t.skipFloors && t.skipFloors.length ? new Set(t.skipFloors) : null;
     for (let fl = 0; fl <= t.top - t.bottom; fl++) {
+      const num = t.top - fl; // band fl counts down from the top floor
+      if (skip && skip.has(num)) continue; // not a stop — leave the shaft blank here
       const fy = topY + fl * floorH;
       ctx.fillStyle = "rgba(255,255,255,0.05)";
       ctx.fillRect(sx + 1, fy, w - 2, 1); // per-floor stop line
-      const num = t.top - fl; // band fl counts down from the top floor
       const label = num >= 1 ? String(num) : `B${1 - num}`;
       ctx.fillStyle = "rgba(255,255,255,0.28)";
       ctx.fillText(label, sx + w / 2, fy + floorH / 2);
