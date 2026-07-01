@@ -1,11 +1,11 @@
-# Project Context — Tower Tycoon (AI agent rules)
+# Project Context — Verticopolis (AI agent rules)
 
 Foundational context every BMAD agent (bmm / cis / **gds game agents**) must carry.
 Concise on purpose — only the non-obvious rules an LLM needs reminding of. For the
 full spec see the PRD under `_bmad-output/planning-artifacts/prds/`.
 
 ## What this is
-- **Tower Tycoon** — a from-scratch, browser-native clone of **SimTower (1994, Maxis/OPeNBooK)**.
+- **Verticopolis** — a from-scratch, browser-native clone of **SimTower (1994, Maxis/OPeNBooK)**.
 - **The single source of truth is SimTower 1994**, specifically the GameFAQs/Kiwizoid
   FAQ (summarized with attribution under `_bmad-output/planning-artifacts/reviews/faq-parity-2026-06-30/faq-canon.md`).
   The bar is **gameplay parity**, not reinvention. New mechanics are out of scope.

@@ -1,7 +1,7 @@
 {
-  "name": "tower-tycoon",
+  "name": "verticopolis",
   "version": "1.0.0",
-  "description": "Tower Tycoon — a browser-native SimTower clone in TypeScript",
+  "description": "Verticopolis — a browser-native SimTower clone in TypeScript",
   "type": "module",
   "engines": {
     "node": ">=22.12.0"

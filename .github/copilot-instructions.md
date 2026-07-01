@@ -12,7 +12,7 @@ non-trivial work." Start with the `bmad-help` agent if you're unsure where to be
 
 ## Project Context
 
-This is **Tower Tycoon** — a from-scratch, browser-native clone of the classic
+This is **Verticopolis** — a from-scratch, browser-native clone of the classic
 **SimTower** (1994). Build a high-rise floor by floor, wire it with elevators,
 attract tenants, keep them happy, and climb the star ratings to a **TOWER**.
 

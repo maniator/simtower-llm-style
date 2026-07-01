@@ -1028,7 +1028,7 @@ if (typeof document !== "undefined") {
   const boot = () => {
     if (!hasWebGL()) {
       showBootMessage(
-        "This viewer can't run WebGL, which Tower Tycoon needs to draw the tower.<br><br>Open this page in <b>Safari</b>, <b>Chrome</b>, or another full web browser to play.",
+        "This viewer can't run WebGL, which Verticopolis needs to draw the tower.<br><br>Open this page in <b>Safari</b>, <b>Chrome</b>, or another full web browser to play.",
       );
       return;
     }

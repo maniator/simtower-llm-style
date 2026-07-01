@@ -499,7 +499,7 @@ export class UI {
   private openImport(): void {
     const box = this.openModal(
       `<h2>Import tower</h2>
-       <p>Paste a Tower Tycoon JSON export, or choose a file. Original SimTower
+       <p>Paste a Verticopolis JSON export, or choose a file. Original SimTower
        <code>.TWR</code> saves are recognized (full conversion is planned for a future update).</p>
        <textarea placeholder="Paste save JSON here…"></textarea>
        <div class="modal-actions">
