@@ -188,7 +188,7 @@ export class EconomySystem {
     }
     for (const u of this.sim.tower.units) {
       const m = ECON.serviceMaintenanceMonthly[u.kind];
-      if (m) cost += m;
+      if (m && u.state !== "gutted") cost += m; // a gutted service room is destroyed — no upkeep
       const operational = isOperational(u);
       // Property tax on an unsold condo: a real carrying cost for holding out
       // for a premium sale (scales with the asking price).

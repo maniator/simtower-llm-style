@@ -284,7 +284,9 @@ export class EventSystem {
           }
         }
         const lastOfKind = !!next && opsOfKind <= 1;
-        if (next && !lastOfKind && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && isOperational(next)) {
+        // adjacentRoom() returns only room-layer units (never floor/lobby) and
+        // isOperational() already excludes fire — so the guard is just these two.
+        if (next && !lastOfKind && isOperational(next)) {
           next.state = "fire";
           next.occupants = 0;
           this.active.add(next.id);
