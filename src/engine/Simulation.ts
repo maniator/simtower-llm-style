@@ -24,6 +24,7 @@ import {
   isHotelKind,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit, WeatherKind } from "./types";
+import { isOperational } from "./types";
 
 /**
  * Current save-format version. `serialize()` always stamps this; `deserialize()`
@@ -319,7 +320,8 @@ export class Simulation implements SimContext {
       // so every removal path upholds the anti-cheat.
       if (u.state === "fire") return false;
       this.tower.removeUnit(u.id);
-      this.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      // A gutted shell has no salvage value; everything else refunds half.
+      this.money += u.state === "gutted" ? 0 : Math.floor(FACILITIES[u.kind].cost * 0.5);
       // If the last Wedding Hall is gone before the VIP arrived, cancel the
       // pending inspection so it can't keep re-failing and spamming the log.
       if (u.kind === "weddingHall" && !this.tower.builtWeddingHall && !this.evaluatedTower) {
@@ -497,7 +499,7 @@ export class Simulation implements SimContext {
     const weekend = this.clock.isWeekend;
     for (const u of this.tower.units) {
       const f = FACILITIES[u.kind];
-      if (u.state === "empty" || u.state === "construction" || u.state === "fire") {
+      if (u.state === "empty" || u.state === "construction" || u.state === "fire" || u.state === "gutted") {
         u.occupants = 0;
         continue;
       }
@@ -538,7 +540,7 @@ export class Simulation implements SimContext {
       this.emit("Tenants are complaining of long elevator waits — add cars or shafts.", "bad");
     }
     for (const u of this.tower.units) {
-      if (u.state === "empty" || u.state === "construction" || u.state === "fire") continue;
+      if (u.state === "empty" || u.state === "construction" || u.state === "fire" || u.state === "gutted") continue;
       const served = this.tower.isFloorServed(u.floor);
       const cong = congMap ? (congMap.get(u.floor) ?? 0) : globalCong;
       if (!served) {
@@ -620,7 +622,7 @@ export class Simulation implements SimContext {
     for (const u of this.tower.units) {
       // Operational only — a metro under construction / on fire moves nobody
       // (matches the v2 spatial model).
-      if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") capacity += 60;
+      if (u.kind === "metro" && isOperational(u)) capacity += 60;
     }
     capacity += 4 * this.tower.functionalParkingSpots(); // only ramp-chained spaces help
     const pop = this.tower.totalPopulation();
@@ -670,7 +672,7 @@ export class Simulation implements SimContext {
     const popByFloor = new Map<number, number>();
     let metro = 0;
     for (const u of this.tower.units) {
-      if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") metro++;
+      if (u.kind === "metro" && isOperational(u)) metro++;
       if (u.state === "occupied" || u.state === "asleep" || u.state === "moving_in") {
         const p = FACILITIES[u.kind].population;
         if (p > 0 && u.floor !== 1) popByFloor.set(u.floor, (popByFloor.get(u.floor) ?? 0) + p);
@@ -953,7 +955,7 @@ export class Simulation implements SimContext {
   countOperational(kind: FacilityKind): number {
     let n = 0;
     for (const u of this.tower.units) {
-      if (u.kind === kind && u.state !== "construction" && u.state !== "fire") n++;
+      if (u.kind === kind && isOperational(u)) n++;
     }
     return n;
   }

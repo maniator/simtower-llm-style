@@ -786,7 +786,12 @@ class GameApp {
     if (u.kind === "cinema") {
       rows.push(`<span class="k">Now showing</span><span class="v" data-field="showing">${vol.showing}</span>`);
     }
-    rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
+    if (u.state === "gutted") {
+      rows.push(`<span class="k">Scrap value</span><span class="v">$0</span>`);
+      rows.push(`<span class="k">⚠</span><span class="v">Gutted by fire — bulldoze and rebuild.</span>`);
+    } else {
+      rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
+    }
 
     let actions = "";
     if (canRename) {
@@ -940,7 +945,8 @@ class GameApp {
           return;
         }
         this.sim.tower.removeUnit(u.id);
-        this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+        // A gutted shell has no salvage value; everything else refunds half.
+        this.sim.money += u.state === "gutted" ? 0 : Math.floor(FACILITIES[u.kind].cost * 0.5);
         this.audio.sfx("sell");
         this.commitUndo();
         return this.clearSelection();
@@ -1186,7 +1192,8 @@ class GameApp {
         return;
       }
       this.sim.tower.removeUnit(u.id);
-      this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      // A gutted shell has no salvage value; everything else refunds half.
+      this.sim.money += u.state === "gutted" ? 0 : Math.floor(FACILITIES[u.kind].cost * 0.5);
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === p.id);
       if (!t) return;

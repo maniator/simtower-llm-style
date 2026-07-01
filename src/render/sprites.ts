@@ -70,6 +70,8 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
     drawFlames(d, x, y, w, h);
     return;
   }
+  // A burned-out room after the fire: the shell, no flames — a scar to rebuild.
+  if (u.state === "gutted") return drawBurntShell(ctx, x, y, w, h);
 
   // Faithful pixel-art rooms own all of their states (empty / closed / asleep…),
   // including their own "for lease"/"for sale" signage when vacant.

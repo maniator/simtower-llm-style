@@ -1,4 +1,5 @@
 import { BUILD_CAPS, FACILITIES, GRID, MAX_CARS, POOLED_CAPS, facilityFloors, isElevatorKind, maxSpanFor } from "./facilities";
+import { isOperational } from "./types";
 import type {
   Facility,
   FacilityKind,
@@ -705,10 +706,10 @@ export class Tower {
    */
   functionalParkingSet(): ReadonlySet<number> {
     const usable = (u?: Unit): boolean =>
-      !!u && (u.kind === "parking" || u.kind === "parkingRamp") && u.state !== "construction" && u.state !== "fire";
+      !!u && (u.kind === "parking" || u.kind === "parkingRamp") && isOperational(u);
     const stack: [number, number][] = [];
     for (const u of this.units) {
-      if (u.kind === "parkingRamp" && u.state !== "construction" && u.state !== "fire") {
+      if (u.kind === "parkingRamp" && isOperational(u)) {
         for (let i = 0; i < u.width; i++) stack.push([u.floor, u.x + i]);
       }
     }

@@ -126,8 +126,8 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
     const near = sim.fireContainmentChance(3); // within radius
     const far = sim.fireContainmentChance(100); // a floor-100 fire, far away
     expect(near).toBeGreaterThan(far);
-    expect(near).toBeCloseTo(0.95, 5); // base 0.45 + security 0.2 + medical 0.3
-    expect(far).toBeCloseTo(0.45, 5); // base only — neither covers floor 100
+    expect(near).toBeCloseTo(1.0, 5); // base 0.50 + security 0.2 + medical 0.3
+    expect(far).toBeCloseTo(0.5, 5); // base only — neither covers floor 100
   });
 
   it("v1 keeps tower-wide coverage (one station protects everywhere)", () => {

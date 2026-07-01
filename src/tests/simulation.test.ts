@@ -419,11 +419,11 @@ describe("Simulation events", () => {
     let guard = 0;
     while (sim.fires > 0 && guard++ < 60) sim.tick(60 * 24); // one day per tick
     expect(sim.fires).toBe(0);
-    // Contained: no longer burning. (Under the default hourly model the gutted
-    // office may since have been re-let, so assert "not on fire" rather than a
-    // permanently-empty unit.)
-    expect(office.state).not.toBe("fire");
-    expect(sim.money).toBeLessThan(before); // repairs cost money
+    // Contained now means DESTROYED (canon): the room is a gutted shell, not
+    // repaired-and-re-let, so it never re-populates and earns nothing.
+    expect(office.state).toBe("gutted");
+    expect(sim.population).toBe(0);
+    void before; // containment no longer charges a repair fee (was: money < before)
   });
 
   it("security defuses a bomb threat cheaply; without it the tower pays dearly", () => {

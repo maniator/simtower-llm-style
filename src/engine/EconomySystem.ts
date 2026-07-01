@@ -1,4 +1,5 @@
 import type { SimContext } from "./SimContext";
+import { isOperational } from "./types";
 import { ECON, rentOf, isOverheadKind } from "./econConfig";
 import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facilities";
 
@@ -29,7 +30,7 @@ export class EconomySystem {
    * / on-fire) — so income effects key off an OPERATIONAL metro/recycling. */
   private hasOperational(kind: string): boolean {
     return this.sim.tower.units.some(
-      (u) => u.kind === kind && u.state !== "construction" && u.state !== "fire",
+      (u) => u.kind === kind && isOperational(u),
     );
   }
 
@@ -188,7 +189,7 @@ export class EconomySystem {
     for (const u of this.sim.tower.units) {
       const m = ECON.serviceMaintenanceMonthly[u.kind];
       if (m) cost += m;
-      const operational = u.state !== "construction" && u.state !== "fire";
+      const operational = isOperational(u);
       // Property tax on an unsold condo: a real carrying cost for holding out
       // for a premium sale (scales with the asking price).
       if (u.kind === "condo" && !u.everOccupied && operational) {

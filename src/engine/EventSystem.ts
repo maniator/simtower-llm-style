@@ -1,5 +1,6 @@
 import type { SimContext } from "./SimContext";
 import type { Unit } from "./types";
+import { isOperational } from "./types";
 import { FACILITIES } from "./facilities";
 import { RNG } from "./rng";
 
@@ -91,7 +92,7 @@ export class EventSystem {
         this.pending = {
           kind: "fireRescue",
           cost,
-          message: `🚒 Fire rescue available for $${cost.toLocaleString()} — extinguish it now, or decline and fight it the slow way.`,
+          message: `🚒 Fire rescue available for $${cost.toLocaleString()} — pay to stop the spread and save the tower now, or decline and fight it the slow way. Either way the rooms already ablaze burn down to gutted shells you'll rebuild; the fee just limits how far the fire spreads.`,
         };
         this.sim.emit(this.pending.message, "bad");
         // Telegraph the free defense to a player who hasn't built one yet. Use
@@ -131,7 +132,10 @@ export class EventSystem {
       if (option === "accept" && this.sim.money >= p.cost) {
         this.sim.money -= p.cost;
         this.extinguishAll();
-        this.sim.emit(`🚒 Fire-rescue crews put the blaze out for $${p.cost.toLocaleString()}.`, "money");
+        this.sim.emit(
+          `🚒 Fire-rescue crews saved the tower for $${p.cost.toLocaleString()}. The rooms that were ablaze are gutted — bulldoze and rebuild them.`,
+          "money",
+        );
       }
       // decline → the fire keeps burning; processFires fights it each day.
       return;
@@ -145,16 +149,24 @@ export class EventSystem {
     }
   }
 
-  /** Put out every active fire (the paid rescue outcome). */
+  /** Reduce a burned unit to a gutted shell — inert until bulldozed & rebuilt.
+   *  Single source of truth for the fire-destroys-rooms transition (canon:
+   *  fires never silently restore a room to a fresh, re-leasable one). */
+  private gut(u: Unit): void {
+    u.state = "gutted";
+    u.occupants = 0;
+    u.everOccupied = false;
+    u.satisfaction = 0;
+    u.pendingIncome = 0;
+    u.label = FACILITIES[u.kind].name;
+  }
+
+  /** End every active fire (the paid rescue outcome). The fee halts the spread
+   *  and ends the panic — it does NOT un-burn: rooms that were ablaze are gutted. */
   private extinguishAll(): void {
     for (const id of [...this.active]) {
       const u = this.sim.tower.units.find((x) => x.id === id);
-      if (u && u.state === "fire") {
-        u.state = "empty";
-        u.satisfaction = 1;
-        u.everOccupied = false;
-        u.label = FACILITIES[u.kind].name;
-      }
+      if (u && u.state === "fire") this.gut(u);
     }
     this.active.clear();
   }
@@ -188,7 +200,8 @@ export class EventSystem {
         u.kind !== "floor" &&
         u.kind !== "lobby" &&
         u.state !== "construction" &&
-        u.state !== "fire",
+        u.state !== "fire" &&
+        u.state !== "gutted", // a husk can't re-ignite
     );
   }
 
@@ -206,11 +219,7 @@ export class EventSystem {
   /** True if an operational unit of `kind` is within `radius` floors of `floor`. */
   private serviceWithin(kind: Unit["kind"], floor: number, radius: number): boolean {
     return this.sim.tower.units.some(
-      (u) =>
-        u.kind === kind &&
-        u.state !== "construction" &&
-        u.state !== "fire" &&
-        Math.abs(u.floor - floor) <= radius,
+      (u) => u.kind === kind && isOperational(u) && Math.abs(u.floor - floor) <= radius, // a gutted station gives no coverage
     );
   }
 
@@ -230,7 +239,7 @@ export class EventSystem {
     // Base is deliberately > 1/3 so a player who can't yet afford Security or the
     // rescue fee isn't trapped in a spreading, satisfaction-draining death spiral;
     // Security/Medical still add a clear, meaningful bonus on top.
-    return 0.45 + (sec ? 0.2 : 0) + (med ? 0.3 : 0);
+    return 0.5 + (sec ? 0.2 : 0) + (med ? 0.3 : 0);
   }
 
   /** The room immediately left or right of a unit on the same floor. */
@@ -255,18 +264,21 @@ export class EventSystem {
       // Response speed depends on whether a station covers THIS fire's floor (v2).
       const control = this.controlChance(u.floor);
       if (this.sim.rng.chance(control)) {
-        // Contained: pay to repair the gutted unit, then it reopens vacant.
-        const repair = Math.floor(FACILITIES[u.kind].cost * 0.3);
-        this.sim.money -= repair;
-        u.state = "empty";
-        u.satisfaction = 1;
-        u.everOccupied = false;
-        u.label = FACILITIES[u.kind].name;
+        // Contained: the blaze stops spreading, but the room is destroyed — a
+        // gutted shell the player must bulldoze and rebuild (canon; no repair).
+        this.gut(u);
         this.active.delete(id);
-        this.sim.emit(`Firefighters contained the blaze on ${this.sim.floorLabel(u.floor)}. Repairs cost $${repair.toLocaleString()}.`, "money");
+        this.sim.emit(
+          `🔥 The ${FACILITIES[u.kind].name} on ${this.sim.floorLabel(u.floor)} burned down — only a gutted shell remains. Bulldoze the rubble and rebuild.`,
+          "bad",
+        );
       } else {
         const next = this.adjacentRoom(u);
-        if (next && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && next.state !== "construction") {
+        // Small-tower safety valve: never consume the LAST operational room of its
+        // kind, so one blaze can't wipe a starter tower to zero of something.
+        const lastOfKind =
+          !!next && this.sim.tower.units.filter((x) => x.kind === next.kind && isOperational(x)).length <= 1;
+        if (next && !lastOfKind && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && isOperational(next)) {
           next.state = "fire";
           next.occupants = 0;
           this.active.add(next.id);

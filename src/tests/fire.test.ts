@@ -1,0 +1,113 @@
+import { describe, it, expect } from "vitest";
+import { Simulation } from "../engine/Simulation";
+import { GRID } from "../engine/facilities";
+import { isOperational } from "../engine/types";
+
+/** A floor-2 tower served by an elevator, with `n` occupied offices — the only
+ *  flammable rooms, so `startFire()` ignites an office deterministically. */
+function firePrep(seed: number, n = 1) {
+  const sim = Simulation.newGame(seed);
+  const x0 = Math.floor(GRID.width / 2) - 20;
+  for (let i = 0; i < 40; i++) sim.tower.place("floor", 2, x0 + i);
+  sim.buildTransport("elevatorStandard", x0, 1, 2);
+  const offices = [];
+  for (let i = 0; i < n; i++) sim.build("office", 2, x0 + i * 2);
+  for (const u of sim.tower.units.filter((u) => u.kind === "office")) {
+    u.state = "occupied";
+    u.everOccupied = true;
+    offices.push(u);
+  }
+  return { sim, offices, x0 };
+}
+
+/** Add Security + Medical AFTER a fire is burning (so they're never the ignited
+ *  unit) — control = 0.5 + 0.2 + 0.3 = 1.0 ⇒ contained the next day. */
+function defend(sim: Simulation, x0: number): void {
+  sim.star = 4;
+  sim.tower.place("security", 2, x0 + 30);
+  sim.tower.place("medical", 2, x0 + 34);
+}
+
+/** Ignite an office, staff up, and run days until the blaze is out. */
+function burnDown(sim: Simulation, x0: number): void {
+  sim.startFire();
+  defend(sim, x0);
+  let guard = 0;
+  while (sim.fires > 0 && guard++ < 20) sim.tick(60 * 24); // one day per tick
+  expect(sim.fires).toBe(0);
+}
+
+describe("Fire aftermath — gutted shells (canon), not auto-repair", () => {
+  it("a contained fire leaves a GUTTED shell, not a fresh vacant room (bug regression)", () => {
+    const { sim, offices, x0 } = firePrep(11, 1);
+    sim.startFire();
+    expect(offices[0].state).toBe("fire");
+    defend(sim, x0);
+    let g = 0;
+    while (sim.fires > 0 && g++ < 20) sim.tick(60 * 24);
+    expect(offices[0].state).toBe("gutted"); // NOT "empty"/"occupied" — the old bug
+    expect(offices[0].occupants).toBe(0);
+    expect(offices[0].everOccupied).toBe(false);
+  });
+
+  it("a gutted room never re-leases or earns over time", () => {
+    const { sim, offices, x0 } = firePrep(11, 1);
+    burnDown(sim, x0);
+    expect(offices[0].state).toBe("gutted");
+    for (let d = 0; d < 40; d++) sim.tick(60 * 24); // ~6 weeks
+    expect(offices[0].state).toBe("gutted"); // still a shell — never silently re-let
+    expect(offices[0].occupants).toBe(0);
+  });
+
+  it("containment charges no repair fee (the room is destroyed instead)", () => {
+    const { sim, x0 } = firePrep(11, 1);
+    sim.startFire();
+    defend(sim, x0);
+    const before = sim.money;
+    sim.tick(60 * 24); // one day → contained (control 1.0)
+    expect(sim.fires).toBe(0);
+    // Only ordinary daily upkeep is spent — the old ~30%-of-cost repair fee
+    // (≈ $12k for an office) is gone; the room is destroyed instead.
+    expect(before - sim.money).toBeLessThan(10_000);
+  });
+
+  it("bulldozing a gutted shell refunds nothing (empty rooms still refund half)", () => {
+    const { sim, offices, x0 } = firePrep(11, 1);
+    burnDown(sim, x0);
+    expect(offices[0].state).toBe("gutted");
+    const before = sim.money;
+    expect(sim.sellAt(offices[0].floor, offices[0].x)).toBe(true);
+    expect(sim.money).toBe(before); // $0 salvage on a gutted shell
+  });
+
+  it("a gutted room is not operational and can't re-ignite", () => {
+    const { sim, offices, x0 } = firePrep(11, 1);
+    burnDown(sim, x0);
+    const gutted = offices[0];
+    expect(isOperational(gutted)).toBe(false);
+    // Igniting again only picks flammable rooms; a gutted husk is excluded.
+    for (let i = 0; i < 5; i++) sim.startFire();
+    expect(gutted.state).toBe("gutted"); // never re-ignited
+  });
+
+  it("survives save/load as gutted and never re-ignites or re-lets", () => {
+    const { sim, x0 } = firePrep(11, 1);
+    burnDown(sim, x0);
+    const json = sim.serialize();
+    const loaded = Simulation.deserialize(json);
+    const office = loaded.tower.units.find((u) => u.kind === "office")!;
+    expect(office.state).toBe("gutted");
+    expect(loaded.fires).toBe(0);
+    for (let d = 0; d < 20; d++) loaded.tick(60 * 24);
+    expect(office.state).toBe("gutted"); // no re-ignite, no re-lease after load
+  });
+
+  it("isOperational excludes construction, fire, and gutted", () => {
+    expect(isOperational({ state: "occupied" })).toBe(true);
+    expect(isOperational({ state: "empty" })).toBe(true);
+    expect(isOperational({ state: "asleep" })).toBe(true);
+    expect(isOperational({ state: "gutted" })).toBe(false);
+    expect(isOperational({ state: "fire" })).toBe(false);
+    expect(isOperational({ state: "construction" })).toBe(false);
+  });
+});
