@@ -145,6 +145,39 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
     expect(sim.fireContainmentChance(10)).toBeGreaterThan(0.5);
     expect(sim.fireContainmentChance(90)).toBeGreaterThan(0.5);
   });
+
+  it("fire-defense visibly lowers how often fires break out", () => {
+    const sim = tallTower(1);
+    const bare = sim.fireIgnitionChance();
+    expect(bare).toBeCloseTo(0.025, 5); // base daily chance with no defense
+
+    sim.tower.place("security", 2, C);
+    const withSecurity = sim.fireIgnitionChance();
+    expect(withSecurity).toBeCloseTo(0.025 * 0.45, 5);
+    // Security more than halves the fire rate — building it is clearly worth it.
+    expect(withSecurity).toBeLessThan(bare * 0.5);
+
+    sim.tower.place("medical", 2, C + 8);
+    const withBoth = sim.fireIgnitionChance();
+    expect(withBoth).toBeCloseTo(0.025 * 0.45 * 0.5, 5);
+    expect(withBoth).toBeLessThan(withSecurity);
+  });
+
+  it("a Security office that is still under construction or on fire does not protect", () => {
+    const sim = tallTower(1);
+    const bare = sim.fireIgnitionChance();
+    const { unitId } = sim.tower.place("security", 2, C);
+    const sec = sim.tower.units.find((u) => u.id === unitId)!;
+
+    sec.state = "construction"; // not finished → no protection yet
+    expect(sim.fireIgnitionChance()).toBeCloseTo(bare, 5);
+
+    sec.state = "fire"; // the station itself is ablaze → no protection
+    expect(sim.fireIgnitionChance()).toBeCloseTo(bare, 5);
+
+    sec.state = "empty"; // operational again → protection returns
+    expect(sim.fireIgnitionChance()).toBeLessThan(bare);
+  });
 });
 
 import { TOWER_POPULATION, FACILITIES } from "../engine/facilities";

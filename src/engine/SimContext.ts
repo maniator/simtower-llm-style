@@ -27,6 +27,9 @@ export interface SimContext {
   emit(text: string, kind?: LogKind): void;
   /** True if the tower contains at least one unit of this kind. */
   hasAny(kind: FacilityKind): boolean;
+  /** True if at least one operational (finished, not-on-fire) unit of this kind
+   * exists. */
+  hasOperational(kind: FacilityKind): boolean;
   /** Human floor label: "floor 5" above ground, "B1"/"B2"… below. */
   floorLabel(floor: number): string;
 }

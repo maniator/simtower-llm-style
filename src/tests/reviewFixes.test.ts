@@ -196,6 +196,8 @@ describe("F14 — the Recycling Centre has a real effect", () => {
       star: 5,
       emit: () => {},
       hasAny: (k: FacilityKind) => tower.units.some((u) => u.kind === k),
+      hasOperational: (k: FacilityKind) =>
+        tower.units.some((u) => u.kind === k && u.state !== "construction" && u.state !== "fire"),
       floorLabel: (f: number) => `${f}`,
     };
     new EconomySystem(ctx).collectTrafficIncome();
