@@ -22,10 +22,10 @@ implements: GDD recommendations #2 (≤2-ride) and #3 (silent hotel/parking rule
 ### 1a. `Tower.functionalParkingSet(): ReadonlySet<number>` — expose the SET, not just the count
 `Tower.functionalParkingSpots()` (`src/engine/Tower.ts:675`) already builds the `reached` set of ramp-chained parking-unit ids, then throws it away returning `reached.size`. Refactor:
 
-- Extract the flood-fill into `functionalParkingSet(): ReadonlySet<number>`, **memoized by `this.revision`** exactly like `servedFloors()`/`servedSet` (add private `parkingSet?: Set<number>` + `parkingRev = -1` fields; return the cache when `parkingRev === this.revision`).
+- Extract the flood-fill into `functionalParkingSet(): ReadonlySet<number>`. **CORRECTION (review):** do NOT memoise by `this.revision` — the set depends on `unit.state` (construction/fire), and those transitions (`finishConstruction`, the fire handlers) mutate `state` WITHOUT bumping `revision`, so a revision cache goes stale (dead-X on working parking; economy relief withheld). Recompute fresh each call — the flood-fill is O(region) with O(1) `roomAt`, cheap enough for every caller.
 - Keep `functionalParkingSpots()` as a one-liner: `return this.functionalParkingSet().size;` — every existing caller (economy relief, tests) is unchanged.
 
-This one set feeds all three parking consumers: inspector membership (`set.has(u.id)`), the canvas red X, and the stats "working/total" row. Memoization means even the 6 Hz `stats()` path pays only a per-revision recompute.
+This one set feeds all three parking consumers: inspector membership (`set.has(u.id)`), the canvas red X, and the stats "working/total" row. It is recomputed fresh (no cache — see correction above); the render path reads it ONCE per sync and threads the result into `addRoom` so a rebake doesn't recompute per unit.
 
 ### 1b. `Simulation.floorReachable(floor: number): boolean` — the per-object ≤2-ride truth
 Thin, self-documenting wrapper so `main.ts` never reaches into crowd internals and the semantics live next to `Tower.isFloorServed`:
@@ -145,7 +145,7 @@ this.strandedNudged = stranded;   // re-arms only after the condition clears
 
 - **Route is BFS, already bounded and cached.** `MAX_RIDES = 2` (`Crowd.ts:143`) bounds each search to two frontier expansions; adjacency is memoized by `tower.revision` (`Crowd.ts:114-131`). No new caching needed.
 - **Nothing BFS-bearing on the 6 Hz / tick path.** `floorReachable` → inspector (per click). `strandedFloors` → modal-open + once/day. `stats()` stays route-free (§1e). This is the design's hard line.
-- **Parking set memoized per revision** (§1a) — safe even inside the 6 Hz `stats()` call and the every-frame `syncScene`.
+- **Parking set recomputed fresh** (§1a; the revision cache was a review-caught bug) — cheap (O(region), O(1) `roomAt`); `syncScene` reads it once per sync, not per unit.
 - **Determinism unchanged.** Every added method is a pure read over existing state; none writes a simulated value, touches `rng.ts`, or runs in `tick()`. Parity (`parity.test.ts`), balance, and the seeded crowd are untouched — satisfies GDD restraint and acceptance criterion #5.
 - **Screenshot stability.** No new always-on chrome; the red X is revision-static; Stats/inspector lines are pull-only. A healthy tower renders identically to pre-pass (acceptance #4).
 
@@ -185,7 +185,7 @@ Rendering (red X, divergent-line rendering) is DOM/canvas and out of Vitest scop
 
 | File | Change |
 |---|---|
-| `src/engine/Tower.ts` (~675) | Extract `functionalParkingSet()` (memoized by revision); `functionalParkingSpots()` → `.size`. |
+| `src/engine/Tower.ts` (~675) | Extract `functionalParkingSet()` (fresh compute — no revision cache); `functionalParkingSpots()` → `.size`. |
 | `src/engine/Simulation.ts` | Add `floorReachable`, `strandedFloors`, `hotelsCountTowardRating`; extend `stats()` (cheap fields); `strandedNudged` latch + nudge in `onDay` (~417). |
 | `src/engine/milestones.ts` (opt.) | Extract shared tenant-floor predicate; reuse in `everyOccupiedFloorServed` + `strandedFloors`. |
 | `src/main.ts` | `inspectPicked` (~806): 3-state Access + hotel + parking lines. `buildStatsHtml` (~659): divergent-pop line, Transport (stranded) section, Parking row. |

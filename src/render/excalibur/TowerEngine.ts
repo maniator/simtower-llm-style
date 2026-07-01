@@ -786,7 +786,10 @@ export class TowerEngine {
         // dawn would wrongly stay shuttered all day until the next lighting flip.
         const open = hasBusinessHours(u.kind) ? (isOpenAt(u.kind, this.d.hour) ? "o" : "c") : "";
         const lateNight = u.kind === "condo" && (this.d.hour >= 23 || this.d.hour < 6) ? "s" : "";
-        const dead = u.kind === "parking" && !parkingOK.has(u.id) ? "x" : "";
+        // Only mark a SETTLED space dead — a mid-build (or burning) space is
+        // excluded from the set for other reasons and isn't a connectivity fault.
+        const dead =
+          u.kind === "parking" && u.state !== "construction" && u.state !== "fire" && !parkingOK.has(u.id) ? "x" : "";
         const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}${dead}`;
         const isDead = dead === "x";
         const a = this.roomActors.get(u.id);

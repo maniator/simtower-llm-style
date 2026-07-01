@@ -1068,8 +1068,7 @@ export class Simulation implements SimContext {
       // Cheap legibility fields (no BFS — safe on the ~6 Hz HUD refresh):
       ratingPopulation: this.ratingPopulation(),
       parkingSpaces,
-      parkingWorking: this.tower.functionalParkingSet().size, // memoised per revision
-      hotelsCount: this.hotelsCountTowardRating(),
+      parkingWorking: this.tower.functionalParkingSet().size, // parking flood-fill (fresh; cheap)
       money: this.money,
       star: this.star,
       offices,

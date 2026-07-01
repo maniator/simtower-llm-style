@@ -861,9 +861,10 @@ class GameApp {
           ? `<div style="color:var(--good)">Counts toward next star: yes.</div>`
           : `<div style="color:var(--bad)">Counts toward stars: no — hotel guests stop counting at 3★ (they still earn income).</div>`
         : "";
-      // Silent rule: a parking space only works when it chains to a ramp.
+      // Silent rule: a parking space only works when it chains to a ramp. Skip
+      // the verdict while it's still building (or on fire) — "Status" covers that.
       const parking =
-        u.kind === "parking"
+        u.kind === "parking" && u.state !== "construction" && u.state !== "fire"
           ? this.sim.tower.functionalParkingSet().has(u.id)
             ? `<div style="color:var(--good)">Ramp access: connected.</div>`
             : `<div style="color:var(--bad)">Ramp access: none — this space is dead (no relief). Chain it to a Parking Ramp.</div>`
