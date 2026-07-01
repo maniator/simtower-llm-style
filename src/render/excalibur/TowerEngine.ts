@@ -5,6 +5,7 @@ import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/ty
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
 import type { Person } from "../../engine/Crowd";
+import { clampCameraY } from "../cameraBounds";
 
 /** World pixels per tile / per floor. */
 export const TILE = 11;
@@ -477,7 +478,10 @@ export class TowerEngine {
   }
   private clamp(): void {
     const x = Math.max(0, Math.min(GRID.width * TILE, this.cam.pos.x));
-    const y = Math.max(-(GRID.maxFloor + 2) * FLOOR, Math.min((2 - GRID.minFloor) * FLOOR, this.cam.pos.y));
+    // Zoom-aware vertical clamp: bound the visible top/bottom edges (not just
+    // the centre) so panning/zooming out never exposes empty void below the
+    // deepest buildable basement. See {@link clampCameraY}.
+    const y = clampCameraY(this.cam.pos.y, this.viewHeight, this.cam.zoom, FLOOR, GRID.minFloor, GRID.maxFloor);
     this.cam.pos = ex.vec(x, y);
   }
   center(): void {
