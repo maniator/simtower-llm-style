@@ -71,11 +71,13 @@ export function drawUnit(d: DrawCtx, u: Unit, x: number, y: number, w: number, h
     return;
   }
 
-  // Faithful pixel-art rooms own all of their states (empty / closed / asleep…).
+  // Faithful pixel-art rooms own all of their states (empty / closed / asleep…),
+  // including their own "for lease"/"for sale" signage when vacant.
   if (ROOM_KINDS.has(u.kind)) return drawRoom(d, u, x, y, w, h);
 
-  // Service / special facilities.
-  if (u.state === "empty") return drawVacancy(ctx, u, x, y, w, h);
+  // Service / special facilities (security, housekeeping, medical, metro…) are
+  // staffed amenities, not leased tenants — they're never "for lease", so always
+  // draw their interior regardless of the internal empty/idle state.
   drawInterior(d, u, x, y, w, h);
 }
 
@@ -223,27 +225,6 @@ function drawFlames(d: DrawCtx, x: number, y: number, w: number, h: number) {
   ctx.fillRect(x, y, w, h);
 }
 
-function drawVacancy(ctx: CanvasRenderingContext2D, u: Unit, x: number, y: number, w: number, h: number) {
-  // "For lease" hatch and a tiny sign.
-  ctx.strokeStyle = "rgba(255,255,255,0.10)";
-  ctx.lineWidth = 1;
-  for (let i = -h; i < w; i += 7) {
-    ctx.beginPath();
-    ctx.moveTo(x + i, y + h);
-    ctx.lineTo(x + i + h, y);
-    ctx.stroke();
-  }
-  if (w > 26) {
-    ctx.fillStyle = "#d9d2b0";
-    ctx.fillRect(x + w / 2 - 9, y + h / 2 - 4, 18, 8);
-    ctx.fillStyle = "#7a6b3a";
-    ctx.font = "6px sans-serif";
-    ctx.textAlign = "center";
-    ctx.fillText("LEASE", x + w / 2, y + h / 2 + 2);
-    ctx.textAlign = "left";
-  }
-  void u;
-}
 
 
 // ---- Entertainment ------------------------------------------------------
