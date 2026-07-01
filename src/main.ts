@@ -140,14 +140,18 @@ class GameApp {
       onContinue: () => {
         /* sim already loaded at construction; splash teardown resumes the engine */
       },
-      onNewTower: () => {
+      onNewTower: (dismiss) => {
         // Guard the same data-loss as the toolbar's New button: starting fresh
-        // overwrites the single autosave slot.
+        // overwrites the single autosave slot. Keep the splash up (paused) behind
+        // the confirmation — only dismiss + start once the player accepts, so a
+        // cancel leaves the title screen intact and no time passes.
         if (SaveGame.hasSave()) {
-          this.ui.confirmModal("Start a new tower?", "This abandons your current tower (it is not auto-saved).", () =>
-            this.newGame(),
-          );
+          this.ui.confirmModal("Start a new tower?", "This abandons your current tower (it is not auto-saved).", () => {
+            dismiss();
+            this.newGame();
+          });
         } else {
+          dismiss();
           this.newGame();
         }
       },
@@ -1043,7 +1047,11 @@ class GameApp {
   private newGame(): void {
     this.adoptSim(Simulation.newGame(Date.now() & 0x7fffffff));
     this.ui.toast("New tower founded. Good luck!", "good");
-    if (shouldArm(true)) this.onboarding.arm(this.sim);
+    // Auto-arm onboarding only for a genuine first-timer. A returning player (a
+    // save exists) is treated as already onboarded even if the localStorage flag
+    // was cleared, so they're never re-onboarded unexpectedly (Replay via Help
+    // still re-arms explicitly).
+    if (shouldArm(true) && !SaveGame.hasSave()) this.onboarding.arm(this.sim);
   }
 }
 

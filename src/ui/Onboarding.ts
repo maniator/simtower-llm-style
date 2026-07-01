@@ -143,12 +143,17 @@ export class OnboardingController {
 
   // ---- Splash -------------------------------------------------------------
 
-  showSplash(o: { hasSave: boolean; onContinue: () => void; onNewTower: () => void }): void {
+  showSplash(o: { hasSave: boolean; onContinue: () => void; onNewTower: (dismiss: () => void) => void }): void {
     this.opts.pauseForSplash(true);
     const mobile = this.opts.mq.matches;
     const el = document.createElement("div");
     el.id = "splash";
     el.className = mobile ? "splash--mobile" : "";
+    // Modal-dialog semantics so screen readers treat the full-screen overlay as
+    // a modal surface (like the in-game <dialog id="modal">).
+    el.setAttribute("role", "dialog");
+    el.setAttribute("aria-modal", "true");
+    el.setAttribute("aria-label", "Verticopolis — start a game");
     const premise = mobile
       ? "Raise a high-rise floor by floor and climb to the TOWER."
       : "Raise a living high-rise floor by floor — lease offices, open shops, run hotels, and thread the elevators that keep the city moving. Climb from 1★ to the legendary TOWER.";
@@ -200,11 +205,16 @@ export class OnboardingController {
       o.onContinue();
     });
     q('[data-splash="new"]')?.addEventListener("click", () => {
-      this.teardownSplash();
-      o.onNewTower();
+      // Keep the splash mounted + the engine paused; the host dismisses only
+      // once the (possibly-confirmed) new game is actually starting, so a
+      // cancelled confirmation leaves the title screen in place and time frozen.
+      o.onNewTower(() => this.teardownSplash());
     });
     // Help stacks over the splash (its own modal); the splash stays behind it.
     q('[data-splash="help"]')?.addEventListener("click", () => this.opts.showHelp());
+    // Move initial focus into the overlay so keyboard users can't tab into the
+    // controls behind it; land on the primary CTA (Continue if a save exists).
+    (q('[data-splash="continue"]') ?? q('[data-splash="new"]'))?.focus();
 
     // Esc / backdrop resolve to the SAFE default: Continue if a save exists,
     // otherwise no-op (New Tower must be an explicit press so intent is never

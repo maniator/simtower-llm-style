@@ -126,6 +126,9 @@ async function dismissFirstRun(pg) {
     } catch {
       /* ignore */
     }
+    // Prefer the splash's own CTA so the app runs its real teardown (drops the
+    // Esc listener, resumes via its pause path); node removal is the safety net.
+    document.querySelector("#splash [data-splash='continue'], #splash [data-splash='new']")?.click();
     document.getElementById("splash")?.remove();
     document.getElementById("onboard")?.remove();
     document.querySelectorAll(".tt-pulse").forEach((n) => n.classList.remove("tt-pulse"));
