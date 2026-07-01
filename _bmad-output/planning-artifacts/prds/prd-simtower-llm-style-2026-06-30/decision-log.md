@@ -21,10 +21,15 @@ PRD at `prd.md`. Newest entries at the bottom.
   the 1994 original*, not a reimagining. New ideas are out of scope; the goal is
   a faithful, browser-native homage. Recorded as the central scope guardrail.
 - **Decision — document the deliberate divergences as first-class requirements,
-  not bugs.** Cathedral → Wedding Hall (religion-agnostic); TOWER population
-  target 12,000 vs. the original 15,000 (smaller-scale population model);
-  individually-routed crowd with an aggregate congestion backstop. These are
-  intentional and specified in §4 and §5.
+  not bugs.** Cathedral → Wedding Hall (religion-agnostic) and canon-non-removable
+  structures kept removable (QoL) are the two intentional divergences that remain.
+  Specified in §4 and §5.
+  - **Update 2026-06-30 (FAQ-parity follow-up):** the earlier scaled-down TOWER
+    target (12,000 → later 8,000) was **reverted to the canonical 15,000** (5★ =
+    10,000) by widening the buildable lot to 340 tiles, which makes the original
+    numbers genuinely reachable (measured ~15,066 occupants). Population scale is
+    no longer a divergence. The individually-routed crowd now also honours the
+    original's ≤2-ride trip rule.
 - **Decision — platform scope is desktop-first browser with a modernized mobile
   layout.** Matches README/PARITY claims. No native app.
 - **Decision — numbers come from the live engine config**, treated as the tuned

@@ -18,7 +18,7 @@ supporting context for downstream architecture/UX work.
 | Metro/subway brings visitors | Whole-basement Metro Station | Faithful |
 | **Cathedral** on floor 100 for TOWER | **Wedding Hall** on floor 100 | **Renamed** — religion-agnostic |
 | Stairs, escalators, standard/service/express elevators with cars + stops | All present; SCAN dispatch; editable cars & per-floor stops | Faithful |
-| Star ratings 2★/3★/4★/5★ at 300/1k/5k/10k; TOWER at **15,000** | Same star thresholds; TOWER at **8,000** | **TOWER pop reduced** |
+| Star ratings 2★/3★/4★/5★ at 300/1k/5k/10k; TOWER at **15,000** | Same thresholds incl. 5★=10k; **TOWER at 15,000** (lot widened to 340 so it's reachable) | Faithful (see 2026-06-30 update) |
 | Fire, terrorist/bomb, VIP inspection, treasure | All present, plus thief + seasonal Santa cameo | Faithful + flavor additions |
 | Aggregate congestion/stress model | **Individually-routed** crowd (BFS) + aggregate backstop | **Enhanced** + backstop |
 | `.TWR` save format | JSON saves; `.TWR` import = documented stub | Modernized; `.TWR` import partial |
@@ -28,10 +28,12 @@ supporting context for downstream architecture/UX work.
 1. **Cathedral → Wedding Hall.** A religion-agnostic events hall avoids
    reproducing the original's specific religious building while preserving the
    "grand capstone on floor 100 that triggers the win" role.
-2. **TOWER population 8,000 vs. 15,000.** This build's population model is
-   smaller-scale (retail/food/entertainment add visitors but no resident
-   population). 8,000 keeps the win reachable while preserving the "fill a tall
-   tower" intent. Revisit if a larger-scale model lands (Open Question 4).
+2. **TOWER population — RESOLVED to the canonical 15,000 (2026-06-30).** Earlier
+   builds scaled the target down (12,000 → 8,000) because a 100×200 lot topped out
+   near ~8,900 occupants under the spatial transport model. Per the owner's call
+   the buildable lot was **widened to 340 tiles** (5★ = 10,000, TOWER = 15,000
+   restored); a well-zoned tower now reaches ~15,066 occupants at healthy
+   congestion, so the original numbers are met, not scaled. No longer a divergence.
 3. **Individually-routed crowd + aggregate backstop.** The original used an
    aggregate stress model. This build pathfinds real commuters (walk → wait →
    ride a real car → transfer → arrive) so stress is *visible* and causal, but
@@ -103,8 +105,9 @@ supporting context for downstream architecture/UX work.
 ## E. Rejected / Deferred Alternatives
 
 - **Reproduce the Cathedral verbatim** — rejected (clean-room + neutrality).
-- **Match 15,000 TOWER population now** — deferred until a larger-scale
-  population model exists; would otherwise make the win grindy/unreachable.
+- **Match 15,000 TOWER population** — **DONE (2026-06-30):** achieved by widening
+  the buildable lot to 340 tiles rather than a new population model; the canonical
+  15,000 / 5★ 10,000 are now reachable (~15,066 measured).
 - **Full `.TWR` import** — deferred; the format is under-documented and the
   effort outweighs MVP value. Stub documents the v2 decode path.
 - **Single aggregate stress model (original-style only)** — superseded by the

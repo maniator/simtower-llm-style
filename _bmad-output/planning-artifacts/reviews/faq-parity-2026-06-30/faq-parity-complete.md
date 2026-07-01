@@ -47,13 +47,27 @@ deferred have all been built:
 - **Escalators are commercial-only** — rejected on floors that hold an office.
 - **Cockroaches** spread from unserviced dirty rooms into adjacent hotel rooms.
 
+## Follow-up round (canon numbers + fine mechanics) — 2026-06-30
+
+The owner ratified closing the remaining scale/mechanic gaps:
+
+- **TOWER 15,000 / 5★ 10,000 restored.** The buildable lot was widened to 340
+  tiles so the canonical population is genuinely reachable (measured ~15,066
+  non-hotel occupants at congestion 0.82). No longer a divergence.
+- **≤2-ride trips.** A commute routes over at most two transport rides (one
+  sky-lobby transfer), per "Sims will only take two methods of transportation."
+- **Blockbuster vs average film.** Each cinema books a blockbuster (~300k, bigger
+  crowd) or an average film (~150k) monthly, replacing the flat booking cost.
+- **Strict parking chains.** A parking space only functions when it chains back
+  to a ramp through contiguous tiles; the demand check and both congestion-relief
+  models now agree on that count.
+
 ## The only remaining divergences (deliberate, not gaps)
 
 | FAQ detail | Decision | Why |
 |---|---|---|
-| Cathedral on floor 100 | Kept as **Wedding Hall** | Clean-room / religion-neutral — a deliberate project value; mechanics (floor 100, wedding→TOWER) match exactly. |
-| TOWER at 15,000 pop | **8,000** | Re-derived from the lot's measured capacity under the spatial model so the game is actually winnable; the metric (occupant census) is faithful, only the number is scaled. |
-| Some items **non-removable** in canon | **Kept removable** (partial-refund bulldoze) | A deliberate QoL improvement, and the F31 review fix (cancelling a pending VIP when the hall is sold) depends on removability. |
+| Cathedral on floor 100 | Kept as **Wedding Hall** | Clean-room / religion-neutral — a ratified project value; mechanics (floor 100, wedding→TOWER) match exactly. |
+| Some items **non-removable** in canon | **Kept removable** (partial-refund bulldoze) | A ratified QoL improvement, and the F31 review fix (cancelling a pending VIP when the hall is sold) depends on removability. |
 
-These two-and-a-half are intentional design/clean-room choices, not fidelity
-oversights. Everything else in the FAQ is now modelled.
+These two are intentional design/clean-room choices, not fidelity oversights.
+Every mechanic and every headline number in the FAQ is now modelled.
