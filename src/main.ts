@@ -851,13 +851,19 @@ class GameApp {
       this.inspectAnchor = { x: u.x + u.width, floor: u.floor + facilityFloors(u.kind) - 1 };
       const f = FACILITIES[u.kind];
       // Access — the whole truth, not just "served": a floor can be connected yet
-      // sit 3+ rides from the lobby, in which case no commuter ever comes.
+      // sit 3+ rides from the lobby, in which case no commuter ever comes. Only
+      // shown for units that actually draw commuters/visitors (tenants + venues);
+      // parking/service work via ramp-chaining/coverage, not passenger trips, so
+      // an access warning on them would be a false alarm.
+      const needsAccess = f.population > 0 || ECON.dailyTrafficIncome[u.kind] !== undefined;
       const served = this.sim.tower.isFloorServed(u.floor);
-      const access = !served
-        ? `<div style="color:var(--bad)">Access: not connected — no elevator or stair reaches this floor.</div>`
-        : this.sim.floorReachable(u.floor)
-          ? `<div style="color:var(--good)">Access: reachable (≤2 rides from the lobby).</div>`
-          : `<div style="color:var(--bad)">Access: too far — 3+ rides from the lobby, so no one travels here. Add a sky-lobby transfer.</div>`;
+      const access = !needsAccess
+        ? ""
+        : !served
+          ? `<div style="color:var(--bad)">Access: not connected — no elevator or stair reaches this floor.</div>`
+          : this.sim.floorReachable(u.floor)
+            ? `<div style="color:var(--good)">Access: reachable (≤2 rides from the lobby).</div>`
+            : `<div style="color:var(--bad)">Access: too far — 3+ rides from the lobby, so no one travels here. Add a sky-lobby transfer.</div>`;
       // Silent rule: hotel guests stop counting toward the star rating at 3★.
       const hotel = isHotelKind(u.kind)
         ? this.sim.hotelsCountTowardRating()
