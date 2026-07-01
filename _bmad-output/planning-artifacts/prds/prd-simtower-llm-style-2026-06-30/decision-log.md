@@ -88,5 +88,5 @@ the shipped code and fixed:
   title "Tower Tycoon" was renamed to **Verticopolis** across the repo, package,
   README and manifest (PR #64). Living specs (this PRD, addendum, design docs) are
   updated to the new name; dated point-in-time review/party snapshots are preserved
-  verbatim with a provenance note. Installer-managed  config is not
-  hand-edited — the durable override lives in .
+  verbatim with a provenance note. Installer-managed `_bmad` config is not
+  hand-edited — the durable override lives in `_bmad/custom/config.toml`.

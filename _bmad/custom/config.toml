@@ -7,10 +7,10 @@
 # description = "Prefers short, bulleted PRDs over narrative drafts."
 
 # Durable rename override: the project is "Verticopolis" (formerly the working
-# title "Tower Tycoon"). The installer-managed _bmad/config.toml + core/bmm
-# config.yaml still carry the old name and are regenerated on install, so pin the
-# real name here (custom deep-merges over the base config; never hand-edit the
-# generated files).
+# title "Tower Tycoon"). The installer-managed _bmad/config.toml,
+# _bmad/core/config.yaml and _bmad/bmm/config.yaml still carry the old name and
+# are regenerated on install, so pin the real name here (custom deep-merges over
+# the base config; never hand-edit the generated files).
 [core]
 project_name = "Verticopolis"
 
