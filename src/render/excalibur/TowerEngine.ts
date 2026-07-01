@@ -505,6 +505,33 @@ export class TowerEngine {
     const hi = this.sim.tower.highestFloor;
     this.cam.pos = ex.vec((GRID.width / 2) * TILE, -(Math.max(6, hi) / 2) * FLOOR);
   }
+
+  /** Zoom by a factor about the current centre (keyboard +/- zoom). */
+  zoomBy(factor: number): void {
+    this.cam.zoom = clampZoom(this.cam.zoom * factor);
+    this.cam.pos = ex.vec(
+      this.cam.pos.x,
+      clampCameraY(this.cam.pos.y, this.viewHeight, this.cam.zoom, FLOOR, GRID.minFloor, GRID.maxFloor),
+    );
+  }
+
+  /** Pan the camera the minimum amount so tile/floor sits within the viewport
+   *  (with a margin) — used to follow the keyboard build cursor. */
+  ensureVisible(tile: number, floor: number): void {
+    const wx = tile * TILE;
+    const wy = -floor * FLOOR;
+    const halfW = this.viewWidth / 2 / this.cam.zoom;
+    const halfH = this.viewHeight / 2 / this.cam.zoom;
+    const mx = TILE * 3;
+    const my = FLOOR * 1.5;
+    let px = this.cam.pos.x;
+    let py = this.cam.pos.y;
+    if (wx < px - halfW + mx) px = wx + halfW - mx;
+    else if (wx > px + halfW - mx) px = wx - halfW + mx;
+    if (wy < py - halfH + my) py = wy + halfH - my;
+    else if (wy > py + halfH - my) py = wy - halfH + my;
+    this.cam.pos = ex.vec(px, clampCameraY(py, this.viewHeight, this.cam.zoom, FLOOR, GRID.minFloor, GRID.maxFloor));
+  }
   setCamera(tileX: number, floor: number, zoom: number): void {
     // Validate zoom to the supported range: the vertical clamp divides by zoom,
     // so a zero/negative/NaN value here would poison later pan/zoom math.

@@ -65,6 +65,9 @@ class GameApp {
   private reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
   /** Last shown traffic tier (for boundary hysteresis, so the chip doesn't flicker). */
   private lastTrafficTier: TrafficTier = 0;
+  /** Keyboard build cursor + a pending transport anchor (mouse-free play). */
+  private kbCursor: { tile: number; floor: number } | null = null;
+  private kbAnchor: { tile: number; floor: number } | null = null;
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
@@ -130,6 +133,127 @@ class GameApp {
 
     // Autosave periodically.
     window.setInterval(() => this.save(true), 30000);
+  }
+
+  // ---- Keyboard play (mouse-free build cursor) ---------------------------
+
+  /** Announce to the screen-reader live region. */
+  private announce(msg: string): void {
+    const el = document.getElementById("a11y-live");
+    if (el) el.textContent = msg;
+  }
+
+  /** The inspectable/bulldozable entity at a cell (room or transport), if any. */
+  private pickedAt(floor: number, tile: number): Picked | null {
+    const u = this.sim.tower.unitAt(floor, tile);
+    if (u && u.kind !== "floor" && u.kind !== "lobby") return { type: "unit", id: u.id, kind: u.kind };
+    const t = this.sim.tower.transports.find(
+      (tr) => tile >= tr.x && tile < tr.x + FACILITIES[tr.kind].width && floor >= tr.bottom && floor <= tr.top,
+    );
+    return t ? { type: "transport", id: t.id, kind: t.kind } : null;
+  }
+
+  private moveCursor(dTile: number, dFloor: number): void {
+    const c = this.kbCursor ?? { tile: Math.floor(GRID.width / 2), floor: 1 };
+    this.kbCursor = {
+      tile: Math.max(0, Math.min(GRID.width - 1, c.tile + dTile)),
+      floor: Math.max(GRID.minFloor, Math.min(GRID.maxFloor, c.floor + dFloor)),
+    };
+    this.engine.ensureVisible(this.kbCursor.tile, this.kbCursor.floor);
+    this.refreshCursorPreview();
+    this.announceCursor();
+  }
+
+  private refreshCursorPreview(): void {
+    const c = this.kbCursor;
+    if (!c) return;
+    if (this.kbAnchor && this.tool.type === "build" && this.isTransportTool()) {
+      this.engine.transportPreview = {
+        kind: this.tool.kind,
+        x: this.kbAnchor.tile,
+        bottom: Math.min(this.kbAnchor.floor, c.floor),
+        top: Math.max(this.kbAnchor.floor, c.floor),
+        valid: true,
+      };
+      this.engine.preview = null;
+    } else {
+      this.updateBuildPreview(c.tile, c.floor);
+    }
+  }
+
+  private announceCursor(): void {
+    const c = this.kbCursor;
+    if (!c) return;
+    const loc = c.floor >= 1 ? `floor ${c.floor}` : `basement ${1 - c.floor}`;
+    const here = this.pickedAt(c.floor, c.tile);
+    this.announce(`Cursor: ${loc}, column ${c.tile} — ${here ? FACILITIES[here.kind].name : "empty"}`);
+  }
+
+  private commitCursor(): void {
+    if (!this.kbCursor) {
+      this.moveCursor(0, 0); // first press: just reveal the cursor
+      return;
+    }
+    const c = this.kbCursor;
+    if (this.tool.type === "inspect") {
+      const p = this.pickedAt(c.floor, c.tile);
+      this.selectPicked(p);
+      this.announce(p ? `Selected ${FACILITIES[p.kind].name}` : "Nothing to inspect here");
+      return;
+    }
+    if (this.tool.type === "bulldoze") {
+      this.bulldozeCursor();
+      return;
+    }
+    if (this.tool.type !== "build") return;
+    const kind = this.tool.kind;
+    if (kind === "floor" || kind === "lobby") {
+      this.paintBrush(kind, c.tile, c.floor);
+      this.announce(`Placed ${FACILITIES[kind].name} on floor ${c.floor}`);
+      this.refreshCursorPreview();
+    } else if (this.isTransportTool()) {
+      if (!this.kbAnchor) {
+        this.kbAnchor = { tile: c.tile, floor: c.floor };
+        this.refreshCursorPreview();
+        this.announce(`${FACILITIES[kind].name} anchored at floor ${c.floor}. Move to the other end and press Enter.`);
+      } else {
+        const bottom = Math.min(this.kbAnchor.floor, c.floor);
+        const top = Math.max(this.kbAnchor.floor, c.floor);
+        const res = this.sim.buildTransport(kind, this.kbAnchor.tile, bottom, top);
+        this.kbAnchor = null;
+        this.engine.transportPreview = null;
+        if (res.ok) {
+          this.audio.sfx("build");
+          this.announce(`${FACILITIES[kind].name} built, floors ${bottom} to ${top}`);
+        } else {
+          this.audio.sfx("error");
+          if (res.reason) this.ui.toast(res.reason, "bad");
+          this.announce(res.reason ?? "Can't build there");
+        }
+        this.refreshCursorPreview();
+      }
+    } else {
+      const x = this.snapX(kind, c.tile);
+      const before = this.sim.tower.units.length;
+      this.tryBuild(kind, c.floor, x);
+      this.announce(
+        this.sim.tower.units.length > before ? `Placed ${FACILITIES[kind].name}` : `Can't place ${FACILITIES[kind].name} here`,
+      );
+    }
+  }
+
+  private bulldozeCursor(): void {
+    const c = this.kbCursor;
+    if (!c) return;
+    const p = this.pickedAt(c.floor, c.tile);
+    if (!p) {
+      this.announce("Nothing to bulldoze here");
+      return;
+    }
+    const name = FACILITIES[p.kind].name;
+    this.bulldozePicked(p);
+    this.announce(`Bulldozed ${name}`);
+    this.refreshCursorPreview();
   }
 
   /** Color-blind-safe traffic cue: word + shape-coded bar glyph (never colour
@@ -275,13 +399,46 @@ class GameApp {
 
   private bindKeys(): void {
     window.addEventListener("keydown", (e) => {
+      // Don't hijack typing (rename field, import box) or modal interaction.
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
+      if ((document.getElementById("modal") as HTMLDialogElement | null)?.open) return;
+
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
         this.engine.paused = SPEEDS[this.speed] === 0;
         document.querySelectorAll("#speed button[data-speed]").forEach((b) =>
           b.classList.toggle("active", (b as HTMLElement).dataset.speed === e.key),
         );
+        return;
       }
+
+      // Keyboard play (F50–52): a virtual build cursor moved with arrows/WASD,
+      // committed with Enter, bulldozed with Delete/X — full mouse-free play.
+      const step = e.shiftKey ? 10 : 1;
+      switch (e.key) {
+        case "ArrowLeft": case "a": case "A": this.moveCursor(-step, 0); break;
+        case "ArrowRight": case "d": case "D": this.moveCursor(step, 0); break;
+        case "ArrowUp": case "w": case "W": this.moveCursor(0, step); break;
+        case "ArrowDown": case "s": case "S": this.moveCursor(0, -step); break;
+        case "Enter": case " ": this.commitCursor(); break;
+        case "Delete": case "Backspace": case "x": case "X": this.bulldozeCursor(); break;
+        case "+": case "=": this.engine.zoomBy(1.15); return;
+        case "-": case "_": this.engine.zoomBy(1 / 1.15); return;
+        case "c": case "C":
+          if (this.kbCursor) this.engine.ensureVisible(this.kbCursor.tile, this.kbCursor.floor);
+          else this.engine.center();
+          return;
+        case "Escape":
+          this.kbAnchor = null;
+          this.engine.transportPreview = null;
+          this.refreshCursorPreview();
+          this.announce("Cancelled");
+          return;
+        default:
+          return; // not a game key — let it through
+      }
+      e.preventDefault(); // consumed a movement/commit/bulldoze key
     });
     // First interaction starts audio (browser autoplay policy).
     const kick = () => this.audio.start();
