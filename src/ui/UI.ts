@@ -26,6 +26,8 @@ export interface UICallbacks {
   onNew(): void;
   onToggleAudio(): boolean; // returns new muted state
   onEditAction(action: string, root: HTMLElement): void;
+  /** Toggle reduced motion; returns the new effective state. */
+  onToggleReducedMotion(): boolean;
   onRenameTower(name: string): void;
   onShowStats(): void;
   onShowSaves(): void;
@@ -556,8 +558,12 @@ export class UI {
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
       </ul>
       <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
-      <div class="modal-actions"><button class="primary" data-act="close">Got it</button></div>
+      <div class="modal-actions"><button data-act="reduce-motion"></button><button class="primary" data-act="close">Got it</button></div>
     `);
+    const rm = box.querySelector<HTMLButtonElement>('[data-act="reduce-motion"]')!;
+    const label = (on: boolean) => (rm.textContent = `Reduced motion: ${on ? "On" : "Off"}`);
+    label(document.documentElement.classList.contains("reduce-motion"));
+    rm.addEventListener("click", () => label(this.cb.onToggleReducedMotion()));
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
   }
 

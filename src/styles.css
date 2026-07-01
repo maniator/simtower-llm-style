@@ -1042,3 +1042,15 @@ dialog#modal {
     scroll-behavior: auto !important;
   }
 }
+
+/* Accessibility: user-toggled reduced motion (mirrors the OS @media rule so it
+   also applies when the OS preference is off). Neutralises CSS animations and
+   transitions; canvas ambient motion is frozen separately by the engine. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}

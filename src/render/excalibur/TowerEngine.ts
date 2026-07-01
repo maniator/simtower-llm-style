@@ -140,6 +140,15 @@ export class TowerEngine {
   /** Set by the controller from the game speed: when paused, the decorative
    *  animation clock stops so on-screen people freeze with everything else. */
   paused = false;
+  /** When true, the decorative animation clock is frozen (accessibility). Only
+   *  the ambient/decorative layers (clouds, rain streaks, pacing walkers, metro
+   *  train) read `d.anim`; elevator cars and the routed crowd move from sim state
+   *  independently, so they keep animating — functional motion stays, ambient
+   *  motion stops. */
+  reducedMotion = false;
+  setReducedMotion(on: boolean): void {
+    this.reducedMotion = on;
+  }
   /** Wall-clock-derived animation time that only advances while unpaused. */
   private animClock = 0;
   private lastAnimWall = 0;
@@ -362,7 +371,9 @@ export class TowerEngine {
     // and street just like the simulated crowd and elevators.
     const nowWall = (globalThis.performance ? performance.now() : 0) / 1000;
     if (this.lastAnimWall === 0) this.lastAnimWall = nowWall;
-    if (!this.paused) this.animClock += nowWall - this.lastAnimWall;
+    // Freeze the decorative clock when paused OR reduced-motion is on; functional
+    // motion (cars, routed crowd) advances from sim state, not this clock.
+    if (!this.paused && !this.reducedMotion) this.animClock += nowWall - this.lastAnimWall;
     this.lastAnimWall = nowWall;
     this.d.anim = this.animClock;
     this.d.hour = c.hour;

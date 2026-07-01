@@ -5,6 +5,7 @@ import type { FacilityKind } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
+import { loadPrefs, savePrefs, reducedMotionActive, type Prefs } from "./storage/Prefs";
 import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
 import { registerPWA } from "./pwa";
@@ -58,6 +59,9 @@ class GameApp {
   /** High-water mark of a shaft's extent during an extend-arrow drag, so a
    *  back-and-forth wiggle is only charged for floors genuinely added. */
   private extendHwm: { id: number; top: number; bottom: number } | null = null;
+  /** Per-device accessibility preferences (localStorage, off the save). */
+  private prefs: Prefs = loadPrefs();
+  private reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
@@ -85,6 +89,12 @@ class GameApp {
         return this.audio.muted;
       },
       onEditAction: (action, root) => this.handleEditAction(action, root),
+      onToggleReducedMotion: () => {
+        this.prefs.reducedMotion = !this.prefs.reducedMotion;
+        savePrefs(this.prefs);
+        this.applyReducedMotion();
+        return reducedMotionActive(this.prefs, this.reduceMq.matches);
+      },
       onRenameTower: (name) => (this.sim.tower.towerName = name),
       onShowStats: () => this.ui.showStats(this.buildStatsHtml()),
       onShowSaves: () => this.ui.showSaves(SaveGame.listSlots()),
@@ -111,8 +121,20 @@ class GameApp {
     this.bindKeys();
     void this.engine.start();
 
+    // Accessibility: apply reduced motion now and whenever the OS pref flips.
+    this.applyReducedMotion();
+    this.reduceMq.addEventListener("change", () => this.applyReducedMotion());
+
     // Autosave periodically.
     window.setInterval(() => this.save(true), 30000);
+  }
+
+  /** Push the effective reduced-motion state (OS pref OR user pref) to the DOM
+   *  (a class CSS keys off) and the engine (freezes ambient canvas motion). */
+  private applyReducedMotion(): void {
+    const on = reducedMotionActive(this.prefs, this.reduceMq.matches);
+    document.documentElement.classList.toggle("reduce-motion", on);
+    this.engine.setReducedMotion(on);
   }
 
   // ---- Engine wiring (all input/camera goes through Excalibur) ------------
