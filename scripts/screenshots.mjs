@@ -150,6 +150,17 @@ async function main() {
   await page.waitForTimeout(300);
   await page.screenshot({ path: `${OUT}/00-splash.png` });
   console.log("captured 00-splash");
+
+  // 0b) First-run onboarding in action: press "New Tower" to arm the
+  // Getting-Started checklist, then frame the empty lot so the checklist,
+  // the pulsed Floor palette item, and the device hint bar are all visible.
+  await page.click('#splash [data-splash="new"]');
+  await page.waitForSelector("#onboard", { timeout: 4000 }).catch(() => {});
+  await page.evaluate(frame, { floor: 4, zoom: 1.0 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${OUT}/00b-onboarding.png` });
+  console.log("captured 00b-onboarding");
+
   // Dismiss the first-run chrome so the remaining shots frame the game cleanly.
   await dismissFirstRun(page);
 
