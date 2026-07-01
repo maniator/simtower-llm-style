@@ -194,6 +194,21 @@ export class UI {
    *  re-measured only when the content changes. */
   private editorSize = { w: 0, h: 0 };
   private inspectorSize = { w: 0, h: 0 };
+  /** The shape currently built into the editor card (see refreshEditor's key). */
+  private editorKey: string | null = null;
+
+  /** Render the editor for a selection. If its shape (`key`) is unchanged, only
+   *  the volatile `data-field` cells are patched in place — the buttons and
+   *  rename input keep their identity, so a refresh can never land mid-click and
+   *  swallow it. A new shape does a full (re)build. */
+  renderEditor(key: string, build: () => string, volatile: Record<string, string>): void {
+    if (key !== this.editorKey) {
+      this.showEditor(build());
+      this.editorKey = key;
+    } else {
+      patchVolatile(this.el.editor, volatile);
+    }
+  }
 
   /** Show the editor card for a selected facility with type-specific actions. */
   showEditor(html: string): void {
@@ -209,6 +224,7 @@ export class UI {
   hideEditor(): void {
     this.el.editor.classList.add("hidden");
     this.el.editor.innerHTML = "";
+    this.editorKey = null; // force a full rebuild when it's next opened
   }
 
   isEditorOpen(): boolean {
@@ -594,6 +610,19 @@ function shortMoney(n: number): string {
  * always stays fully inside the viewport (with an 8px margin). Pure so the
  * placement logic is unit-testable without a DOM.
  */
+/**
+ * Update the volatile cells of a container in place: for each `data-field` key
+ * in `volatile`, set that cell's innerHTML (only when it actually changed).
+ * Buttons, inputs and static rows are untouched, so an in-flight click is never
+ * clobbered. Pure over its `container`, so it's unit-testable without the app.
+ */
+export function patchVolatile(container: HTMLElement, volatile: Record<string, string>): void {
+  for (const field in volatile) {
+    const node = container.querySelector<HTMLElement>(`[data-field="${field}"]`);
+    if (node && node.innerHTML !== volatile[field]) node.innerHTML = volatile[field];
+  }
+}
+
 export function anchorBeside(
   rect: { x: number; y: number; w: number },
   size: { w: number; h: number },

@@ -301,12 +301,12 @@ class GameApp {
       this.lastUiUpdate = now;
       this.audio.update(this.engine.focus());
       this.ui.update(this.sim);
-      // Keep the open editor's live stats fresh — but never while the user is
-      // typing in it or pressing one of its buttons (a rebuild mid-click would
-      // swallow the click, e.g. "+ rent" not always registering).
-      if (this.selected && this.ui.isEditorOpen()) {
-        const editing = document.activeElement?.id === "ed-name";
-        if (!editing && !this.ui.isEditorBusy()) this.refreshEditor();
+      // Keep the open editor's live stats fresh. Refresh now patches only the
+      // volatile cells in place (never the buttons or rename input), so this is
+      // safe while renaming; the pointer guard still skips the rare full rebuild
+      // during an active press.
+      if (this.selected && this.ui.isEditorOpen() && !this.ui.isEditorBusy()) {
+        this.refreshEditor();
       }
       // A jingle on every star promotion (2★–5★), not just the TOWER win.
       if (this.sim.star > this.lastStar) {
@@ -407,39 +407,62 @@ class GameApp {
 
   private refreshEditor(): void {
     if (!this.selected) return;
+    // The render key encodes the editor's SHAPE (not its live values): same key
+    // → patch the volatile fields in place; different key → full rebuild. The
+    // shape only changes when a control appears/disappears (a condo sells and
+    // loses its price adjuster; a car button hits its disabled bound), so
+    // rebuilds are rare and the buttons/input survive every stat tick.
     if (this.selected.type === "unit") {
       const u = this.sim.tower.units.find((x) => x.id === this.selected!.id);
       if (!u) return this.clearSelection();
       this.engine.selectedId = u.id;
-      this.ui.showEditor(this.unitEditorHtml(u));
+      const adjuster = !!rentConfig(u.kind) && !(u.kind === "condo" && u.everOccupied);
+      this.ui.renderEditor(`unit:${u.id}:${adjuster ? "r" : ""}`, () => this.unitEditorHtml(u), this.unitEditorVolatile(u));
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
       if (!t) return this.clearSelection();
       this.engine.selectedId = t.id; // outlines the shaft + shows extend arrows
-      this.ui.showEditor(this.transportEditorHtml(t));
+      const maxCars = MAX_CARS[t.kind] ?? 1;
+      const shape = `${t.cars <= 1 ? "-" : ""}${t.cars >= maxCars ? "+" : ""}`;
+      this.ui.renderEditor(`transport:${t.id}:${shape}`, () => this.transportEditorHtml(t), this.transportEditorVolatile(t));
     }
+  }
+
+  /** The values in the unit editor that change while it stays open, keyed by the
+   *  `data-field` on their cell. These are patched in place each refresh so the
+   *  buttons and rename input are never rebuilt out from under a click. */
+  private unitEditorVolatile(u: import("./engine/types").Unit): Record<string, string> {
+    const f = FACILITIES[u.kind];
+    const served = this.sim.tower.isFloorServed(u.floor);
+    const evalPct = Math.round(u.satisfaction * 100);
+    const vol: Record<string, string> = {
+      status: u.state,
+      served: `<span style="color:${served ? "var(--good)" : "var(--bad)"}">${served ? "Yes" : "No"}</span>`,
+      eval: `<span class="evalbar"><span style="width:${evalPct}%"></span></span> ${evalPct}%`,
+    };
+    if (f.population) vol.occupants = `${u.occupants}/${f.population}`;
+    if (rentConfig(u.kind)) {
+      vol.rent = `$${rentOf(u).toLocaleString()}${isHotelKind(u.kind) ? "/night" : ""}`;
+    }
+    return vol;
   }
 
   private unitEditorHtml(u: import("./engine/types").Unit): string {
     const f = FACILITIES[u.kind];
-    const served = this.sim.tower.isFloorServed(u.floor);
     const floorLabel = u.floor >= 1 ? `Floor ${u.floor}` : `Basement ${1 - u.floor}`;
     const canRename = u.kind === "office" || u.kind === "condo";
     const rcfg = rentConfig(u.kind);
+    const vol = this.unitEditorVolatile(u);
     const rows: string[] = [
       `<span class="k">Location</span><span class="v">${floorLabel}</span>`,
-      `<span class="k">Status</span><span class="v">${u.state}</span>`,
+      `<span class="k">Status</span><span class="v" data-field="status">${vol.status}</span>`,
     ];
-    if (f.population) rows.push(`<span class="k">Occupants</span><span class="v">${u.occupants}/${f.population}</span>`);
-    rows.push(`<span class="k">Elevator access</span><span class="v" style="color:${served ? "var(--good)" : "var(--bad)"}">${served ? "Yes" : "No"}</span>`);
-    const evalPct = Math.round(u.satisfaction * 100);
-    rows.push(
-      `<span class="k">Eval</span><span class="v"><span class="evalbar"><span style="width:${evalPct}%"></span></span> ${evalPct}%</span>`,
-    );
+    if (f.population) rows.push(`<span class="k">Occupants</span><span class="v" data-field="occupants">${vol.occupants}</span>`);
+    rows.push(`<span class="k">Elevator access</span><span class="v" data-field="served">${vol.served}</span>`);
+    rows.push(`<span class="k">Eval</span><span class="v" data-field="eval">${vol.eval}</span>`);
     if (rcfg) {
       const label = u.kind === "condo" ? "Sale price" : isHotelKind(u.kind) ? "Room rate" : "Quarterly rent";
-      const suffix = isHotelKind(u.kind) ? "/night" : "";
-      rows.push(`<span class="k">${label}</span><span class="v">$${rentOf(u).toLocaleString()}${suffix}</span>`);
+      rows.push(`<span class="k">${label}</span><span class="v" data-field="rent">${vol.rent}</span>`);
     }
     rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
 
@@ -461,19 +484,35 @@ class GameApp {
     );
   }
 
+  private transportEditorVolatile(t: import("./engine/types").Transport): Record<string, string> {
+    const isEl = isElevatorKind(t.kind);
+    const maxCars = MAX_CARS[t.kind] ?? 1;
+    const skipped = t.skipFloors?.length ?? 0;
+    const vol: Record<string, string> = {
+      serves: `${floorTag(t.bottom)} – ${floorTag(t.top)}`,
+      height: `${t.top - t.bottom + 1} floors`,
+    };
+    if (isEl) {
+      vol.cars = `${t.cars} / ${maxCars} max`;
+      vol.capacity = `${this.sim.transportCapacity(t)} riders/trip`;
+      vol.stops = skipped ? `express · skips ${skipped}` : "all floors";
+    }
+    return vol;
+  }
+
   private transportEditorHtml(t: import("./engine/types").Transport): string {
     const f = FACILITIES[t.kind];
     const isEl = isElevatorKind(t.kind);
     const maxCars = MAX_CARS[t.kind] ?? 1;
-    const skipped = t.skipFloors?.length ?? 0;
+    const vol = this.transportEditorVolatile(t);
     const rows: string[] = [
-      `<span class="k">Serves floors</span><span class="v">${floorTag(t.bottom)} – ${floorTag(t.top)}</span>`,
-      `<span class="k">Height</span><span class="v">${t.top - t.bottom + 1} floors</span>`,
+      `<span class="k">Serves floors</span><span class="v" data-field="serves">${vol.serves}</span>`,
+      `<span class="k">Height</span><span class="v" data-field="height">${vol.height}</span>`,
     ];
     if (isEl) {
-      rows.push(`<span class="k">Cars</span><span class="v">${t.cars} / ${maxCars} max</span>`);
-      rows.push(`<span class="k">Capacity</span><span class="v">${this.sim.transportCapacity(t)} riders/trip</span>`);
-      rows.push(`<span class="k">Stops</span><span class="v">${skipped ? `express · skips ${skipped}` : "all floors"}</span>`);
+      rows.push(`<span class="k">Cars</span><span class="v" data-field="cars">${vol.cars}</span>`);
+      rows.push(`<span class="k">Capacity</span><span class="v" data-field="capacity">${vol.capacity}</span>`);
+      rows.push(`<span class="k">Stops</span><span class="v" data-field="stops">${vol.stops}</span>`);
     }
     rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
 
