@@ -14,7 +14,7 @@ import type { FacilityKind } from "../../engine/types";
  * win are then driven through the real `sim.evaluateStar()` / `sim.tick()` path.
  */
 
-/** Centre column of the lot — also the wedding-hall build spot. */
+/** Center column of the lot — also the wedding-hall build spot. */
 export const CX = Math.floor(GRID.width / 2);
 const LEFT = 4;
 const RIGHT = GRID.width - 4;
@@ -103,8 +103,12 @@ export function buildWinningTower(sim: Simulation, opts: WinTowerOpts = {}): voi
  * crowd sim churns tenants in and out and the midnight census oscillates well
  * under 15k — a congestion artifact, not a win-logic fact. Congestion/crowd
  * behavior is covered by the crowd tests; here we isolate the completion ladder.
+ *
+ * The default wait is comfortably larger than the current schedule (the hall
+ * books the VIP `clock.day + 3` out) so a tweak to that lead time — or an extra
+ * reschedule — doesn't break the test while the game is still winnable.
  */
-export function runVipInspection(sim: Simulation, waitDays = 4): void {
+export function runVipInspection(sim: Simulation, waitDays = 10): void {
   sim.clock.advance(waitDays * 24 * 60);
   sim.checkVip();
 }

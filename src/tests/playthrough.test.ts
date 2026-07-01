@@ -5,9 +5,11 @@ import { buildWinningTower, runVipInspection, buildWeddingHall } from "./fixture
 
 /**
  * End-to-end "can a player finish the game?" guarantee. A real, fully-served,
- * fully-occupied tower is built through the public API, then the sim is driven
- * through the actual daily loop to the TOWER win — and each rung's gate is shown
- * to BLOCK the win when its facility is missing.
+ * fully-occupied tower is built through the public API, then the REAL win logic
+ * (evaluateStar + the VIP inspection via checkVip) is run to the TOWER win — and
+ * each rung's gate is shown to BLOCK the win when its facility is missing. The
+ * rating is driven directly rather than by ticking the crowd sim through in-game
+ * years (see the fixture for why: congestion would churn a 17k tower under 15k).
  */
 describe("full playthrough → TOWER win", () => {
   const won = (sim: Simulation) => sim.log.some((l) => /you win/i.test(l.text));
