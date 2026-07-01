@@ -477,7 +477,7 @@ export class UI {
         <li><b>Floors first.</b> Lay <b>Floor</b> tiles, then place rooms on them.</li>
         <li><b>Move people.</b> Every floor needs an <b>elevator</b> or <b>stairs</b> chain back to the ground lobby, or tenants leave.</li>
         <li><b>Make money.</b> Offices pay quarterly rent, condos sell once, hotels earn nightly, shops &amp; restaurants earn from foot traffic.</li>
-        <li><b>Grow your rating.</b> 2★ at 300 pop, 3★ at 1,000 (needs Security), 4★ at 5,000 (needs Medical), 5★ at 10,000.</li>
+        <li><b>Grow your rating.</b> 2★ at 300 pop, 3★ at 1,000 (needs Security), 4★ at 5,000 (needs Medical, Recycling, suites &amp; a VIP), 5★ at 7,000 (needs a Metro).</li>
         <li><b>Win.</b> At 5★ with a Metro station, build the <b>Wedding Hall</b> on floor 100 and pass the VIP inspection.</li>
         <li><b>Sky lobbies</b> every 15 floors keep tall towers moving.</li>
       </ul>
@@ -498,8 +498,21 @@ export class UI {
         <button data-act="decline">Decline</button>
       </div>
     `);
-    box.querySelector('[data-act="accept"]')!.addEventListener("click", () => { this.closeModal(); onResolve("accept"); });
-    box.querySelector('[data-act="decline"]')!.addEventListener("click", () => { this.closeModal(); onResolve("decline"); });
+    const dialog = this.el.modal as HTMLDialogElement;
+    // The choice MUST resolve exactly once, no matter how the modal closes —
+    // buttons, Esc, or a backdrop click — or the sim (frozen while a choice is
+    // open) would deadlock. Dismissing counts as declining.
+    let done = false;
+    const finish = (opt: "accept" | "decline") => {
+      if (done) return;
+      done = true;
+      this.closeModal();
+      onResolve(opt);
+    };
+    box.querySelector('[data-act="accept"]')!.addEventListener("click", () => finish("accept"));
+    box.querySelector('[data-act="decline"]')!.addEventListener("click", () => finish("decline"));
+    dialog.onclick = (e) => { if (e.target === dialog) finish("decline"); }; // backdrop
+    dialog.oncancel = () => finish("decline"); // Esc
   }
 
   congratsTower(): void {

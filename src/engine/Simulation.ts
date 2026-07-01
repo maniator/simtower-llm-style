@@ -1060,7 +1060,12 @@ export class Simulation implements SimContext {
     // window doesn't permanently cancel the TOWER evaluation.
     sim.vipVisitDay = data.vipVisitDay ?? -1;
     sim.vipFavorable = data.vipFavorable ?? false;
-    sim.treasuresFound = typeof data.treasuresFound === "number" ? data.treasuresFound : 0;
+    // Clamp ≥0 (untrusted save): a negative value would keep `treasuresFound < 3`
+    // true forever and re-open the treasure farm.
+    sim.treasuresFound = Math.max(
+      0,
+      typeof data.treasuresFound === "number" && Number.isFinite(data.treasuresFound) ? data.treasuresFound : 0,
+    );
     // Restore excavation history so buried treasure stays one-time per tile across
     // a save/reload (otherwise the build/bulldoze exploit reopens on load).
     if (Array.isArray(data.excavated)) {
