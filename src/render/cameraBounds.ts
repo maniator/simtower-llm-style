@@ -14,9 +14,10 @@
  * World Y grows downward and floor `f` sits at `y = -f * floorPx`, so the top of
  * the world (highest floor) is the most-negative Y and basements are positive Y.
  *
- * @param desiredY   the camera-centre Y the player is trying to move to
+ * @param desiredY   the camera-center Y the player is trying to move to
  * @param viewHeight viewport height in screen pixels
- * @param zoom       camera zoom (screen pixels per world pixel)
+ * @param zoom       camera zoom (screen pixels per world pixel); non-positive or
+ *                   non-finite values fall back to 1 so the result stays finite
  * @param floorPx    height of one floor in world pixels
  * @param minFloor   deepest buildable floor (e.g. -9 for B10)
  * @param maxFloor   highest buildable floor
@@ -29,7 +30,10 @@ export function clampCameraY(
   minFloor: number,
   maxFloor: number,
 ): number {
-  const halfH = viewHeight / 2 / zoom;
+  // Guard against a zero/negative/NaN zoom so half-height (and the result) can
+  // never become Infinity/NaN, regardless of what a caller passes.
+  const safeZoom = Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  const halfH = viewHeight / 2 / safeZoom;
   const topY = -(maxFloor + 2) * floorPx; // a little sky above the top floor
   const bottomY = -(minFloor - 2) * floorPx; // ~2 floors of dirt below the basement
 

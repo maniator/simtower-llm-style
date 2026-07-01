@@ -35,7 +35,7 @@ describe("clampCameraY", () => {
   });
 
   it("leaves an in-bounds target untouched when zoomed in", () => {
-    // Zoomed in, a centred target well inside the world should pass through.
+    // Zoomed in, a centered target well inside the world should pass through.
     const y = -20 * FLOOR;
     expect(clamp(y, 2)).toBeCloseTo(y);
   });
@@ -46,6 +46,13 @@ describe("clampCameraY", () => {
     const tinyZoom = 0.05;
     const y = clamp(0, tinyZoom);
     expect(bottomEdge(y, tinyZoom)).toBeCloseTo(BOTTOM_Y);
+  });
+
+  it("stays finite for a zero / negative / NaN zoom", () => {
+    for (const bad of [0, -1, NaN, Infinity]) {
+      const y = clamp(0, bad);
+      expect(Number.isFinite(y)).toBe(true);
+    }
   });
 
   it("regression: the old center-only clamp would have exposed void", () => {
