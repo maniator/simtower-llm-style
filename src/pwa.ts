@@ -34,23 +34,33 @@ export interface PwaHandlers {
 const UPDATE_GRACE_MS = 900;
 
 export function registerPWA(handlers: PwaHandlers): void {
-  // Service workers need a window + a secure context; bail cleanly otherwise
-  // (e.g. the `file://` single-file build, or any non-browser environment).
-  if (typeof window === "undefined" || !("serviceWorker" in navigator)) return;
+  // Service workers only work in a secure context with SW support. Bail cleanly
+  // otherwise — a non-browser environment, insecure `http://`, or a page opened
+  // straight from `file://` — rather than let registration throw a
+  // SecurityError. (localhost counts as secure, so dev/preview still register.)
+  if (typeof window === "undefined" || !("serviceWorker" in navigator) || !window.isSecureContext) {
+    return;
+  }
 
   const updateSW = registerSW({
     immediate: true,
     onNeedRefresh() {
-      // A new worker is waiting. Save first, announce, then activate + reload.
-      // `updateSW(true)` calls skipWaiting and reloads the page onto the new
-      // assets, so the save MUST land before it runs.
-      void Promise.resolve(handlers.onUpdateReady())
-        .catch(() => {
-          /* never let a save hiccup block the update */
-        })
-        .finally(() => {
-          window.setTimeout(() => void updateSW(true), UPDATE_GRACE_MS);
-        });
+      // A new worker is waiting. Flush the tower to disk FIRST, then activate it
+      // (`updateSW(true)` calls skipWaiting and reloads onto the new assets).
+      // The async wrapper also catches a *synchronous* throw from the save.
+      //
+      // If the save throws or rejects (e.g. localStorage quota), we do NOT
+      // reload — that would drop unsaved progress, the one thing this flow
+      // exists to prevent. The new worker simply stays waiting and activates on
+      // the next natural page load, so the player keeps their tower either way.
+      void (async () => {
+        try {
+          await handlers.onUpdateReady();
+        } catch {
+          return;
+        }
+        window.setTimeout(() => void updateSW(true), UPDATE_GRACE_MS);
+      })();
     },
     onOfflineReady() {
       handlers.onOfflineReady?.();
