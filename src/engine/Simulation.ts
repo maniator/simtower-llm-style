@@ -874,7 +874,10 @@ export class Simulation implements SimContext {
         r.skippedSold++;
         continue;
       }
-      if (onlyDefault && u.rent !== undefined) {
+      // Treat an override equal to the kind default as default-priced too, so a
+      // legacy save (or older adjustRent) that stored the default explicitly isn't
+      // mis-counted as custom.
+      if (onlyDefault && u.rent !== undefined && u.rent !== cfg.default) {
         r.skippedCustom++;
         continue;
       }

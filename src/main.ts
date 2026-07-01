@@ -928,7 +928,14 @@ class GameApp {
       { kind, kindLabel: FACILITIES[kind].name, band },
       {
         preview: (target, opts) => this.sim.previewRentBatch(kind, target, opts)!,
-        apply: (target, opts) => this.sim.applyRentBatch(kind, target, opts)!,
+        apply: (target, opts) => {
+          // Capture BEFORE the mutation (the dialog applies asynchronously, so the
+          // synchronous captureUndo in handleEditAction is stale) → an undoable batch.
+          this.captureUndo("Set prices");
+          const r = this.sim.applyRentBatch(kind, target, opts)!;
+          this.commitUndo();
+          return r;
+        },
         onApplied: (summary) => {
           this.audio.sfx("build");
           this.ui.toast(summary, "good");

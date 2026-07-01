@@ -517,6 +517,12 @@ export class UI {
     box.querySelector('[data-bp="inc"]')!.addEventListener("click", () => step(1));
     box.querySelector('[data-bp="dec"]')!.addEventListener("click", () => step(-1));
     priceEl.addEventListener("input", refresh);
+    // On commit (blur/Enter), normalize the field to the snapped value it will
+    // actually apply, so the input never shows a number different from the result.
+    priceEl.addEventListener("change", () => {
+      if (mode() !== "default") priceEl.value = String(snap(Number(priceEl.value) || 0));
+      refresh();
+    });
     onlyEl.addEventListener("change", refresh);
     box.querySelectorAll('input[name="bp-mode"]').forEach((el) => el.addEventListener("change", refresh));
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
@@ -649,6 +655,7 @@ export class UI {
         <li><b>Two rides, tops.</b> People take at most <b>two</b> elevator/stair rides to reach a floor — add <b>sky lobbies</b> (every ~15 floors) so distant floors are one transfer away, or nobody comes.</li>
         <li><b>Parking</b> spaces only work when they touch a <b>Parking Ramp</b> or a connected space — chain them off a ramp, or they sit empty.</li>
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
+        <li><b>Price in bulk.</b> Inspect any office, condo or hotel room and use <b>“Set all …”</b> to re-price every unit of that kind at once (or reset them to the default) — no need to edit each room. A preview shows how many change before you apply.</li>
       </ul>
       <p style="color:var(--muted)">Mouse: drag to pan, scroll to zoom, click to build, Inspect tool to edit a room. Made a mistake? <b>Undo with Ctrl+Z</b> (or the ↩ button) — redo with Ctrl+Shift+Z. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
       <h3>Keyboard play</h3>
