@@ -38,3 +38,30 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Tier-2 end-to-end smoke: drive the BUILT app in a real browser and prove the
+  # TOWER win surfaces to the player (the congratulations modal). Kept in its own
+  # job so its browser download never slows the fast lint/typecheck/test lane.
+  e2e:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Use Node.js (from .nvmrc)
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ".nvmrc"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Build
+        run: npm run build
+
+      - name: Run end-to-end tests
+        run: npm run e2e
