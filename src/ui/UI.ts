@@ -119,6 +119,7 @@ export class UI {
       if (e.repeat) return; // a held key must not fire repeatedly (native button semantics)
       if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
         e.preventDefault();
+        e.stopPropagation(); // don't also reach the global build-cursor handler
         onActivate();
       }
     });

@@ -76,6 +76,7 @@ class GameApp {
     this.ui = new UI({
       onSelectTool: (t) => {
         this.tool = t;
+        this.kbAnchor = null; // don't carry a pending transport anchor across tools
         this.engine.preview = null;
         this.engine.transportPreview = null;
       },
@@ -168,12 +169,15 @@ class GameApp {
     const c = this.kbCursor;
     if (!c) return;
     if (this.kbAnchor && this.tool.type === "build" && this.isTransportTool()) {
+      const kind = this.tool.kind;
+      const bottom = Math.min(this.kbAnchor.floor, c.floor);
+      const top = Math.max(this.kbAnchor.floor, c.floor);
       this.engine.transportPreview = {
-        kind: this.tool.kind,
+        kind,
         x: this.kbAnchor.tile,
-        bottom: Math.min(this.kbAnchor.floor, c.floor),
-        top: Math.max(this.kbAnchor.floor, c.floor),
-        valid: true,
+        bottom,
+        top,
+        valid: this.sim.tower.placeTransportDryRun(kind, this.kbAnchor.tile, bottom, top) && this.sim.isUnlocked(kind),
       };
       this.engine.preview = null;
     } else {
@@ -213,7 +217,9 @@ class GameApp {
       this.refreshCursorPreview();
     } else if (this.isTransportTool()) {
       if (!this.kbAnchor) {
-        this.kbAnchor = { tile: c.tile, floor: c.floor };
+        // Snap the anchor column like the mouse path, so a wide shaft near the
+        // right edge places instead of failing.
+        this.kbAnchor = { tile: this.snapX(kind, c.tile), floor: c.floor };
         this.refreshCursorPreview();
         this.announce(`${FACILITIES[kind].name} anchored at floor ${c.floor}. Move to the other end and press Enter.`);
       } else {
@@ -399,9 +405,23 @@ class GameApp {
 
   private bindKeys(): void {
     window.addEventListener("keydown", (e) => {
-      // Don't hijack typing (rename field, import box) or modal interaction.
+      // Never hijack browser/OS shortcuts (Ctrl/Cmd/Alt + key).
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Don't hijack typing (rename field, import box) or activation of the app's
+      // own focusable controls — a focused palette item / button owns Enter/Space
+      // (else keyboard tool-selection would also fire a build), and a modal traps.
       const ae = document.activeElement as HTMLElement | null;
-      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.isContentEditable)) return;
+      if (
+        ae &&
+        (ae.tagName === "INPUT" ||
+          ae.tagName === "TEXTAREA" ||
+          ae.tagName === "BUTTON" ||
+          ae.tagName === "SELECT" ||
+          ae.tagName === "A" ||
+          ae.isContentEditable ||
+          ae.getAttribute("role") === "button")
+      )
+        return;
       if ((document.getElementById("modal") as HTMLDialogElement | null)?.open) return;
 
       if (e.key >= "0" && e.key <= "3") {
