@@ -317,3 +317,53 @@ describe("Deep-review regressions (must not come back)", () => {
     expect(TOWER_POPULATION).toBeLessThanOrEqual(15100); // within the widened lot's measured ceiling (~15,066)
   });
 });
+
+import { ECON } from "../engine/econConfig";
+
+describe("Fine FAQ mechanics", () => {
+  it("≤2-ride limit: a trip needing 3 rides doesn't route; a 2-ride trip does", () => {
+    const sim = Simulation.newGame(1);
+    sim.money = 1e12;
+    const x0 = C - 15;
+    for (let x = x0; x < x0 + 30; x++) sim.tower.place("lobby", 1, x);
+    for (let f = 2; f <= 45; f++) for (let x = x0; x < x0 + 30; x++) sim.tower.place("floor", f, x);
+    sim.tower.placeTransport("elevatorStandard", x0, 1, 15);       // A
+    sim.tower.placeTransport("elevatorStandard", x0 + 6, 15, 30);  // B (transfer at 15)
+    sim.tower.placeTransport("elevatorStandard", x0 + 12, 30, 45); // C (transfer at 30)
+    expect(sim.crowd.route(sim.tower, 1, 25)).not.toBeNull(); // A→15, B→25 = 2 rides
+    expect(sim.crowd.route(sim.tower, 1, 40)).toBeNull();     // would need A→15→30→40 = 3 rides
+  });
+
+  it("blockbuster vs average film: two-tier booking cost exists and both occur", () => {
+    expect(ECON.cinemaBookingBlockbuster).toBeGreaterThan(ECON.cinemaBookingMonthly);
+    const sim = Simulation.newGame(3);
+    sim.money = 1e12;
+    sim.star = 3;
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    lay(sim, "floor", 3);
+    sim.tower.place("cinema", 2, 0); // only maintained thing → monthly cost is the booking
+    for (let d = 0; d < 365; d++) sim.tick(60 * 24);
+    const bookings = sim.log
+      .filter((e) => e.text.startsWith("Monthly maintenance"))
+      .map((e) => Number(e.text.replace(/[^0-9]/g, "")));
+    expect(bookings.some((c) => c === ECON.cinemaBookingBlockbuster)).toBe(true); // some blockbuster months
+    expect(bookings.some((c) => c === ECON.cinemaBookingMonthly)).toBe(true); // some average months
+  });
+
+  it("strict parking alignment: only ramp-chained spaces function", () => {
+    const sim = Simulation.newGame(4);
+    sim.money = 1e12;
+    const x0 = C - 20; // start inside the seeded centre lobby so the strip connects
+    for (let x = x0; x < x0 + 140; x++) sim.tower.place("lobby", 1, x);
+    for (let x = x0; x < x0 + 140; x++) sim.tower.place("floor", 0, x);
+    // No ramp yet → nothing functions.
+    sim.tower.place("parking", 0, x0 + 6);
+    expect(sim.tower.functionalParkingSpots()).toBe(0);
+    // Ramp at x0..x0+5, a chain of two spaces (x0+6, x0+12), plus an isolated one.
+    sim.tower.place("parkingRamp", 0, x0);
+    sim.tower.place("parking", 0, x0 + 12);
+    sim.tower.place("parking", 0, x0 + 120); // gap → dead X, not connected
+    expect(sim.tower.functionalParkingSpots()).toBe(2); // the two chained spaces, not the isolated one
+  });
+});

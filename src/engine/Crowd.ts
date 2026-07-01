@@ -132,14 +132,23 @@ export class Crowd {
     return adj;
   }
 
-  /** BFS over the transport network for the fewest-transfer route. */
+  /**
+   * BFS over the transport network for the fewest-transfer route. Each edge is
+   * one transport ride, and — per the original ("Sims will only take two methods
+   * of transportation to their destination") — a trip is capped at TWO rides
+   * (i.e. one sky-lobby transfer). A destination needing 3+ rides returns null,
+   * so a badly-zoned tower's commuters give up rather than teleporting there.
+   */
+  private static readonly MAX_RIDES = 2;
   route(tower: Tower, from: number, to: number): Route | null {
     if (from === to) return { floors: [from], shafts: [] };
     const adj = this.adjacency(tower);
     const prev = new Map<number, { f: number; shaft: number }>();
     const seen = new Set<number>([from]);
     let frontier = [from];
-    while (frontier.length) {
+    let rides = 0;
+    while (frontier.length && rides < Crowd.MAX_RIDES) {
+      rides++;
       const next: number[] = [];
       for (const f of frontier) {
         for (const edge of adj.get(f) ?? []) {

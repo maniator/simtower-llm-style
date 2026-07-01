@@ -657,6 +657,37 @@ export class Tower {
     return this.servedFloors();
   }
 
+  /**
+   * Count parking SPACES that actually function — i.e. connect to a Parking Ramp
+   * through a contiguous chain of parking/ramp tiles (canon: "spaces must be
+   * touching the ramp or another space"). Flood-fills from every operational ramp
+   * over adjacent parking/ramp tiles (horizontally along a floor and vertically
+   * between stacked ramps); a space with no path back to a ramp is a dead X.
+   */
+  functionalParkingSpots(): number {
+    const usable = (u?: Unit): boolean =>
+      !!u && (u.kind === "parking" || u.kind === "parkingRamp") && u.state !== "construction" && u.state !== "fire";
+    const stack: [number, number][] = [];
+    for (const u of this.units) {
+      if (u.kind === "parkingRamp" && u.state !== "construction" && u.state !== "fire") {
+        for (let i = 0; i < u.width; i++) stack.push([u.floor, u.x + i]);
+      }
+    }
+    const visited = new Set<string>();
+    const reached = new Set<number>(); // parking-unit ids connected to a ramp
+    while (stack.length) {
+      const [f, x] = stack.pop()!;
+      const key = `${f}:${x}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      const u = this.roomAt(f, x);
+      if (!usable(u)) continue;
+      if (u!.kind === "parking") reached.add(u!.id);
+      stack.push([f, x - 1], [f, x + 1], [f - 1, x], [f + 1, x]);
+    }
+    return reached.size;
+  }
+
   facilityOf(unit: Unit): Facility {
     return FACILITIES[unit.kind];
   }

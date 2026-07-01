@@ -12,6 +12,10 @@ import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facili
 export class EconomySystem {
   constructor(private readonly sim: SimContext) {}
 
+  /** Cinemas showing a blockbuster this month (booked in payMaintenance): they
+   * cost more to book but draw bigger crowds. */
+  private blockbusters = new Set<number>();
+
   /** True if a finished, intact unit of `kind` exists (ignores under-construction
    * / on-fire) — so income effects key off an OPERATIONAL metro/recycling. */
   private hasOperational(kind: string): boolean {
@@ -56,10 +60,13 @@ export class EconomySystem {
         this.sim.weather === "rain"
           ? (this.hasOperational("metro") ? 0.7 : 0.5) * (u.kind === "fastFood" ? 0.6 : 1)
           : 1;
+      // A cinema showing a blockbuster this month draws a bigger crowd.
+      const filmMult = u.kind === "cinema" && this.blockbusters.has(u.id) ? 1.7 : 1;
       // Spread the headline DAILY take across the venue's actual open hours so a
       // full day earns ≈ `daily * appeal`, not a per-hour multiple of it. (Before,
       // dividing by a flat 8 while open 9–15 h/day inflated income 2–3x.)
-      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * rainMult * (0.6 + this.sim.rng.next() * 0.4);
+      const hourly =
+        (daily / openHoursPerDay(u.kind)) * appeal * rainMult * filmMult * (0.6 + this.sim.rng.next() * 0.4);
       u.pendingIncome += hourly;
       if (u.pendingIncome >= 1) {
         const earned = Math.floor(u.pendingIncome);
@@ -171,10 +178,17 @@ export class EconomySystem {
       if (u.kind === "condo" && !u.everOccupied && u.state !== "construction" && u.state !== "fire") {
         cost += Math.ceil(rentOf(u) * ECON.condoMonthlyTaxRate);
       }
-      // A cinema must book films to show (canon: ~150k average / 300k blockbuster);
-      // modelled as a monthly booking cost, so a theatre isn't free money.
+      // A cinema books a film each month (canon: 150k average / 300k
+      // blockbuster). A blockbuster costs more but draws bigger crowds (applied
+      // in collectTrafficIncome). Rebuilt fresh each month here.
       if (u.kind === "cinema" && u.state !== "construction" && u.state !== "fire") {
-        cost += ECON.cinemaBookingMonthly;
+        this.blockbusters.delete(u.id);
+        if (this.sim.rng.chance(0.4)) {
+          this.blockbusters.add(u.id);
+          cost += ECON.cinemaBookingBlockbuster;
+        } else {
+          cost += ECON.cinemaBookingMonthly;
+        }
       }
     }
     if (cost > 0) {
