@@ -1,4 +1,5 @@
 import { Simulation } from "./engine/Simulation";
+import { UndoHistory, towerStateSig } from "./engine/UndoHistory";
 import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
 import { ECON, rentConfig, rentOf } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
@@ -72,14 +73,10 @@ class GameApp {
   private kbCursor: { tile: number; floor: number } | null = null;
   private kbAnchor: { tile: number; floor: number } | null = null;
 
-  /** Undo/redo: serialized snapshots taken *before* each player action. A
-   *  gesture (drag) coalesces into ONE step — the snapshot is captured on the
-   *  first mutation and committed on gesture-end only if the tower actually
-   *  changed (so misfires/pans never create empty steps). Restores go through
-   *  the normal load path (adoptSim). */
-  private undoStack: { snap: string; label: string }[] = [];
-  private redoStack: { snap: string; label: string }[] = [];
-  private pendingUndo: { snap: string; sig: string; label: string } | null = null;
+  /** Undo/redo: snapshot-based history (see {@link UndoHistory}). Built in the
+   *  constructor once `sim`/`ui` exist; its ports close over `this` so they
+   *  always see the live sim across an adoptSim() swap. */
+  private history!: UndoHistory;
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
@@ -144,6 +141,15 @@ class GameApp {
         SaveGame.deleteSlot(n);
         this.ui.toast(`Deleted slot ${n}.`, "info");
       },
+    });
+
+    // Undo/redo history — ports close over `this` so snapshot / signature /
+    // restore always target the *current* sim (adoptSim swaps it).
+    this.history = new UndoHistory({
+      snapshot: () => JSON.stringify(this.sim.serialize()),
+      restore: (snap) => this.adoptSim(Simulation.deserialize(JSON.parse(snap)), true),
+      signature: () => towerStateSig(this.sim.tower, this.sim.money),
+      notify: (msg) => this.ui.toast(msg, "info"),
     });
 
     this.wireEngine();
@@ -1282,62 +1288,27 @@ class GameApp {
       // A *different* tower (New Tower / Load / a slot / Import) invalidates the
       // undo trail — otherwise Undo could resurrect an unrelated old tower and a
       // later autosave persist it. Undo/redo restores pass preserveHistory.
-      this.undoStack.length = 0;
-      this.redoStack.length = 0;
-      this.pendingUndo = null;
+      this.history.clear();
     }
   }
 
-  // ---- Undo / redo --------------------------------------------------------
+  // ---- Undo / redo (state + logic live in engine/UndoHistory) -------------
+  // Thin delegators kept so the many gesture call sites read unchanged.
 
-  /** A cheap fingerprint of everything a *player action* can change (structure,
-   *  transport config, labels, rents, cinema booking policy, money) — but NOT
-   *  time, so a press where only the clock ticked doesn't register as a change. */
-  private stateSig(): string {
-    const t = this.sim.tower;
-    const u = t.units
-      .map((x) => `${x.kind}@${x.floor},${x.x}:${x.label ?? ""}:${x.rent ?? ""}:${x.filmPolicy ?? ""}`)
-      .join(";");
-    const r = t.transports
-      .map((x) => `${x.kind}@${x.x}:${x.bottom}-${x.top}:${x.cars}:${(x.skipFloors ?? []).join(".")}`)
-      .join(";");
-    return `${this.sim.money}|${u}|${r}`;
-  }
-
-  /** Capture the pre-action snapshot. Called once at the start of each gesture
-   *  (a drag's first mutation, or a discrete edit click), so a whole drag
-   *  coalesces into a single undo step. */
   private captureUndo(label: string): void {
-    this.pendingUndo = { snap: JSON.stringify(this.sim.serialize()), sig: this.stateSig(), label };
+    this.history.capture(label);
   }
 
-  /** Finalize the captured snapshot, but only if the action actually changed
-   *  something — a misfired or empty gesture leaves no undo step. */
   private commitUndo(): void {
-    const p = this.pendingUndo;
-    this.pendingUndo = null;
-    if (!p || this.stateSig() === p.sig) return;
-    this.undoStack.push({ snap: p.snap, label: p.label });
-    if (this.undoStack.length > 40) this.undoStack.shift();
-    this.redoStack.length = 0; // a fresh action invalidates the redo trail
+    this.history.commit();
   }
 
   private undo(): void {
-    this.commitUndo(); // finalize any in-flight gesture first
-    const entry = this.undoStack.pop();
-    if (!entry) return this.ui.toast("Nothing to undo.", "info");
-    this.redoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
-    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)), true);
-    this.ui.toast(`Undid: ${entry.label}`, "info");
+    this.history.undo();
   }
 
   private redo(): void {
-    this.commitUndo(); // finalize any in-flight gesture first (matches undo)
-    const entry = this.redoStack.pop();
-    if (!entry) return this.ui.toast("Nothing to redo.", "info");
-    this.undoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
-    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)), true);
-    this.ui.toast(`Redid: ${entry.label}`, "info");
+    this.history.redo();
   }
 
   private save(silent = false): void {
