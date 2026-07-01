@@ -114,3 +114,52 @@ describe("Seasonal & visitor events", () => {
     expect(ctx2.log.some((m) => m.includes("Santa"))).toBe(false);
   });
 });
+
+describe("Fires", () => {
+  /** A tower with a flammable room, optionally defended by security + medical. */
+  function fireTower(defended: boolean): Tower {
+    const tower = new Tower();
+    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
+    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
+    tower.place("office", 2, 0); // a flammable room (placed "empty")
+    if (defended) {
+      tower.place("security", 2, 10);
+      tower.place("medical", 2, 20);
+    }
+    return tower;
+  }
+
+  function runDays(events: EventSystem, ctx: { clock: Clock }, days: number) {
+    for (let d = 0; d < days; d++) {
+      ctx.clock = new Clock(d * 1440);
+      events.maybeRandomEvent();
+    }
+  }
+
+  it("fire-defense facilities make fires markedly rarer", () => {
+    const bare = makeCtx(fireTower(false), 4);
+    const defended = makeCtx(fireTower(true), 4);
+    runDays(new EventSystem(bare, 7), bare, 4000);
+    runDays(new EventSystem(defended, 7), defended, 4000);
+    const bareFires = bare.log.filter((m) => m.includes("Fire broke out")).length;
+    const defendedFires = defended.log.filter((m) => m.includes("Fire broke out")).length;
+    expect(bareFires).toBeGreaterThan(0);
+    expect(defendedFires).toBeLessThan(bareFires);
+  });
+
+  it("scales the fire-rescue cost with the tower's rating", () => {
+    const firstFireCost = (star: number): number | null => {
+      const ctx = makeCtx(fireTower(false), star);
+      const events = new EventSystem(ctx, 7);
+      for (let d = 0; d < 8000; d++) {
+        ctx.clock = new Clock(d * 1440);
+        events.maybeRandomEvent();
+        if (events.pending?.kind === "fireRescue") return events.pending.cost;
+      }
+      return null;
+    };
+    // Affordable while small, up to the original's $500k for a 5★ tower.
+    expect(firstFireCost(2)).toBe(150_000);
+    expect(firstFireCost(5)).toBe(500_000);
+  });
+});

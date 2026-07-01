@@ -80,19 +80,24 @@ export class EventSystem {
     if (this.sim.star < 2) return;
 
     const roll = this.sim.rng.next();
-    // A medical center's fast emergency response makes fires far less likely.
-    const fireChance = this.sim.hasAny("medical") ? 0.04 : 0.09;
+    const fireChance = this.fireChance();
     if (this.active.size === 0 && roll < fireChance) {
       this.startFire();
-      // Canon: you're offered fire rescue for $500,000 — accept to put it out at
-      // once, or decline and let Security/Medical fight it over the coming days.
+      // Canon: Security fights fires for free; the fire-rescue helicopter puts it
+      // out instantly for a fee. That fee scales with the tower so it's payable
+      // early (~$150k at 2★) and reaches the original's $500k for a 5★ skyscraper.
       if (this.active.size > 0) {
+        const cost = this.fireRescueCost();
         this.pending = {
           kind: "fireRescue",
-          cost: 500_000,
-          message: "🚒 Fire rescue available for $500,000 — extinguish it now, or decline and fight it the slow way.",
+          cost,
+          message: `🚒 Fire rescue available for $${cost.toLocaleString()} — extinguish it now, or decline and fight it the slow way.`,
         };
         this.sim.emit(this.pending.message, "bad");
+        // Telegraph the free defense to a player who hasn't built one yet.
+        if (!this.sim.hasAny("security")) {
+          this.sim.emit("Tip: a Security office fights fires for free — build one to defend your tower.", "info");
+        }
       }
       return;
     }
@@ -150,6 +155,28 @@ export class EventSystem {
       }
     }
     this.active.clear();
+  }
+
+  /**
+   * Daily chance a fire breaks out, reduced by the fire-defense you've built.
+   * Security (buildable from 2★) is the free front-line defense; a medical
+   * center's fast emergency response cuts the odds further. Building both makes
+   * fires rare — investing in safety visibly pays off.
+   */
+  private fireChance(): number {
+    let chance = 0.05;
+    if (this.sim.hasAny("security")) chance *= 0.6;
+    if (this.sim.hasAny("medical")) chance *= 0.5;
+    return chance;
+  }
+
+  /**
+   * Cost of the instant fire-rescue helicopter. Scales with the tower's rating
+   * so it's affordable while you're small (~$150k at 2★) and rises to the
+   * original's $500k for a 5★ tower.
+   */
+  private fireRescueCost(): number {
+    return Math.min(500_000, 150_000 + Math.max(0, this.sim.star - 2) * 120_000);
   }
 
   /** Rooms that can catch fire (real, finished rooms — not structure). */

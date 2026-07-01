@@ -608,6 +608,11 @@ class GameApp {
       const u = this.sim.tower.units.find((x) => x.id === this.selected!.id);
       if (!u) return this.clearSelection();
       if (action === "sell") {
+        if (u.state === "fire") {
+          this.audio.sfx("error");
+          this.sim.emit("You can't sell a burning unit — call fire rescue or let it burn out.", "bad");
+          return;
+        }
         this.sim.tower.removeUnit(u.id);
         this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
         this.audio.sfx("sell");
@@ -846,6 +851,11 @@ class GameApp {
     if (p.type === "unit") {
       const u = this.sim.tower.units.find((x) => x.id === p.id);
       if (!u) return;
+      if (u.state === "fire") {
+        this.audio.sfx("error");
+        this.sim.emit("You can't bulldoze a burning unit — call fire rescue or let it burn out.", "bad");
+        return;
+      }
       this.sim.tower.removeUnit(u.id);
       this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
     } else {
