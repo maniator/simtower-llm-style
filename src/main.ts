@@ -72,6 +72,15 @@ class GameApp {
   private kbCursor: { tile: number; floor: number } | null = null;
   private kbAnchor: { tile: number; floor: number } | null = null;
 
+  /** Undo/redo: serialized snapshots taken *before* each player action. A
+   *  gesture (drag) coalesces into ONE step — the snapshot is captured on the
+   *  first mutation and committed on gesture-end only if the tower actually
+   *  changed (so misfires/pans never create empty steps). Restores go through
+   *  the normal load path (adoptSim). */
+  private undoStack: { snap: string; label: string }[] = [];
+  private redoStack: { snap: string; label: string }[] = [];
+  private pendingUndo: { snap: string; sig: string; label: string } | null = null;
+
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
     this.sim = SaveGame.load() ?? Simulation.newGame(Date.parse("2024-01-01"));
@@ -98,6 +107,8 @@ class GameApp {
         this.audio.setMuted(!this.audio.muted);
         return this.audio.muted;
       },
+      onUndo: () => this.undo(),
+      onRedo: () => this.redo(),
       onEditAction: (action, root) => this.handleEditAction(action, root),
       onToggleReducedMotion: () => {
         this.prefs.reducedMotion = !this.prefs.reducedMotion;
@@ -362,6 +373,7 @@ class GameApp {
         return;
       }
       if (!touch) return; // mouse pan-taps with a build/bulldoze tool do nothing
+      this.captureUndo(this.tool.type === "bulldoze" ? "Bulldoze" : `Build ${FACILITIES[this.tool.kind].name}`);
       if (this.tool.type === "bulldoze") this.bulldozePicked(picked);
       else if (this.tool.type === "build" && !this.isTransportTool()) {
         if (this.tool.kind === "floor" || this.tool.kind === "lobby") {
@@ -370,10 +382,14 @@ class GameApp {
           this.tryBuild(this.tool.kind, floor, this.snapX(this.tool.kind, tile));
         }
       }
+      this.commitUndo();
     };
 
     this.engine.onActionDown = (tile, floor, _touch, picked) => {
       this.audio.start();
+      if (this.tool.type === "bulldoze" || this.tool.type === "build") {
+        this.captureUndo(this.tool.type === "bulldoze" ? "Bulldoze" : `Build ${FACILITIES[this.tool.kind].name}`);
+      }
       if (this.tool.type === "bulldoze") {
         this.bulldozePicked(picked);
       } else if (this.tool.type === "build") {
@@ -428,6 +444,7 @@ class GameApp {
         }
       }
       this.transportStart = null;
+      this.commitUndo();
     };
 
     this.engine.onHover = (tile, floor, picked) => {
@@ -445,7 +462,10 @@ class GameApp {
     // In-world extend arrows on the selected elevator: drag an end to grow or
     // shrink the shaft floor-by-floor.
     this.engine.onExtendTo = (end, target) => this.extendSelectedTo(end, target);
-    this.engine.onExtendEnd = () => (this.extendHwm = null);
+    this.engine.onExtendEnd = () => {
+      this.extendHwm = null;
+      this.commitUndo();
+    };
     // Suppress the browser context menu so right-click is ours to use.
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
@@ -455,7 +475,25 @@ class GameApp {
 
   private bindKeys(): void {
     window.addEventListener("keydown", (e) => {
-      // Never hijack browser/OS shortcuts (Ctrl/Cmd/Alt + key).
+      // Undo / redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or +Y) — handled BEFORE the
+      // modifier bail below so it isn't swallowed; skipped while typing in a field
+      // (which keeps its own edit history, e.g. the rename box).
+      {
+        const el = document.activeElement;
+        const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+        if (!typing && (e.ctrlKey || e.metaKey)) {
+          const k = e.key.toLowerCase();
+          if (k === "z" && !e.shiftKey) {
+            e.preventDefault();
+            return this.undo();
+          }
+          if ((k === "z" && e.shiftKey) || k === "y") {
+            e.preventDefault();
+            return this.redo();
+          }
+        }
+      }
+      // Never hijack other browser/OS shortcuts (Ctrl/Cmd/Alt + key).
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       // Don't hijack typing (rename field, import box) or activation of the app's
       // own focusable controls — a focused palette item / button owns Enter/Space
@@ -475,7 +513,6 @@ class GameApp {
       if ((document.getElementById("modal") as HTMLDialogElement | null)?.open) return;
       // Don't let game keys run the paused engine behind the first-run splash.
       if (document.getElementById("splash")) return;
-
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
         this.engine.paused = SPEEDS[this.speed] === 0;
@@ -851,6 +888,7 @@ class GameApp {
     if (!t || !isElevatorKind(t.kind)) return; // only lifts have extend handles / billing
     if (!this.extendHwm || this.extendHwm.id !== t.id) {
       this.extendHwm = { id: t.id, top: t.top, bottom: t.bottom };
+      this.captureUndo("Extend");
     }
     let nb = t.bottom;
     let nt = t.top;
@@ -882,6 +920,21 @@ class GameApp {
 
   private handleEditAction(action: string, root: HTMLElement): void {
     if (!this.selected) return;
+    const UNDO_LABELS: Record<string, string> = {
+      sell: "Sell",
+      rename: "Rename",
+      rentUp: "Rent change",
+      rentDown: "Rent change",
+      addcar: "Elevator cars",
+      removecar: "Elevator cars",
+      stops: "Elevator stops",
+      express: "Elevator stops",
+      allstops: "Elevator stops",
+      extendUp: "Extend",
+      extendDown: "Extend",
+      filmPolicy: "Film policy",
+    };
+    this.captureUndo(UNDO_LABELS[action] ?? "Edit");
     if (this.selected.type === "unit") {
       const u = this.sim.tower.units.find((x) => x.id === this.selected!.id);
       if (!u) return this.clearSelection();
@@ -894,6 +947,7 @@ class GameApp {
         this.sim.tower.removeUnit(u.id);
         this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
         this.audio.sfx("sell");
+        this.commitUndo();
         return this.clearSelection();
       }
       if (action === "rename") {
@@ -920,6 +974,7 @@ class GameApp {
         this.sim.tower.removeTransport(t.id);
         this.sim.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
         this.audio.sfx("sell");
+        this.commitUndo();
         return this.clearSelection();
       }
       if (action === "addcar") {
@@ -959,6 +1014,7 @@ class GameApp {
         this.refreshEditor();
       }
     }
+    this.commitUndo();
   }
 
   private buildStatsHtml(): string {
@@ -1223,6 +1279,57 @@ class GameApp {
     this.lastStar = sim.star;
     this.accMinutes = 0;
     this.engine.setSim(sim);
+  }
+
+  // ---- Undo / redo --------------------------------------------------------
+
+  /** A cheap fingerprint of everything a *player action* can change (structure,
+   *  transport config, labels, rents, money) — but NOT time, so a press where
+   *  only the clock ticked doesn't register as a change. */
+  private stateSig(): string {
+    const t = this.sim.tower;
+    const u = t.units
+      .map((x) => `${x.kind}@${x.floor},${x.x}:${x.label ?? ""}:${x.rent ?? ""}`)
+      .join(";");
+    const r = t.transports
+      .map((x) => `${x.kind}@${x.x}:${x.bottom}-${x.top}:${x.cars}:${(x.skipFloors ?? []).join(".")}`)
+      .join(";");
+    return `${this.sim.money}|${u}|${r}`;
+  }
+
+  /** Capture the pre-action snapshot. Called once at the start of each gesture
+   *  (a drag's first mutation, or a discrete edit click), so a whole drag
+   *  coalesces into a single undo step. */
+  private captureUndo(label: string): void {
+    this.pendingUndo = { snap: JSON.stringify(this.sim.serialize()), sig: this.stateSig(), label };
+  }
+
+  /** Finalize the captured snapshot, but only if the action actually changed
+   *  something — a misfired or empty gesture leaves no undo step. */
+  private commitUndo(): void {
+    const p = this.pendingUndo;
+    this.pendingUndo = null;
+    if (!p || this.stateSig() === p.sig) return;
+    this.undoStack.push({ snap: p.snap, label: p.label });
+    if (this.undoStack.length > 40) this.undoStack.shift();
+    this.redoStack.length = 0; // a fresh action invalidates the redo trail
+  }
+
+  private undo(): void {
+    this.commitUndo(); // finalize any in-flight gesture first
+    const entry = this.undoStack.pop();
+    if (!entry) return this.ui.toast("Nothing to undo.", "info");
+    this.redoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
+    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)));
+    this.ui.toast(`Undid: ${entry.label}`, "info");
+  }
+
+  private redo(): void {
+    const entry = this.redoStack.pop();
+    if (!entry) return this.ui.toast("Nothing to redo.", "info");
+    this.undoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
+    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)));
+    this.ui.toast(`Redid: ${entry.label}`, "info");
   }
 
   private save(silent = false): void {

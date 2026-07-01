@@ -1,4 +1,4 @@
-# Addendum — Tower Tycoon PRD
+# Addendum — Verticopolis PRD
 
 Depth that does not fit the PRD's capability-focused shape: technical realization,
 aesthetic/tone direction, the relationship to the source of truth, and rejected
@@ -7,9 +7,9 @@ supporting context for downstream architecture/UX work.
 
 ---
 
-## A. Source-of-Truth Mapping (SimTower 1994 → Tower Tycoon)
+## A. Source-of-Truth Mapping (SimTower 1994 → Verticopolis)
 
-| SimTower (1994) mechanic | Tower Tycoon realization | Divergence |
+| SimTower (1994) mechanic | Verticopolis realization | Divergence |
 | --- | --- | --- |
 | Build floors, then rooms; ground + sky lobbies every 15 floors | Two-layer grid; rooms auto-create floor beneath; lobbies at ground + every 15th | Faithful |
 | ~100 floors up, basements below | 100 up, 10 basement levels below (B1…B10, floor 0 = B1 down to floor −9), 200 tiles wide | Faithful (basement depth tuned) |

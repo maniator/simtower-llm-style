@@ -78,6 +78,7 @@ under the hood) — no hand-rolled service worker. A few details worth knowing:
 | Edit a facility | Inspect tool, click a room or shaft → edit panel |
 | Bulldoze | Bulldoze tool, click (or drag) |
 | Game speed | Top-right buttons, or number keys `0`–`3` |
+| Undo / Redo | `Ctrl+Z` / `Ctrl+Shift+Z` (`⌘` on Mac), or the ↩ ↪ top-bar buttons |
 
 ## Features
 

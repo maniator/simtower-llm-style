@@ -1,6 +1,6 @@
 ---
 title: "GDD Slice — Economy Depth (Late-Game Money Lever + Blockbuster-as-Choice)"
-game: Tower Tycoon (browser SimTower clone)
+game: Verticopolis (browser SimTower clone)
 author: Samus Shepard (Game Designer — BMAD gds agent)
 date: 2026-07-01
 status: Design spec — ready for dev
