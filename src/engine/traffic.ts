@@ -16,8 +16,8 @@ export function trafficTier(congestion: number): TrafficTier {
 
 export const TRAFFIC_LABELS = ["Smooth", "Busy", "Backed up", "Gridlock"] as const;
 
-/** A shape-coded 4-step bar glyph (▁▃▅▇ filled to the tier) — legible in
- *  grayscale, so the cue never depends on color alone. */
+/** A shape-coded 4-step bar glyph — filled cells (▮) up to the tier, empty (▯)
+ *  after — legible in grayscale, so the cue never depends on color alone. */
 export function trafficGlyph(tier: TrafficTier): string {
   const on = "▮";
   const off = "▯";

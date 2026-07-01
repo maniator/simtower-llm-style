@@ -140,11 +140,12 @@ export class TowerEngine {
   /** Set by the controller from the game speed: when paused, the decorative
    *  animation clock stops so on-screen people freeze with everything else. */
   paused = false;
-  /** When true, the decorative animation clock is frozen (accessibility). Only
-   *  the ambient/decorative layers (clouds, rain streaks, pacing walkers, metro
-   *  train) read `d.anim`; elevator cars and the routed crowd move from sim state
-   *  independently, so they keep animating — functional motion stays, ambient
-   *  motion stops. */
+  /** When true, the decorative animation clock is frozen (accessibility). Every
+   *  `d.anim`-driven decoration stops — the ambient bed (clouds, rain streaks,
+   *  pacing walkers, metro train) and the smaller flourishes in the sprite code
+   *  (construction crane hook, flame flicker, cinema marquee). All of it is purely
+   *  cosmetic: elevator cars and the routed crowd move from sim state (not
+   *  `d.anim`), so functional motion keeps running while the animation stops. */
   reducedMotion = false;
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
