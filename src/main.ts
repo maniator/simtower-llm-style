@@ -874,7 +874,11 @@ class GameApp {
       floors.push({ floor: fl, stop: this.sim.tower.stopsAt(t, fl), lobby: lobbies.has(fl) });
     }
     this.ui.showStopsDialog(FACILITIES[t.kind].name, floors, (floor, stop) => {
+      // Each toggle is its own undo step (the surrounding handleEditAction
+      // commit already fired before the dialog mutated anything).
+      this.captureUndo("Elevator stops");
       this.sim.tower.setStop(t.id, floor, stop);
+      this.commitUndo();
       this.refreshEditor();
     });
   }
@@ -1274,24 +1278,32 @@ class GameApp {
   // ---- Save / load / new --------------------------------------------------
 
   /** Swap in a freshly loaded/created simulation and point the engine at it. */
-  private adoptSim(sim: Simulation): void {
+  private adoptSim(sim: Simulation, preserveHistory = false): void {
     this.sim = sim;
     this.clearSelection();
     this.shownWin = false;
     this.lastStar = sim.star;
     this.accMinutes = 0;
     this.engine.setSim(sim);
+    if (!preserveHistory) {
+      // A *different* tower (New Tower / Load / a slot / Import) invalidates the
+      // undo trail — otherwise Undo could resurrect an unrelated old tower and a
+      // later autosave persist it. Undo/redo restores pass preserveHistory.
+      this.undoStack.length = 0;
+      this.redoStack.length = 0;
+      this.pendingUndo = null;
+    }
   }
 
   // ---- Undo / redo --------------------------------------------------------
 
   /** A cheap fingerprint of everything a *player action* can change (structure,
-   *  transport config, labels, rents, money) — but NOT time, so a press where
-   *  only the clock ticked doesn't register as a change. */
+   *  transport config, labels, rents, cinema booking policy, money) — but NOT
+   *  time, so a press where only the clock ticked doesn't register as a change. */
   private stateSig(): string {
     const t = this.sim.tower;
     const u = t.units
-      .map((x) => `${x.kind}@${x.floor},${x.x}:${x.label ?? ""}:${x.rent ?? ""}`)
+      .map((x) => `${x.kind}@${x.floor},${x.x}:${x.label ?? ""}:${x.rent ?? ""}:${x.filmPolicy ?? ""}`)
       .join(";");
     const r = t.transports
       .map((x) => `${x.kind}@${x.x}:${x.bottom}-${x.top}:${x.cars}:${(x.skipFloors ?? []).join(".")}`)
@@ -1322,15 +1334,16 @@ class GameApp {
     const entry = this.undoStack.pop();
     if (!entry) return this.ui.toast("Nothing to undo.", "info");
     this.redoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
-    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)));
+    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)), true);
     this.ui.toast(`Undid: ${entry.label}`, "info");
   }
 
   private redo(): void {
+    this.commitUndo(); // finalize any in-flight gesture first (matches undo)
     const entry = this.redoStack.pop();
     if (!entry) return this.ui.toast("Nothing to redo.", "info");
     this.undoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
-    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)));
+    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)), true);
     this.ui.toast(`Redid: ${entry.label}`, "info");
   }
 
