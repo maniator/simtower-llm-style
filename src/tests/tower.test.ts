@@ -119,7 +119,7 @@ describe("Tower placement", () => {
     for (let i = 0; i < 20; i++) tower.place("floor", 1, i);
     expect(tower.canPlace("office", 1, 0).ok).toBe(false);
     expect(tower.canPlace("shop", 1, 0).ok).toBe(false);
-    // A two-storey facility starting on the ground floor is rejected too.
+    // A two-story facility starting on the ground floor is rejected too.
     for (let i = 0; i < 20; i++) tower.place("floor", 2, i);
     expect(tower.canPlace("cinema", 1, 0).ok).toBe(false);
     // Rooms are fine one floor up.

@@ -30,7 +30,7 @@ const NO_BASEMENT_KINDS = new Set<FacilityKind>([
   "hotelSuite",
 ]);
 
-/** True if a room footprint (floor..floor+hgt-1) covers the ground concourse. */
+/** True if a facility footprint (floor..floor+hgt-1) covers the ground concourse. */
 function coversGroundFloor(floor: number, hgt: number): boolean {
   return floor <= 1 && floor + hgt - 1 >= 1;
 }
