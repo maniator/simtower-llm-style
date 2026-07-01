@@ -137,8 +137,11 @@ describe("Fires", () => {
   }
 
   it("fire-defense facilities make fires markedly rarer", () => {
-    const bare = makeCtx(fireTower(false), 4);
-    const defended = makeCtx(fireTower(true), 4);
+    // Use a 3★ context: fires roll (≥2★) and the fixture can place Security +
+    // Medical, but bomb threats (≥4★) stay out so this measures fire ignition
+    // alone, not unrelated emergency behavior.
+    const bare = makeCtx(fireTower(false), 3);
+    const defended = makeCtx(fireTower(true), 3);
     runDays(new EventSystem(bare, 7), bare, 4000);
     runDays(new EventSystem(defended, 7), defended, 4000);
     const bareFires = bare.log.filter((m) => m.includes("Fire broke out")).length;
