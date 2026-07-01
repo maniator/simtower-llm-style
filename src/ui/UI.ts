@@ -569,7 +569,7 @@ export class UI {
       <ul class="help-keys">
         <li><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> (or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>) move the build cursor — hold <kbd>Shift</kbd> for ×10</li>
         <li><kbd>Enter</kbd> / <kbd>Space</kbd> build (or inspect) at the cursor. For an elevator or stairway, press once to anchor and again at the far end to size the shaft</li>
-        <li><kbd>Delete</kbd> / <kbd>X</kbd> bulldoze at the cursor · <kbd>Esc</kbd> cancel</li>
+        <li><kbd>Delete</kbd> / <kbd>Backspace</kbd> / <kbd>X</kbd> bulldoze at the cursor · <kbd>Esc</kbd> cancel</li>
         <li><kbd>+</kbd> / <kbd>−</kbd> zoom · <kbd>C</kbd> re-center · <kbd>0</kbd>–<kbd>3</kbd> game speed</li>
       </ul>
       <div class="modal-actions"><button data-act="reduce-motion"></button><button data-act="replay-onboard"${replayAttr}>Replay Getting Started</button><button class="primary" data-act="close">Got it</button></div>

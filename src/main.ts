@@ -493,7 +493,7 @@ class GameApp {
         case "ArrowRight": case "d": case "D": this.moveCursor(step, 0); break;
         case "ArrowUp": case "w": case "W": this.moveCursor(0, step); break;
         case "ArrowDown": case "s": case "S": this.moveCursor(0, -step); break;
-        case "Enter": case " ": this.commitCursor(); break;
+        case "Enter": case " ": case "Spacebar": this.commitCursor(); break;
         case "Delete": case "Backspace": case "x": case "X": this.bulldozeCursor(); break;
         case "+": case "=": this.engine.zoomBy(1.15); return;
         case "-": case "_": this.engine.zoomBy(1 / 1.15); return;
