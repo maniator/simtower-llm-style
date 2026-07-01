@@ -16,3 +16,8 @@ coverage/
 !vite-env.d.ts
 __pycache__/
 node_modules
+
+# Playwright
+/test-results/
+/playwright-report/
+/playwright/.cache/

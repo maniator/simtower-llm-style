@@ -16,6 +16,7 @@
     "test:watch": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
+    "e2e": "playwright test",
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "screenshots": "vite build && node scripts/serve-and-shoot.mjs",
