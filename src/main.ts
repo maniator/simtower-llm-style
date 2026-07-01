@@ -495,21 +495,16 @@ class GameApp {
       }
       // Never hijack other browser/OS shortcuts (Ctrl/Cmd/Alt + key).
       if (e.ctrlKey || e.metaKey || e.altKey) return;
-      // Don't hijack typing (rename field, import box) or activation of the app's
-      // own focusable controls — a focused palette item / button owns Enter/Space
-      // (else keyboard tool-selection would also fire a build), and a modal traps.
+      // Typing controls swallow every game key.
       const ae = document.activeElement as HTMLElement | null;
-      if (
-        ae &&
-        (ae.tagName === "INPUT" ||
-          ae.tagName === "TEXTAREA" ||
-          ae.tagName === "BUTTON" ||
-          ae.tagName === "SELECT" ||
-          ae.tagName === "A" ||
-          ae.isContentEditable ||
-          ae.getAttribute("role") === "button")
-      )
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable))
         return;
+      // A focused button / palette item owns Enter/Space activation — don't ALSO
+      // fire the build cursor on those keys. Movement/zoom/bulldoze keys still get
+      // through, so keyboard play flows right after picking a tool from the palette.
+      const onControl = !!ae && (ae.tagName === "BUTTON" || ae.tagName === "A" || ae.getAttribute("role") === "button");
+      const activationKey = e.key === "Enter" || e.key === " " || e.key === "Spacebar";
+      if (onControl && activationKey) return;
       if ((document.getElementById("modal") as HTMLDialogElement | null)?.open) return;
       // Don't let game keys run the paused engine behind the first-run splash.
       if (document.getElementById("splash")) return;

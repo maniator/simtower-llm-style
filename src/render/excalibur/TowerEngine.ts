@@ -510,10 +510,7 @@ export class TowerEngine {
   /** Zoom by a factor about the current center (keyboard +/- zoom). */
   zoomBy(factor: number): void {
     this.cam.zoom = clampZoom(this.cam.zoom * factor);
-    this.cam.pos = ex.vec(
-      this.cam.pos.x,
-      clampCameraY(this.cam.pos.y, this.viewHeight, this.cam.zoom, FLOOR, GRID.minFloor, GRID.maxFloor),
-    );
+    this.clamp(); // bound both axes, same as pointer zoom
   }
 
   /** Pan the camera the minimum amount so tile/floor sits within the viewport
@@ -531,7 +528,8 @@ export class TowerEngine {
     else if (wx > px + halfW - mx) px = wx - halfW + mx;
     if (wy < py - halfH + my) py = wy + halfH - my;
     else if (wy > py + halfH - my) py = wy - halfH + my;
-    this.cam.pos = ex.vec(px, clampCameraY(py, this.viewHeight, this.cam.zoom, FLOOR, GRID.minFloor, GRID.maxFloor));
+    this.cam.pos = ex.vec(px, py);
+    this.clamp(); // bound both axes, same as pointer pan
   }
   setCamera(tileX: number, floor: number, zoom: number): void {
     // Validate zoom to the supported range: the vertical clamp divides by zoom,
