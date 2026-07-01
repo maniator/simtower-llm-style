@@ -25,6 +25,8 @@ export interface UICallbacks {
   onImportLegacy(buffer: ArrayBuffer, filename: string): void;
   onNew(): void;
   onToggleAudio(): boolean; // returns new muted state
+  onUndo(): void;
+  onRedo(): void;
   onEditAction(action: string, root: HTMLElement): void;
   onReplayOnboarding(): void;
   onRenameTower(name: string): void;
@@ -164,6 +166,8 @@ export class UI {
       const muted = this.cb.onToggleAudio();
       this.el.audioToggle.textContent = muted ? "🔇" : "🔊";
     });
+    document.getElementById("btn-undo")?.addEventListener("click", () => this.cb.onUndo());
+    document.getElementById("btn-redo")?.addEventListener("click", () => this.cb.onRedo());
 
     document.getElementById("panel-toggle")?.addEventListener("click", () => {
       document.body.classList.toggle("panels-open");
@@ -560,7 +564,7 @@ export class UI {
         <li><b>Parking</b> spaces only work when they touch a <b>Parking Ramp</b> or a connected space — chain them off a ramp, or they sit empty.</li>
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
       </ul>
-      <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
+      <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Made a mistake? <b>Undo with Ctrl+Z</b> (or the ↩ button) — redo with Ctrl+Shift+Z. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
       <div class="modal-actions"><button data-act="replay-onboard"${replayAttr}>Replay Getting Started</button><button class="primary" data-act="close">Got it</button></div>
     `);
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
