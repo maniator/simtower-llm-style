@@ -126,8 +126,8 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
     const near = sim.fireContainmentChance(3); // within radius
     const far = sim.fireContainmentChance(100); // a floor-100 fire, far away
     expect(near).toBeGreaterThan(far);
-    expect(near).toBeCloseTo(0.95, 5); // base 0.45 + security 0.2 + medical 0.3
-    expect(far).toBeCloseTo(0.45, 5); // base only — neither covers floor 100
+    expect(near).toBeCloseTo(1.0, 5); // base 0.50 + security 0.2 + medical 0.3
+    expect(far).toBeCloseTo(0.5, 5); // base only — neither covers floor 100
   });
 
   it("v1 keeps tower-wide coverage (one station protects everywhere)", () => {
@@ -144,6 +144,40 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
     // Every occupied band now has a station within the security radius.
     expect(sim.fireContainmentChance(10)).toBeGreaterThan(0.5);
     expect(sim.fireContainmentChance(90)).toBeGreaterThan(0.5);
+  });
+
+  it("fire-defense visibly lowers how often fires break out", () => {
+    const sim = tallTower(1);
+    const bare = sim.fireIgnitionChance();
+    expect(bare).toBeCloseTo(0.025, 5); // base daily chance with no defense
+
+    expect(sim.tower.place("security", 2, C).ok).toBe(true);
+    const withSecurity = sim.fireIgnitionChance();
+    expect(withSecurity).toBeCloseTo(0.025 * 0.45, 5);
+    // Security more than halves the fire rate — building it is clearly worth it.
+    expect(withSecurity).toBeLessThan(bare * 0.5);
+
+    expect(sim.tower.place("medical", 2, C + 8).ok).toBe(true);
+    const withBoth = sim.fireIgnitionChance();
+    expect(withBoth).toBeCloseTo(0.025 * 0.45 * 0.5, 5);
+    expect(withBoth).toBeLessThan(withSecurity);
+  });
+
+  it("a Security office that is still under construction or on fire does not protect", () => {
+    const sim = tallTower(1);
+    const bare = sim.fireIgnitionChance();
+    const placed = sim.tower.place("security", 2, C);
+    expect(placed.ok).toBe(true);
+    const sec = sim.tower.units.find((u) => u.id === placed.unitId)!;
+
+    sec.state = "construction"; // not finished → no protection yet
+    expect(sim.fireIgnitionChance()).toBeCloseTo(bare, 5);
+
+    sec.state = "fire"; // the station itself is ablaze → no protection
+    expect(sim.fireIgnitionChance()).toBeCloseTo(bare, 5);
+
+    sec.state = "empty"; // operational again → protection returns
+    expect(sim.fireIgnitionChance()).toBeLessThan(bare);
   });
 });
 

@@ -19,6 +19,8 @@ function makeCtx(tower: Tower, star: number, money = 1_000_000) {
       this.log.push(text);
     },
     hasAny: (kind: FacilityKind) => tower.units.some((u) => u.kind === kind),
+    hasOperational: (kind: FacilityKind) =>
+      tower.units.some((u) => u.kind === kind && u.state !== "construction" && u.state !== "fire"),
     floorLabel: (floor: number) => (floor >= 1 ? `floor ${floor}` : `B${1 - floor}`),
   };
 }
@@ -119,12 +121,21 @@ describe("Fires", () => {
   /** A tower with a flammable room, optionally defended by security + medical. */
   function fireTower(defended: boolean): Tower {
     const tower = new Tower();
-    for (let x = 0; x < 40; x++) tower.place("lobby", 1, x);
-    for (let x = 0; x < 40; x++) tower.place("floor", 2, x);
-    tower.place("office", 2, 0); // a flammable room (placed "empty")
+    const W = 20;
+    for (let x = 0; x < W; x++) tower.place("lobby", 1, x);
+    // Floor 2 carries only the (optional) stations, so no office ever sits next
+    // to one — keeps ignitions isolated (no spread) for a clean frequency count.
+    for (let x = 0; x < W; x++) tower.place("floor", 2, x);
     if (defended) {
-      tower.place("security", 2, 10);
-      tower.place("medical", 2, 20);
+      tower.place("security", 2, 0);
+      tower.place("medical", 2, 10);
+    }
+    // A large pool of ISOLATED offices (one per floor, so a fire can't spread and
+    // depletion stays slow). Fires now destroy rooms permanently (gutted), so the
+    // count must be read over a horizon short enough that neither tower burns out.
+    for (let f = 3; f <= 42; f++) {
+      for (let x = 0; x < W; x++) tower.place("floor", f, x);
+      tower.place("office", f, 0);
     }
     return tower;
   }
@@ -142,8 +153,8 @@ describe("Fires", () => {
     // alone, not unrelated emergency behavior.
     const bare = makeCtx(fireTower(false), 3);
     const defended = makeCtx(fireTower(true), 3);
-    runDays(new EventSystem(bare, 7), bare, 4000);
-    runDays(new EventSystem(defended, 7), defended, 4000);
+    runDays(new EventSystem(bare, 7), bare, 500);
+    runDays(new EventSystem(defended, 7), defended, 500);
     const bareFires = bare.log.filter((m) => m.includes("Fire broke out")).length;
     const defendedFires = defended.log.filter((m) => m.includes("Fire broke out")).length;
     expect(bareFires).toBeGreaterThan(0);

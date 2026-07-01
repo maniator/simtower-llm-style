@@ -1,3 +1,6 @@
+import { FACILITIES } from "./facilities";
+import type { FacilityKind } from "./types";
+
 /** Tunable economic constants (dollars), tuned to the 1994 SimTower balance. */
 export const ECON = {
   startingMoney: 2_000_000,
@@ -9,6 +12,8 @@ export const ECON = {
     partyHall: 3_000,
   } as Record<string, number>,
   maintenancePerCarMonthly: 600,
+  /** Cost to add one elevator car to a shaft. */
+  addCarCost: 40_000,
   /** Monthly film-booking cost per cinema (canon: 150k average / 300k
    *  blockbuster). A blockbuster costs more but draws bigger crowds. */
   cinemaBookingMonthly: 150_000,
@@ -56,6 +61,37 @@ export function rentConfig(kind: string): { default: number; min: number; max: n
 /** The effective price for a unit — the player's choice, or the kind default. */
 export function rentOf(u: { kind: string; rent?: number }): number {
   return u.rent ?? ECON.rent[u.kind]?.default ?? 0;
+}
+
+/** Partial refund when a facility is sold or bulldozed — half its build cost.
+ *  The single source of truth for the resale rule (shown in the editor and paid
+ *  out by both the editor Sell button and the bulldoze tool). */
+export function resaleRefund(kind: FacilityKind): number {
+  return Math.floor(FACILITIES[kind].cost * 0.5);
+}
+
+/** One step of budget-clamped billing for an elevator extend drag. Given the
+ *  shaft's current ends, the gesture's high-water mark, which end is being dragged
+ *  and to where, the spendable money and the per-floor cost, returns the new ends
+ *  (clamped to what the player can afford) plus the count of *new* floors — past
+ *  the high-water mark — to bill for. A back-and-forth wiggle re-bills nothing. */
+export function extendBill(
+  cur: { bottom: number; top: number },
+  hwm: { bottom: number; top: number },
+  end: "up" | "down",
+  targetFloor: number,
+  money: number,
+  perFloor: number,
+): { nb: number; nt: number; added: number } {
+  let nb = cur.bottom;
+  let nt = cur.top;
+  if (end === "up") nt = Math.max(cur.bottom + 1, targetFloor);
+  else nb = Math.min(cur.top - 1, targetFloor);
+  const budgetFloors = Math.floor(money / perFloor);
+  if (nt > hwm.top) nt = hwm.top + Math.min(nt - hwm.top, budgetFloors);
+  if (nb < hwm.bottom) nb = hwm.bottom - Math.min(hwm.bottom - nb, budgetFloors);
+  const added = Math.max(0, nt - hwm.top) + Math.max(0, hwm.bottom - nb);
+  return { nb, nt, added };
 }
 
 /** True for a unit kind that holds leasable/operational space and therefore

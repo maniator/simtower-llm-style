@@ -342,7 +342,8 @@ describe("Fine FAQ mechanics", () => {
     // sub-steps — which keeps a year-long loop well under the CI timeout.
     sim.simModel = "v1";
     sim.money = 1e12;
-    sim.star = 3;
+    sim.star = 1; // star 1 ⇒ no random fires (which would gut the lone cinema); this
+    // test only exercises the monthly booking economy, which is star-independent.
     lay(sim, "lobby", 1);
     lay(sim, "floor", 2);
     lay(sim, "floor", 3);

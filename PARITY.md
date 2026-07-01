@@ -52,7 +52,7 @@ abstraction · ⬜ not present.
 - ✅ **TOWER** rating: 5★ + Wedding Hall + metro + VIP inspection (8,000 pop, scaled to our model)
 
 ## Events & disasters
-- ✅ Fire — spreads to the neighbor unless Security/Medical contain it; costs repairs
+- ✅ Fire — spreads to the neighbor unless Security/Medical contain it; burned rooms are destroyed (gutted shells you must bulldoze and rebuild), never auto-repaired
 - ✅ Bomb threat (4★+) — Security defuses it; otherwise damage + fine
 - ✅ VIP inspection → TOWER win/lose
 - ✅ Treasure discovery; flavorful headlines

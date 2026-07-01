@@ -61,6 +61,8 @@ describe("EconomySystem", () => {
       star,
       emit: () => {},
       hasAny: (kind: FacilityKind) => tower.units.some((u) => u.kind === kind),
+      hasOperational: (kind: FacilityKind) =>
+        tower.units.some((u) => u.kind === kind && u.state !== "construction" && u.state !== "fire"),
       floorLabel: (floor: number) => (floor >= 1 ? `floor ${floor}` : `B${1 - floor}`),
     };
   }
