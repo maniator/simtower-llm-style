@@ -65,3 +65,13 @@ jobs:
 
       - name: Run end-to-end tests
         run: npm run e2e
+
+      # Per-run visual proof of the ★-progression (the committed gallery in
+      # docs/screenshots/milestones/ is the human-blessed baseline).
+      - name: Upload milestone screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: milestone-screenshots
+          path: docs/screenshots/milestones/
+          if-no-files-found: warn

@@ -192,6 +192,20 @@ camera or raw pointer math directly.
 | --- | --- |
 | ![day](docs/screenshots/03-tower-day.png) | ![night](docs/screenshots/04-tower-night.png) |
 
+### From a lobby to a legend — the ★ progression
+
+A humble ground floor climbs the whole rating ladder to the coveted **TOWER**.
+These frames are captured by the end-to-end test itself (`e2e/milestones.spec.ts`),
+one per rung, so they can't drift from what the game actually does.
+
+| 1★ | 2★ | 3★ |
+| --- | --- | --- |
+| ![1 star](docs/screenshots/milestones/1-star.png) | ![2 star](docs/screenshots/milestones/2-star.png) | ![3 star](docs/screenshots/milestones/3-star.png) |
+
+| 4★ | 5★ | TOWER |
+| --- | --- | --- |
+| ![4 star](docs/screenshots/milestones/4-star.png) | ![5 star](docs/screenshots/milestones/5-star.png) | ![TOWER achieved](docs/screenshots/milestones/tower.png) |
+
 ## Tests
 
 The Vitest suite covers placement rules, transport reachability, the economy
@@ -199,6 +213,13 @@ The Vitest suite covers placement rules, transport reachability, the economy
 hotel housekeeping cycle, elevator editing, save/load round-trips (including
 serialize-deserialize stability and corrupt/forward-version saves), and the
 clock. Run with `npm test`.
+
+Two layers of **end-to-end** coverage guarantee the game stays winnable:
+a deterministic headless *playthrough* suite (`src/tests/playthrough.test.ts`)
+drives the real win logic to the TOWER and proves every rung's gate blocks it
+when missing, and a Playwright *browser* smoke (`e2e/`) confirms the win — and
+each ★ milestone — actually surfaces on screen. Run the browser tier with
+`npm run e2e` (after `npm run build`).
 
 ---
 
