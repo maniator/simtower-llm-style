@@ -1,9 +1,9 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, TRANSPORT_CAPACITY, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
+import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt, transportCapacity } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
-import { carIndicator, type CarArrow } from "../carIndicator";
+import { carIndicator, type CarIndicator } from "../carIndicator";
 import { person, SHIRTS } from "../pixelSprites";
 import type { Person } from "../../engine/Crowd";
 import { clampCameraY } from "../cameraBounds";
@@ -17,6 +17,9 @@ export const MIN_ZOOM = 0.3;
 export const MAX_ZOOM = 3;
 const clampZoom = (z: number): number =>
   Number.isFinite(z) ? Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)) : MIN_ZOOM;
+
+/** The empty, idle cab state used to seed a fresh car's graphic. */
+const IDLE_CAR: CarIndicator = { riders: 0, arrow: null, full: false };
 
 /**
  * The crowd advances on *game* time, not real time, so the speed control only
@@ -1013,18 +1016,15 @@ export class TowerEngine {
   }
 
   /** Stable cache key for a cab graphic's indicator state. */
-  private carKey(riders: number, arrow: CarArrow, full: boolean): string {
-    return `${riders}:${arrow ?? "x"}:${full ? "f" : "e"}`;
+  private carKey(ind: CarIndicator): string {
+    return `${ind.riders}:${ind.arrow ?? "x"}:${ind.full ? "f" : "e"}`;
   }
 
-  /** Get-or-create the cab graphic for a given indicator state. */
-  private carGfx(
-    entry: { seed: number; w: number; gfx: Map<string, ex.Canvas> },
-    riders: number,
-    arrow: CarArrow,
-    full: boolean,
-  ): ex.Canvas {
-    const key = this.carKey(riders, arrow, full);
+  /** Get-or-create the cab graphic for a given indicator state. Keying and
+   *  drawing both derive from the one {@link CarIndicator}, so the cache key and
+   *  the painted cab can't fall out of sync. */
+  private carGfx(entry: { seed: number; w: number; gfx: Map<string, ex.Canvas> }, ind: CarIndicator): ex.Canvas {
+    const key = this.carKey(ind);
     let cv = entry.gfx.get(key);
     if (!cv) {
       const { seed, w } = entry;
@@ -1032,7 +1032,7 @@ export class TowerEngine {
         width: w,
         height: FLOOR,
         cache: true,
-        draw: (ctx) => drawCar(ctx, seed, w, FLOOR, riders, arrow, full),
+        draw: (ctx) => drawCar(ctx, seed, w, FLOOR, ind.riders, ind.arrow, ind.full),
       });
       entry.gfx.set(key, cv);
     }
@@ -1050,9 +1050,9 @@ export class TowerEngine {
         // count, direction lantern, FULL) so we only ever draw each variant once.
         const gfx = new Map<string, ex.Canvas>();
         const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), -t.carPositions[i] * FLOOR), width: w, height: FLOOR, anchor: ex.vec(0, 0), z: 2 });
-        a.graphics.use(this.carGfx({ seed, w, gfx }, 0, null, false));
+        a.graphics.use(this.carGfx({ seed, w, gfx }, IDLE_CAR));
         this.engine.add(a);
-        this.carActors.push({ actor: a, t, i, seed, w, gfx, shown: this.carKey(0, null, false) });
+        this.carActors.push({ actor: a, t, i, seed, w, gfx, shown: this.carKey(IDLE_CAR) });
       }
     }
     for (const u of this.sim.tower.units) {
@@ -1139,13 +1139,12 @@ export class TowerEngine {
       // FULL) is derived by the tested carIndicator helper; the cab graphic is
       // cached per state so we only redraw when the state actually changes.
       const load = c.t.carLoad?.[c.i] ?? 0;
-      const cap = TRANSPORT_CAPACITY[c.t.kind] ?? 16;
       const dir = c.t.carDir?.[c.i] ?? 0;
-      const { riders, arrow, full } = carIndicator(dir, load, cap);
-      const key = this.carKey(riders, arrow, full);
+      const ind = carIndicator(dir, load, transportCapacity(c.t.kind));
+      const key = this.carKey(ind);
       if (key !== c.shown) {
         c.shown = key;
-        c.actor.graphics.use(this.carGfx(c, riders, arrow, full));
+        c.actor.graphics.use(this.carGfx(c, ind));
       }
     }
     for (const tr of this.trainActors) {

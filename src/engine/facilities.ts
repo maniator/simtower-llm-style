@@ -434,6 +434,15 @@ export const TRANSPORT_CAPACITY: Record<string, number> = {
   stairs: 8,
 };
 
+/**
+ * Passenger capacity for a transport kind, with a single shared fallback for
+ * any kind missing from the table — so dispatch clamping and the renderer's
+ * rider-fill / FULL indicator always agree on the same number.
+ */
+export function transportCapacity(kind: FacilityKind): number {
+  return TRANSPORT_CAPACITY[kind] ?? 16;
+}
+
 /** Maximum cars allowed per shaft, by elevator type. */
 export const MAX_CARS: Record<string, number> = {
   elevatorStandard: 8,
