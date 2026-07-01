@@ -814,6 +814,7 @@ export class Simulation implements SimContext {
   private priceUnit(u: Unit, target: number): number | null {
     const cfg = rentConfig(u.kind);
     if (!cfg) return null;
+    if (!Number.isFinite(target)) return null; // guard NaN/Infinity from any caller
     if (u.kind === "condo" && u.everOccupied) return null; // already sold
     u.rent = Math.max(cfg.min, Math.min(cfg.max, target));
     return u.rent;
@@ -852,6 +853,7 @@ export class Simulation implements SimContext {
   ): BatchRentResult | null {
     const cfg = rentConfig(kind);
     if (!cfg) return null; // not a priced kind
+    if (target !== "default" && !Number.isFinite(target)) return null; // guard NaN/Infinity
     const onlyDefault = opts.onlyDefaultPriced ?? false;
     const r: BatchRentResult = {
       matched: 0,
