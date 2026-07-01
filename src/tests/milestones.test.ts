@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { Simulation } from "../engine/Simulation";
+import { MILESTONES } from "../engine/milestones";
 import { GRID, FACILITIES } from "../engine/facilities";
+
+const predicate = (id: string) => MILESTONES.find((m) => m.id === id)!.test;
 
 const W = GRID.width;
 const C = Math.floor(W / 2);
@@ -29,7 +32,7 @@ const done = (sim: Simulation, label: string): boolean =>
   sim.milestoneProgress().list.find((m) => m.label === label)?.done ?? false;
 
 describe("Milestones (optional goals)", () => {
-  it("fires once, pays its reward once, and shows in progress", () => {
+  it("fires once, is announced once, and shows in progress", () => {
     const sim = Simulation.newGame(1);
     sim.money = 1_000_000_000;
     layFull(sim, "lobby", 1);
@@ -51,7 +54,7 @@ describe("Milestones (optional goals)", () => {
     expect(sim.milestoneProgress().achieved).toBe(achieved);
   });
 
-  it("achievements survive save/reload (no re-announce, no re-pay)", () => {
+  it("achievements survive save/reload (no re-announce)", () => {
     const sim = Simulation.newGame(1);
     sim.money = 1_000_000_000;
     layFull(sim, "lobby", 1);
@@ -66,7 +69,7 @@ describe("Milestones (optional goals)", () => {
     const reloaded = Simulation.deserialize(sim.serialize());
     expect(done(reloaded, "Getting Started")).toBe(true); // restored, still achieved
     const achieved = reloaded.milestoneProgress().achieved;
-    reloaded.tick(DAY); // already achieved → must not re-announce or re-pay
+    reloaded.tick(DAY); // already achieved → must not re-announce
     expect(reloaded.milestoneProgress().achieved).toBe(achieved);
   });
 
@@ -85,5 +88,49 @@ describe("Milestones (optional goals)", () => {
     expect(done(sim, "Smooth Operator")).toBe(false); // not evaluated until a day passes
     sim.tick(DAY);
     expect(done(sim, "Smooth Operator")).toBe(true);
+  });
+});
+
+describe("Milestone review follow-ups", () => {
+  it("full-house counts vacant condos/hotels, not just offices (M1)", () => {
+    // Test the predicate directly — no tick — so under-provisioned transport can't
+    // evict offices and confound the vacancy check. This is purely M1's logic:
+    // an empty condo/hotel is a vacancy too, not only empty offices.
+    const sim = Simulation.newGame(3);
+    sim.money = 1_000_000_000;
+    layFull(sim, "lobby", 1);
+    for (let f = 2; f <= 12; f++) {
+      layFull(sim, "floor", f);
+      fillOffices(sim, f); // all occupied → no empty offices
+    }
+    layFull(sim, "floor", 13);
+    const condo = sim.tower.place("condo", 13, 0); // an unsold (empty) condo on its own floor
+    expect(condo.ok).toBe(true);
+    expect(sim.population).toBeGreaterThanOrEqual(2000);
+
+    const fullHouse = predicate("full-house");
+    expect(fullHouse(sim)).toBe(false); // the empty condo is a vacancy (office-only vacant would miss it)
+    sim.tower.removeUnit(condo.unitId!); // remove the only vacant leasable unit
+    expect(fullHouse(sim)).toBe(true);
+  });
+
+  it("adopts already-satisfied milestones silently on load, without a burst (I2)", () => {
+    const sim = Simulation.newGame(1);
+    sim.money = 1_000_000_000;
+    layFull(sim, "lobby", 1);
+    for (const f of [2, 3, 4]) {
+      layFull(sim, "floor", f);
+      fillOffices(sim, f, 6);
+    }
+    sim.tower.placeTransport("elevatorStandard", W - 4, 1, 4);
+    expect(sim.population).toBeGreaterThanOrEqual(500);
+
+    // Simulate a pre-feature save: no milestones field, none yet announced.
+    const data = sim.serialize();
+    delete data.milestones;
+    const reloaded = Simulation.deserialize(data);
+
+    expect(done(reloaded, "Getting Started")).toBe(true); // adopted at load, not announced
+    expect(reloaded.log.some((e) => e.text.includes("🏅"))).toBe(false); // no burst headline
   });
 });

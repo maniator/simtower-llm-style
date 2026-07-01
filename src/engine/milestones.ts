@@ -1,5 +1,5 @@
 import type { Simulation } from "./Simulation";
-import { FACILITIES } from "./facilities";
+import { FACILITIES, isHotelKind } from "./facilities";
 
 /**
  * Optional milestones — light, one-time goals that give the mid-late game texture
@@ -14,7 +14,7 @@ export interface Milestone {
   desc: string;
   test: (sim: Simulation) => boolean;
 }
-// Recognition-only by design: milestones are goals/acknowledgement, NOT cash.
+// Recognition-only by design: milestones are goals/acknowledgment, NOT cash.
 // The GDD flagged that money already trivializes late-game; paying out for
 // milestones would make that worse and confound the economy. The reward is the
 // headline + the checklist filling in.
@@ -33,6 +33,16 @@ function everyOccupiedFloorServed(sim: Simulation): boolean {
   return sawOne;
 }
 
+/** True when no leasable tenant space (office, condo, or hotel room) is sitting
+ *  empty — a real "no vacancy", not just full offices. */
+function noLeasableVacancy(sim: Simulation): boolean {
+  for (const u of sim.tower.units) {
+    if (u.state !== "empty") continue;
+    if (u.kind === "office" || u.kind === "condo" || isHotelKind(u.kind)) return false;
+  }
+  return true;
+}
+
 export const MILESTONES: Milestone[] = [
   { id: "pop-500", label: "Getting Started", desc: "Reach 500 population.", test: (s) => s.population >= 500 },
   { id: "pop-2500", label: "Rising", desc: "Reach 2,500 population.", test: (s) => s.population >= 2500 },
@@ -46,15 +56,13 @@ export const MILESTONES: Milestone[] = [
   {
     id: "well-served",
     label: "Smooth Operator",
-    desc: "Reach 5,000 population with every occupied floor reachable.",
-   
+    desc: "Reach 5,000 population with every occupied, tenant-bearing floor reachable.",
     test: (s) => s.population >= 5000 && everyOccupiedFloorServed(s),
   },
   {
     id: "full-house",
     label: "No Vacancy",
-    desc: "Reach 2,000 population with zero vacancies.",
-   
-    test: (s) => s.population >= 2000 && s.stats().vacant === 0,
+    desc: "Reach 2,000 population with no vacant offices, condos, or hotel rooms.",
+    test: (s) => s.population >= 2000 && noLeasableVacancy(s),
   },
 ];

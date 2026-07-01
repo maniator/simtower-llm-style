@@ -132,7 +132,7 @@ export class Simulation implements SimContext {
   /** Basement tiles already excavated, so buried treasure is a one-time find per
    * tile and can't be farmed by repeatedly building and bulldozing the same spot. */
   private excavated = new Set<string>();
-  /** Milestone ids already achieved (announced + paid once); persisted. */
+  /** Milestone ids already achieved (announced once); persisted. */
   private achievedMilestones = new Set<string>();
 
   /** Bookkeeping for period boundaries. */
@@ -1088,7 +1088,7 @@ export class Simulation implements SimContext {
     }
     // Restore this month's blockbuster bookings (already paid for pre-save).
     if (Array.isArray(data.blockbusters)) sim.economy.restoreBlockbusters(data.blockbusters);
-    // Restore achieved milestones so reload doesn't re-announce or re-pay them.
+    // Restore achieved milestones so reload doesn't re-announce them.
     if (Array.isArray(data.milestones)) {
       for (const id of data.milestones) if (typeof id === "string") sim.achievedMilestones.add(id);
     }
@@ -1155,6 +1155,11 @@ export class Simulation implements SimContext {
     sim.lastQuarter = sim.clock.quarter;
     sim.lastMonth = Math.floor(sim.clock.day / 30);
     sim.lastHour = sim.clock.hour;
+    // Silently adopt any milestone already satisfied at load time (e.g. a save
+    // that predates this feature) so the next day doesn't spam a burst of
+    // headlines for goals the player already earned. Runs last — after the tower,
+    // transports and clock are fully restored — so the predicates read real state.
+    for (const m of MILESTONES) if (!sim.achievedMilestones.has(m.id) && m.test(sim)) sim.achievedMilestones.add(m.id);
     return sim;
   }
 
