@@ -572,9 +572,11 @@ export class Simulation implements SimContext {
     // ever touching the passenger elevators, easing the crunch — the very
     // reason you build them in the original.
     for (const u of this.tower.units) {
-      if (u.kind === "metro") capacity += 60;
-      else if (u.kind === "parking") capacity += 4;
+      // Operational only — a metro under construction / on fire moves nobody
+      // (matches the v2 spatial model).
+      if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") capacity += 60;
     }
+    capacity += 4 * this.tower.functionalParkingSpots(); // only ramp-chained spaces help
     const pop = this.tower.totalPopulation();
     if (capacity <= 0) return pop > 0 ? 3 : 0;
     // Demand swings with the day: a heavy morning/evening commute can overwhelm
@@ -620,16 +622,16 @@ export class Simulation implements SimContext {
     const result = new Map<number, number>();
 
     const popByFloor = new Map<number, number>();
-    let metro = 0, parking = 0;
+    let metro = 0;
     for (const u of this.tower.units) {
       if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") metro++;
-      else if (u.kind === "parking") parking++;
       if (u.state === "occupied" || u.state === "asleep" || u.state === "moving_in") {
         const p = FACILITIES[u.kind].population;
         if (p > 0 && u.floor !== 1) popByFloor.set(u.floor, (popByFloor.get(u.floor) ?? 0) + p);
       }
     }
     if (popByFloor.size === 0) return result;
+    const parking = this.tower.functionalParkingSpots(); // only ramp-chained spaces relieve demand
     const relief = Math.max(0.4, 1 - metro * 0.25 - parking * 0.02);
 
     const served = this.tower.servedFloorSet();
@@ -698,22 +700,12 @@ export class Simulation implements SimContext {
    * (each parking space serves ~12 workers) — offices then demand parking. */
   private officeParkingShort(): boolean {
     if (this.star < 3) return false;
-    // A parking space only counts if it chains to a ramp (canon) — a ramp on the
-    // same or an adjacent basement floor.
-    const rampFloors = new Set<number>();
-    for (const u of this.tower.units) {
-      if (u.kind === "parkingRamp" && u.state !== "construction" && u.state !== "fire") rampFloors.add(u.floor);
-    }
     let officePop = 0;
-    let spots = 0;
     for (const u of this.tower.units) {
-      if (u.kind === "office" && u.state === "occupied") {
-        officePop += FACILITIES.office.population;
-      } else if (u.kind === "parking" && u.state !== "construction" && u.state !== "fire") {
-        if (rampFloors.has(u.floor) || rampFloors.has(u.floor + 1) || rampFloors.has(u.floor - 1)) spots++;
-      }
+      if (u.kind === "office" && u.state === "occupied") officePop += FACILITIES.office.population;
     }
-    return spots * 12 < officePop;
+    // Only ramp-chained spaces count (canon).
+    return this.tower.functionalParkingSpots() * 12 < officePop;
   }
 
   private attemptMoveIns(): void {
@@ -1045,6 +1037,7 @@ export class Simulation implements SimContext {
       treasuresFound: this.treasuresFound,
       events: this.events.saveState(),
       excavated: [...this.excavated],
+      blockbusters: this.economy.blockbusterIds,
     };
   }
 
@@ -1071,6 +1064,8 @@ export class Simulation implements SimContext {
     if (Array.isArray(data.excavated)) {
       for (const k of data.excavated) if (typeof k === "string") sim.excavated.add(k);
     }
+    // Restore this month's blockbuster bookings (already paid for pre-save).
+    if (Array.isArray(data.blockbusters)) sim.economy.restoreBlockbusters(data.blockbusters);
     // Reject any unit/transport with an unrecognized kind from untrusted saves,
     // and coerce the numeric fields that drive the loop to finite values so a
     // hand-edited or foreign save can't poison the math with NaN/undefined.

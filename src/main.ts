@@ -25,6 +25,8 @@ class GameApp {
   engine: TowerEngine;
   audio = new AudioEngine();
   ui: UI;
+  /** Lot geometry, exposed for tooling (e.g. the screenshot harness). */
+  readonly grid = GRID;
   speed = 1;
   tool: Tool = { type: "inspect" };
 

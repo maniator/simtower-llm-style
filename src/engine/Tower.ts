@@ -38,6 +38,10 @@ export class Tower {
   private structKind = new Map<string, "floor" | "lobby">();
   /** "floor:x" -> room unit id. */
   private rooms = new Map<string, number>();
+  /** id → unit index, kept in lockstep with `units` via register/unregister, so
+   *  tile lookups are O(1) rather than a linear scan (hot in the flood-fills and
+   *  the per-frame congestion read). */
+  private byId = new Map<number, Unit>();
 
   private key(floor: number, x: number): string {
     return `${floor}:${x}`;
@@ -47,16 +51,16 @@ export class Tower {
   unitAt(floor: number, x: number): Unit | undefined {
     const k = this.key(floor, x);
     const rid = this.rooms.get(k);
-    if (rid !== undefined) return this.units.find((u) => u.id === rid);
+    if (rid !== undefined) return this.byId.get(rid);
     const sid = this.structure.get(k);
-    if (sid !== undefined) return this.units.find((u) => u.id === sid);
+    if (sid !== undefined) return this.byId.get(sid);
     return undefined;
   }
 
   /** The room (non-structural) at a tile, if any. */
   roomAt(floor: number, x: number): Unit | undefined {
     const rid = this.rooms.get(this.key(floor, x));
-    return rid === undefined ? undefined : this.units.find((u) => u.id === rid);
+    return rid === undefined ? undefined : this.byId.get(rid);
   }
 
   hasStructure(floor: number, x: number): boolean {
@@ -106,6 +110,7 @@ export class Tower {
   }
 
   private register(unit: Unit): void {
+    this.byId.set(unit.id, unit);
     const structural = isStructural(unit.kind);
     const map = structural ? this.structure : this.rooms;
     const hgt = facilityFloors(unit.kind);
@@ -119,6 +124,7 @@ export class Tower {
   }
 
   private unregister(unit: Unit): void {
+    this.byId.delete(unit.id);
     const structural = isStructural(unit.kind);
     const map = structural ? this.structure : this.rooms;
     const hgt = facilityFloors(unit.kind);
@@ -135,6 +141,7 @@ export class Tower {
     this.structure.clear();
     this.structKind.clear();
     this.rooms.clear();
+    this.byId.clear();
     for (const u of this.units) this.register(u);
     this.revision++;
   }
@@ -655,6 +662,43 @@ export class Tower {
    * view for the spatial congestion model. */
   servedFloorSet(): ReadonlySet<number> {
     return this.servedFloors();
+  }
+
+  /**
+   * Count parking SPACES that actually function — i.e. connect to a Parking Ramp
+   * through a contiguous chain of parking/ramp tiles (canon: "spaces must be
+   * touching the ramp or another space"). Flood-fills from every operational ramp
+   * over adjacent parking/ramp tiles (horizontally along a floor, and vertically
+   * only across a ramp — cars change floors through ramps); a space with no path
+   * back to a ramp is a dead X.
+   */
+  functionalParkingSpots(): number {
+    const usable = (u?: Unit): boolean =>
+      !!u && (u.kind === "parking" || u.kind === "parkingRamp") && u.state !== "construction" && u.state !== "fire";
+    const stack: [number, number][] = [];
+    for (const u of this.units) {
+      if (u.kind === "parkingRamp" && u.state !== "construction" && u.state !== "fire") {
+        for (let i = 0; i < u.width; i++) stack.push([u.floor, u.x + i]);
+      }
+    }
+    const visited = new Set<string>();
+    const reached = new Set<number>(); // parking-unit ids connected to a ramp
+    while (stack.length) {
+      const [f, x] = stack.pop()!;
+      const key = `${f}:${x}`;
+      if (visited.has(key)) continue;
+      visited.add(key);
+      const u = this.roomAt(f, x);
+      if (!usable(u)) continue;
+      if (u!.kind === "parking") reached.add(u!.id);
+      // Horizontal chaining is always allowed (spaces touch along a floor).
+      stack.push([f, x - 1], [f, x + 1]);
+      // Cars only change floors through a RAMP, so a vertical step is allowed
+      // only from a ramp tile — two parking spaces stacked with no ramp between
+      // them do NOT connect (they'd be dead Xs in the original).
+      if (u!.kind === "parkingRamp") stack.push([f - 1, x], [f + 1, x]);
+    }
+    return reached.size;
   }
 
   facilityOf(unit: Unit): Facility {

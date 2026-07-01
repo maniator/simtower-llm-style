@@ -9,9 +9,10 @@ export const ECON = {
     partyHall: 3_000,
   } as Record<string, number>,
   maintenancePerCarMonthly: 600,
-  /** Monthly film-booking cost per cinema (canon: ~150k/film). A theatre must
-   *  keep booking movies, so it is not free money. */
+  /** Monthly film-booking cost per cinema (canon: 150k average / 300k
+   *  blockbuster). A blockbuster costs more but draws bigger crowds. */
   cinemaBookingMonthly: 150_000,
+  cinemaBookingBlockbuster: 300_000,
   /** Cost to extend an elevator shaft by one floor (click or drag handle). */
   transportFloorCost: 5_000,
   /** Monthly property tax on an UNSOLD condo, as a fraction of its asking

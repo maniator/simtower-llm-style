@@ -12,6 +12,19 @@ import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facili
 export class EconomySystem {
   constructor(private readonly sim: SimContext) {}
 
+  /** Cinemas showing a blockbuster this month (booked in payMaintenance): they
+   * cost more to book but draw bigger crowds. Serialized so a mid-month reload
+   * keeps the boost that was already paid for. */
+  private blockbusters = new Set<number>();
+
+  /** Snapshot / restore the blockbuster bookings across save/load. */
+  get blockbusterIds(): number[] {
+    return [...this.blockbusters];
+  }
+  restoreBlockbusters(ids: number[]): void {
+    this.blockbusters = new Set(ids.filter((n) => typeof n === "number" && Number.isFinite(n)));
+  }
+
   /** True if a finished, intact unit of `kind` exists (ignores under-construction
    * / on-fire) — so income effects key off an OPERATIONAL metro/recycling. */
   private hasOperational(kind: string): boolean {
@@ -56,10 +69,16 @@ export class EconomySystem {
         this.sim.weather === "rain"
           ? (this.hasOperational("metro") ? 0.7 : 0.5) * (u.kind === "fastFood" ? 0.6 : 1)
           : 1;
+      // A cinema showing a blockbuster this month draws a much bigger crowd — it
+      // has to more than cover the doubled booking fee at healthy traffic (a
+      // +70% bump never could, since appeal is capped at 1), so a blockbuster is
+      // a genuine upside in a busy tower and a gamble in a quiet one.
+      const filmMult = u.kind === "cinema" && this.blockbusters.has(u.id) ? 2.2 : 1;
       // Spread the headline DAILY take across the venue's actual open hours so a
       // full day earns ≈ `daily * appeal`, not a per-hour multiple of it. (Before,
       // dividing by a flat 8 while open 9–15 h/day inflated income 2–3x.)
-      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * rainMult * (0.6 + this.sim.rng.next() * 0.4);
+      const hourly =
+        (daily / openHoursPerDay(u.kind)) * appeal * rainMult * filmMult * (0.6 + this.sim.rng.next() * 0.4);
       u.pendingIncome += hourly;
       if (u.pendingIncome >= 1) {
         const earned = Math.floor(u.pendingIncome);
@@ -160,6 +179,9 @@ export class EconomySystem {
   /** Monthly upkeep for elevator cars and staffed service facilities. */
   payMaintenance(): void {
     let cost = 0;
+    // Fresh film bookings each month: drop last month's blockbusters (incl. any
+    // on now-removed or on-fire cinemas) before re-rolling below.
+    this.blockbusters.clear();
     for (const t of this.sim.tower.transports) {
       if (isElevatorKind(t.kind)) cost += t.cars * ECON.maintenancePerCarMonthly;
     }
@@ -171,10 +193,17 @@ export class EconomySystem {
       if (u.kind === "condo" && !u.everOccupied && u.state !== "construction" && u.state !== "fire") {
         cost += Math.ceil(rentOf(u) * ECON.condoMonthlyTaxRate);
       }
-      // A cinema must book films to show (canon: ~150k average / 300k blockbuster);
-      // modelled as a monthly booking cost, so a theatre isn't free money.
+      // A cinema books a film each month (canon: 150k average / 300k
+      // blockbuster). A blockbuster costs more but draws bigger crowds (applied
+      // in collectTrafficIncome). A cinema that is on fire / under construction
+      // books nothing this month (its stale flag was already cleared above).
       if (u.kind === "cinema" && u.state !== "construction" && u.state !== "fire") {
-        cost += ECON.cinemaBookingMonthly;
+        if (this.sim.rng.chance(0.4)) {
+          this.blockbusters.add(u.id);
+          cost += ECON.cinemaBookingBlockbuster;
+        } else {
+          cost += ECON.cinemaBookingMonthly;
+        }
       }
     }
     if (cost > 0) {
