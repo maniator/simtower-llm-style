@@ -284,7 +284,7 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     name: "Metro Station",
     // Spans the full lot width and THREE deep-basement floors (B8–B10 in the
     // original), so it must be placed at the bottom of the basement.
-    width: 200,
+    width: 340,
     floors: 3,
     cost: 1000000,
     minStar: 4,
@@ -320,33 +320,29 @@ export function isFacilityKind(value: unknown): value is FacilityKind {
 }
 
 /**
- * Star-rating population thresholds. The low ranks match the original
- * (300 / 1,000 / 5,000); 5★ is re-derived DOWN from the original's 10,000 to
- * 7,000 so it is reachable within this lot. Above 3★ the rating counts only
- * non-hotel occupants (offices/condos), and the lot tops out near ~8,900 of
- * those — so the original 10,000 would put 5★ (and therefore the TOWER win,
- * which needs 5★ + 8,000) permanently out of reach. 5★ (7,000) < TOWER (8,000)
- * < the ~8,900 ceiling keeps the whole endgame winnable.
+ * Star-rating population thresholds — the canonical 1994 values
+ * (300 / 1,000 / 5,000 / 10,000). Above 3★ the rating counts only non-hotel
+ * occupants (offices/condos); the lot was widened to 340 tiles so a well-zoned
+ * tower holds ~15,000+ of those (measured ~15,066 at congestion 0.82), keeping
+ * the canonical 10,000 (5★) and 15,000 (TOWER) genuinely reachable.
  */
 export const STAR_THRESHOLDS: Record<number, number> = {
   1: 0,
   2: 300,
   3: 1000,
   4: 5000,
-  5: 7000,
+  5: 10000,
 };
 
 /**
  * Population needed for the final TOWER rating (above 5 stars). Same metric as
  * the 1994 original — a census of OCCUPANTS (office workers + condo residents;
  * hotel guests count only while climbing to 3★, then drop out per canon);
- * commercial/visitor traffic never counts. The original asked for
- * 15,000, but that assumed a denser lot: under the v2 spatial transport model a
- * fully, well-zoned 100×200 tower tops out near ~8,900 occupants once shaft
- * columns are reserved (measured), so the goal is re-derived to 8,000 — reachable
- * with good play, with margin. (Phase 2 / review F2; owner-ratified metric.)
+ * commercial/visitor traffic never counts. The canonical 15,000: the lot was
+ * widened to 340 tiles so a well-zoned 100-floor tower can actually reach it
+ * (measured ~15,066 occupants at congestion 0.82 with express + banded locals).
  */
-export const TOWER_POPULATION = 8000;
+export const TOWER_POPULATION = 15000;
 
 /** Tower geometry constants. */
 export const GRID = {
@@ -358,7 +354,7 @@ export const GRID = {
    */
   minFloor: -9,
   /** Total buildable width in tiles. */
-  width: 200,
+  width: 340,
   /** Floors between required (sky) lobbies. */
   lobbyInterval: 15,
 } as const;

@@ -314,6 +314,6 @@ describe("Deep-review regressions (must not come back)", () => {
 
   it("D14: the star ladder is internally consistent (5★ ≤ TOWER target, both within the lot)", () => {
     expect(STAR_THRESHOLDS[5]).toBeLessThanOrEqual(TOWER_POPULATION); // 5★ reachable before TOWER
-    expect(TOWER_POPULATION).toBeLessThanOrEqual(8900); // within the measured non-hotel ceiling
+    expect(TOWER_POPULATION).toBeLessThanOrEqual(15100); // within the widened lot's measured ceiling (~15,066)
   });
 });

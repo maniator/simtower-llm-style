@@ -3,6 +3,7 @@ import { Tower } from "../engine/Tower";
 import { Clock } from "../engine/Clock";
 import { Crowd } from "../engine/Crowd";
 import { Simulation } from "../engine/Simulation";
+import { GRID } from "../engine/facilities";
 
 /**
  * The Crowd is SimTower's signature: real people who route through the tower.
@@ -181,7 +182,7 @@ describe("Crowd: owned and advanced by the engine", () => {
   it("advances the crowd inside the deterministic tick — no renderer required", () => {
     const sim = Simulation.newGame(1);
     sim.money = 1_000_000_000;
-    const c = 90;
+    const c = Math.floor(GRID.width / 2) - 15; // overlap the seeded centre lobby so the strip connects
     for (let x = c; x < c + 30; x++) sim.tower.place("lobby", 1, x);
     for (let f = 2; f <= 6; f++) for (let x = c; x < c + 30; x++) sim.tower.place("floor", f, x);
     const r = sim.tower.place("office", 5, c);
