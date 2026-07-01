@@ -504,6 +504,7 @@ export class UI {
       const r = cb.preview(target(), opts());
       let msg = `Set ${r.changed} of ${r.matched} ${noun} to ${priceText(target())}.`;
       if (r.skippedCustom) msg += ` ${r.skippedCustom} custom-priced left as-is.`;
+      if (r.customOverwritten) msg += ` ${r.customOverwritten} custom price${r.customOverwritten === 1 ? "" : "s"} will be overwritten.`;
       if (r.skippedSold) msg += ` ${r.skippedSold} sold skipped.`;
       if (r.clampedHigh) msg += ` Clamped to the ${money(band.max)} max.`;
       if (r.clampedLow) msg += ` Clamped to the ${money(band.min)} min.`;

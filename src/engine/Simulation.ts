@@ -79,7 +79,8 @@ export interface BatchRentResult {
   eligible: number; // matched − skippedSold − skippedCustom
   changed: number; // units whose effective price actually differs after the write
   skippedSold: number; // condo && everOccupied
-  skippedCustom: number; // had a custom price and onlyDefaultPriced was set
+  skippedCustom: number; // had a custom price and onlyDefaultPriced was set (left alone)
+  customOverwritten: number; // eligible custom-priced units being replaced (protect toggle off)
   clampedLow: number; // eligible units whose target was below the band minimum
   clampedHigh: number; // eligible units whose target was above the band maximum
 }
@@ -866,6 +867,7 @@ export class Simulation implements SimContext {
       changed: 0,
       skippedSold: 0,
       skippedCustom: 0,
+      customOverwritten: 0,
       clampedLow: 0,
       clampedHigh: 0,
     };
@@ -884,6 +886,10 @@ export class Simulation implements SimContext {
         continue;
       }
       r.eligible++;
+      // With the protect toggle off, a custom-priced unit here is about to be
+      // overwritten — count it so the preview can warn (skippedCustom only counts
+      // the toggle-ON case where they're left alone).
+      if (u.rent !== undefined && u.rent !== cfg.default) r.customOverwritten++;
       const before = rentOf(u);
       if (target === "default") {
         if (before !== cfg.default) r.changed++;

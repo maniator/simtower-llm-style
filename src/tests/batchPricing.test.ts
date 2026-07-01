@@ -74,6 +74,18 @@ describe("Batch pricing", () => {
     expect(rentOf(condos[1])).toBe(200_000);
   });
 
+  it("counts custom prices about to be overwritten when the protect toggle is off", () => {
+    const { sim, offices } = officeTower(1, 3);
+    sim.adjustRent(offices[0].id, 1); // one hand-tuned office → 11,000
+    const res = sim.previewRentBatch("office", 14_000)!; // toggle off (default)
+    expect(res.customOverwritten).toBe(1);
+    expect(res.skippedCustom).toBe(0);
+    // With the toggle ON the same unit is left alone (skipped, not overwritten).
+    const kept = sim.previewRentBatch("office", 14_000, { onlyDefaultPriced: true })!;
+    expect(kept.customOverwritten).toBe(0);
+    expect(kept.skippedCustom).toBe(1);
+  });
+
   it("preview computes the same result as apply but mutates nothing", () => {
     const { sim, offices } = officeTower(1, 4);
     const preview = sim.previewRentBatch("office", 13_000)!;
