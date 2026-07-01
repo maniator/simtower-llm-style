@@ -11,6 +11,12 @@ import { clampCameraY } from "../cameraBounds";
 export const TILE = 11;
 export const FLOOR = 34;
 
+/** Max floors drawn into a single shaft-graphic band. A shaft's backing bitmap
+ *  is `floors * FLOOR` px tall; a mobile GPU's MAX_TEXTURE_SIZE is often 4096 and
+ *  sometimes 2048, and a bitmap past that fails to upload (renders black). 48
+ *  floors → 1632px, safely under both, so tall shafts are split into bands. */
+const TRANSPORT_BAND_FLOORS = 48;
+
 /** Camera zoom range (screen pixels per world pixel). */
 export const MIN_ZOOM = 0.3;
 export const MAX_ZOOM = 3;
@@ -974,21 +980,44 @@ export class TowerEngine {
 
   private addTransport(t: Transport): void {
     const w = t.width * TILE;
-    const h = (t.top - t.bottom + 1) * FLOOR;
-    const cv = new ex.Canvas({
-      width: w,
-      height: h,
-      cache: true,
-      draw: (ctx) => {
-        this.d.ctx = ctx;
-        drawTransport(ctx, t, 0, 0, w, FLOOR);
-      },
-    });
+    const totalFloors = t.top - t.bottom + 1;
+    const h = totalFloors * FLOOR;
     const a = new ex.Actor({ pos: ex.vec(this.worldX(t.x), this.worldYTop(t.top)), width: w, height: h, anchor: ex.vec(0, 0), z: 1 });
-    a.graphics.use(cv);
+    a.graphics.use(this.transportGraphic(t, w, totalFloors));
     a.collider.set(ex.Shape.Box(w, h, ex.vec(0, 0)));
     this.engine.add(a);
     this.transportActors.set(t.id, a);
+  }
+
+  /**
+   * Build a shaft graphic whose backing bitmap can't exceed the GPU texture
+   * limit. A tall shaft is `floors * FLOOR` px high, which on a mobile GPU
+   * (MAX_TEXTURE_SIZE often 4096, sometimes 2048) can fail to upload and render
+   * as a black rectangle. A tall shaft is therefore split into stacked bands,
+   * each its own small cached Canvas, composed onto one GraphicsGroup — a single
+   * actor, so the rest of the engine (sync, removal, collider) is unchanged.
+   */
+  private transportGraphic(t: Transport, w: number, totalFloors: number): ex.Graphic {
+    const band = (fromTop: number, floors: number): ex.Canvas =>
+      new ex.Canvas({
+        width: w,
+        height: floors * FLOOR,
+        cache: true,
+        quality: 1, // background structure — keep the bitmap at its logical size
+        draw: (ctx) => {
+          this.d.ctx = ctx;
+          // Draw the whole shaft shifted up so only this band lands in-bounds; the
+          // rest is clipped. Bands abut seamlessly (each draws the full shaft).
+          drawTransport(ctx, t, 0, -fromTop * FLOOR, w, FLOOR);
+        },
+      });
+    if (totalFloors <= TRANSPORT_BAND_FLOORS) return band(0, totalFloors);
+    const members: { graphic: ex.Graphic; offset: ex.Vector }[] = [];
+    for (let from = 0; from < totalFloors; from += TRANSPORT_BAND_FLOORS) {
+      const floors = Math.min(TRANSPORT_BAND_FLOORS, totalFloors - from);
+      members.push({ graphic: band(from, floors), offset: ex.vec(0, from * FLOOR) });
+    }
+    return new ex.GraphicsGroup({ members, useAnchor: false });
   }
 
   // ---- Engine-driven motion (cars, train, walkers) ------------------------
