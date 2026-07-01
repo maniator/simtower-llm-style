@@ -1,7 +1,7 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
 import { GRID, TRANSPORT_CAPACITY, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt } from "../../engine/facilities";
-import type { FacilityKind, Transport, Unit } from "../../engine/types";
+import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
 import type { Person } from "../../engine/Crowd";
@@ -23,6 +23,15 @@ export interface ViewFocus {
   centerFloor: number;
   dominant: FacilityKind | "outside" | "lobby" | "empty";
   night: boolean;
+  /**
+   * Current camera zoom (world pixels multiplier). ~0.3 is fully zoomed out
+   * — the whole tower in frame — and 3 is a tight close-up. Audio uses this to
+   * pull back to a wide "tower overview" bed when zoomed out and to fade in
+   * area-specific detail (crowd, kitchen clatter, elevator dings) up close.
+   */
+  zoom: number;
+  /** Today's sky weather; drives an outdoor rain layer in the ambient bed. */
+  weather: WeatherKind;
 }
 
 /** What the pointer is over, resolved by Excalibur's collider hit-testing. */
@@ -1101,7 +1110,7 @@ export class TowerEngine {
       }
     }
     if (dominant === "empty" && centerFloor <= 0) dominant = "outside";
-    return { centerFloor, dominant, night };
+    return { centerFloor, dominant, night, zoom: this.cam.zoom, weather: this.sim.weather };
   }
 
   dispose(): void {

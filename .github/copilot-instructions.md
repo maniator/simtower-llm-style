@@ -49,7 +49,6 @@ npm run build        # production build to dist/
 npm test             # Vitest suite
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
-npm run build:single # single self-contained HTML build (dist-single/)
 npm run screenshots  # build + headless screenshot capture into docs/screenshots
 ```
 

@@ -82,4 +82,3 @@ economy, ratings gates, the housekeeping/fire/bomb events, elevator dispatch,
 the individually-routed **crowd's BFS routing and movement**
 (`src/tests/crowd.test.ts`), save/load, the `.TWR` parser, and an
 **end-to-end run to the TOWER victory** (`src/tests/parity.test.ts`).
-`npm run build:single` produces a one-file playable build.
