@@ -116,12 +116,12 @@ research.]`
 - **Tower** — the entire building the player constructs; also the name of the
   final win-state rank (see **TOWER rank**). Disambiguated by context/casing.
 - **Lot** — the fixed buildable region: 100 floors above ground, 10 basement
-  levels below (B1…B10), 200 tiles wide.
+  levels below (B1…B10), 340 tiles wide.
 - **Two-layer grid** — the building model: a structural floor/corridor layer with
   a room layer placed on top of it. A Room cannot exist without a Floor beneath.
 - **Floor (structure)** — a single structural floor tile; must exist before a
   room can sit on it. The cheap base layer of the **two-layer grid**.
-- **Tile** — the unit of horizontal width on the grid (lot is 200 tiles wide).
+- **Tile** — the unit of horizontal width on the grid (lot is 340 tiles wide).
 - **Floor number** — continuous numbering: floor 1 = ground, floor 0 = B1,
   −1 = B2 … −9 = B10 (no gap at 0); top is floor 100. The basement therefore has
   10 levels (B1…B10).
@@ -187,7 +187,7 @@ Realizes **UJ-1**, **UJ-4**.
 **Functional Requirements:**
 - **FR-1** — The player can build within a lot of **100 floors above ground**,
   **10 basement levels below** (B1…B10, i.e. floor 0 down to floor −9), and
-  **200 tiles wide** [`GRID`: `maxFloor` 100, `minFloor` −9, `width` 200].
+  **340 tiles wide** [`GRID`: `maxFloor` 100, `minFloor` −9, `width` 340]. `[UPDATED 2026-06-30: widened 200→340 so the canonical 15,000 TOWER target is reachable — see FR-46/FR-67.]`
   Placement outside these bounds is rejected.
 - **FR-2** — Floor numbering is continuous with no gap at zero: floor 1 =
   ground, floor 0 = B1, down to −9 = B10; top = floor 100.
@@ -506,8 +506,9 @@ gaps. Full rationale and the complete source-of-truth mapping live in
   stand-in for the original's **Cathedral**; it fills the identical role of
   triggering the TOWER evaluation (see FR-19, FR-46).
 - **FR-67** — The TOWER goal is a **population census** as in the 1994 original
-  (residents + office workers + hotel guests; commercial visitors excluded), at
-  the canonical target of **15,000**. The interim scaled-down number (8,000) was
+  (office workers + condo residents; hotel guests count only while the tower is
+  climbing to 3★, then drop out of the rating per canon; commercial visitors are
+  always excluded — `ratingPopulation()`), at the canonical target of **15,000**. The interim scaled-down number (8,000) was
   restored to 15,000 on 2026-06-30 by widening the lot to 340 tiles so the target
   is genuinely reachable under the spatial model — both the metric *and* the
   number are now canonical (see the RESOLVED note on FR-46).
@@ -515,7 +516,7 @@ gaps. Full rationale and the complete source-of-truth mapping live in
   crowd** (FR-30) layered over an **aggregate congestion model** (FR-34),
   whereas the original used a single aggregate model; the on-screen crowd is
   **capped** for performance (FR-35) while the full population is still
-  simulated. Routing honours the original's **two-ride rule**: a trip uses at
+  simulated. Routing honors the original's **two-ride rule**: a trip uses at
   most **two transport rides** (one sky-lobby transfer), so floors reachable only
   via 3+ rides draw no commuters — the player must provide sky-lobby transfers.
 - **FR-69** — All art and audio are **generated in code** (FR-60), and saves use

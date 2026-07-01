@@ -520,7 +520,7 @@ export class UI {
         <li><b>Move people.</b> Every floor needs an <b>elevator</b> or <b>stairs</b> chain back to the ground lobby, or tenants leave.</li>
         <li><b>Make money.</b> Offices pay quarterly rent, condos sell once, hotels earn nightly, shops &amp; restaurants earn from foot traffic.</li>
         <li><b>Grow your rating.</b> 2★ at 300 pop, 3★ at 1,000 (needs Security), 4★ at 5,000 (needs Medical, Recycling, suites &amp; a VIP), 5★ at 10,000 (needs a Metro).</li>
-        <li><b>Win.</b> At 5★ with a Metro station, build the <b>Wedding Hall</b> on floor 100 and pass the VIP inspection — the <b>TOWER</b> rank needs 15,000 residents.</li>
+        <li><b>Win.</b> At 5★ with a Metro station, build the <b>Wedding Hall</b> on floor 100 and pass the VIP inspection — the <b>TOWER</b> rank needs 15,000 occupants (office workers + residents).</li>
         <li><b>Two rides, tops.</b> People take at most <b>two</b> elevator/stair rides to reach a floor — add <b>sky lobbies</b> (every ~15 floors) so distant floors are one transfer away, or nobody comes.</li>
         <li><b>Parking</b> spaces only work when they touch a <b>Parking Ramp</b> or a connected space — chain them off a ramp, or they sit empty.</li>
       </ul>
