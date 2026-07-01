@@ -477,7 +477,17 @@ class GameApp {
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
     // Per-frame: advance the sim and (throttled) refresh DOM/audio.
-    this.engine.onUpdate = (ms) => this.update(ms);
+    this.engine.onUpdate = (ms) => {
+      // A thrown frame must NEVER escape to Excalibur: its game loop calls
+      // stop() on any uncaught exception, which freezes the whole game dead
+      // (seen at high speed, where far more sim work runs per frame). Contain it
+      // here so a transient error skips one frame instead of halting play.
+      try {
+        this.update(ms);
+      } catch (err) {
+        console.error("[tick] frame error — continuing:", err);
+      }
+    };
   }
 
   private bindKeys(): void {
@@ -1132,7 +1142,7 @@ class GameApp {
     const mp = this.sim.milestoneProgress();
     const half = Math.ceil(mp.list.length / 2);
     const col = (items: typeof mp.list) =>
-      `<div class="col">${items
+      `<div class="col ms">${items
         .map(
           (m) =>
             `<span class="k" style="color:${m.done ? "var(--good)" : "var(--muted)"}">${m.done ? "✓" : "·"} ${escapeAttr(m.label)}</span>` +

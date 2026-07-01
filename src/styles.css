@@ -239,6 +239,9 @@ body {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  /* Scroll when the panels are taller than the viewport (e.g. a phone held
+     landscape, where it's wide enough to skip the mobile drawer layout). */
+  overflow-y: auto;
 }
 /* The drawer close button and dimming scrim are mobile-only. */
 #panel-close,
@@ -557,12 +560,42 @@ body {
   font-weight: 700;
 }
 
+/* ---- Short viewports (e.g. a phone held landscape) ----
+   Wide enough to keep the desktop side-panel layout, but too short for it: the
+   Bulletin's flex-grow would otherwise swallow the height and push the Game
+   panel (Save/Load/New Tower/Help) off the bottom with no way to reach it. Let
+   every panel take its natural height and cap the log, so #sidebar scrolls to
+   all of them. */
+@media (max-height: 560px) {
+  .panel.grow {
+    flex: 0 0 auto;
+  }
+  #log {
+    max-height: 120px;
+  }
+}
+
 /* ---- Mobile / small screens ---- */
 @media (max-width: 860px) {
   #topbar {
     gap: 8px;
     padding: 5px 8px;
     flex-wrap: wrap;
+  }
+  /* Stats/milestones: stack the two columns into one so each row gets the full
+     width. Two side-by-side columns (each itself label|value) become four
+     cramped, mis-aligned columns on a phone. */
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+  /* Milestone rows are a label + a long description, not a short right-aligned
+     value: give the label its natural width and let the description fill the
+     rest, left-aligned, so it reads cleanly as "· Label   description". */
+  .stats-grid .col.ms {
+    grid-template-columns: auto 1fr;
+  }
+  .stats-grid .col.ms .v {
+    text-align: left;
   }
   .brand {
     font-size: 13px;
