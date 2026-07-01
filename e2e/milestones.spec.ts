@@ -25,6 +25,16 @@ test("progression: a screenshot at each ★ milestone, 1★ → TOWER", async ({
   await page.goto("/");
   await page.waitForFunction(() => Boolean((window as unknown as { game?: unknown }).game));
 
+  // Dismiss the first-run splash overlay so the captures show the tower, not the
+  // title screen. We remove it directly and resume the engine rather than click
+  // "New Tower" — that would reset the sim, wiping the tower buildToStar grows.
+  await page.evaluate(() => {
+    const g = (window as unknown as { game: { engine: { paused: boolean }; speed: number } }).game;
+    document.getElementById("splash")?.remove();
+    g.engine.paused = false;
+    g.speed = 1;
+  });
+
   for (const [star, name] of FRAMES) {
     const reached = await page.evaluate(buildToStar, star);
     expect(reached).toBe(star); // the real assertion — the rung was genuinely earned
