@@ -227,11 +227,15 @@ const SCENES: Record<Scene, SceneDef> = {
 const OVERVIEW_ZOOM = 0.55;
 /** Zoom at which area detail is fully faded in. */
 const DETAIL_ZOOM = 1.7;
+/** Hysteresis band around OVERVIEW_ZOOM so the overview scene doesn't flicker. */
+const OVERVIEW_EXIT = OVERVIEW_ZOOM + 0.08;
 
-function sceneFor(focus: ViewFocus): Scene {
+function sceneFor(focus: ViewFocus, overview: boolean): Scene {
   // Zoomed all the way out — you're looking at the whole building, so play the
-  // wide overview theme regardless of what happens to be centered.
-  if (focus.zoom < OVERVIEW_ZOOM) return "overview";
+  // wide overview theme regardless of what happens to be centered. The caller
+  // resolves `overview` with hysteresis so hovering near the zoom threshold
+  // doesn't flip scenes (and churn the pad) frame to frame.
+  if (overview) return "overview";
   if (focus.dominant === "outside") return "outside";
   if (focus.centerFloor <= -1) return "metro";
   const k = focus.dominant as FacilityKind;
@@ -283,6 +287,12 @@ function lerp(a: number, b: number, t: number): number {
   return a + (b - a) * t;
 }
 
+function sameNotes(a: number[], b: number[]): boolean {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+
 export class AudioEngine {
   // Master + shared effect chain.
   private master: Tone.Gain | null = null;
@@ -324,6 +334,8 @@ export class AudioEngine {
   private tick = 0;
   private scene: Scene = "lobby";
   private targetScene: Scene = "lobby";
+  /** Hysteresis latch for the zoomed-out overview scene. */
+  private overview = false;
   private padNotes: number[] = [];
   private ambBase = 0.2;
   private detail = 0.4;
@@ -358,7 +370,7 @@ export class AudioEngine {
       this.padGain = new Tone.Gain(0).connect(this.bedFilter);
       this.pad = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "fatsine" },
-        envelope: { attack: 1.5, decay: 0.3, sustain: 1, release: 2.5 },
+        envelope: { attack: 1.5, decay: 0.3, sustain: 1, release: 1.4 },
       }).connect(this.padGain);
       this.pad.volume.value = -6;
 
@@ -452,24 +464,43 @@ export class AudioEngine {
   /** Called every frame with the renderer's focus; switches scenes smoothly. */
   update(focus: ViewFocus): void {
     if (!this.started) return;
+    // Never let an audio hiccup escape into the game loop, and never leave the
+    // graph half-updated: any Tone error here is swallowed and retried next frame.
+    try {
+      // The browser can suspend the AudioContext (tab backgrounded, power
+      // saving), which silences everything until it's resumed. Nudge it back on
+      // each update so sound reliably returns instead of staying dead.
+      const ctx = Tone.getContext();
+      if (!this.muted && ctx.state === "suspended") void ctx.resume().catch(() => {});
 
-    // Zoom detail: opens the distance filter and fades ambient detail in/out.
-    const detail = detailFor(focus.zoom);
-    if (Math.abs(detail - this.detail) > 0.02) this.applyDetail(detail, 0.3);
+      // Zoom detail: opens the distance filter and fades ambient detail in/out.
+      const detail = detailFor(focus.zoom);
+      if (Math.abs(detail - this.detail) > 0.02) this.applyDetail(detail, 0.3);
 
-    const s = sceneFor(focus);
-    if (s !== this.targetScene) {
-      this.targetScene = s;
-      this.crossfadeTo(s);
-    }
+      // Resolve the overview latch with hysteresis so hovering near the zoom
+      // threshold can't flip the scene (and re-trigger the pad) every frame.
+      if (this.overview) {
+        if (focus.zoom > OVERVIEW_EXIT) this.overview = false;
+      } else if (focus.zoom < OVERVIEW_ZOOM) {
+        this.overview = true;
+      }
 
-    // Outdoor rain layer — only when you can actually see the sky (zoomed out
-    // to the overview or looking at the street), so it reads as a real "tell"
-    // for the weather rather than an inaudible smear behind indoor scenes.
-    const wantRain = focus.weather === "rain" && (s === "outside" || s === "overview") ? 0.13 : 0;
-    if (wantRain !== this.rainTarget && this.rainGain) {
-      this.rainTarget = wantRain;
-      this.rainGain.gain.rampTo(wantRain, 1.5);
+      const s = sceneFor(focus, this.overview);
+      if (s !== this.targetScene) {
+        this.targetScene = s;
+        this.crossfadeTo(s);
+      }
+
+      // Outdoor rain layer — only when you can actually see the sky (zoomed out
+      // to the overview or looking at the street), so it reads as a real "tell"
+      // for the weather rather than an inaudible smear behind indoor scenes.
+      const wantRain = focus.weather === "rain" && (s === "outside" || s === "overview") ? 0.13 : 0;
+      if (wantRain !== this.rainTarget && this.rainGain) {
+        this.rainTarget = wantRain;
+        this.rainGain.gain.rampTo(wantRain, 1.5);
+      }
+    } catch {
+      /* transient Tone/context error — recover on the next update */
     }
   }
 
@@ -491,11 +522,17 @@ export class AudioEngine {
     this.bassGain.gain.rampTo(def.bass * 0.16, time);
     if (this.lead) this.lead.set({ oscillator: { type: def.wave } });
 
-    // Move the pad to the new chord and the bass to the new root.
+    // Move the pad to the new chord — but only actually re-voice it when the
+    // chord changes. Retriggering on every scene flip stacks held voices (the
+    // release tail is seconds long) and can exhaust the PolySynth, which shows
+    // up as glitchy static and, eventually, a stuck/silent pad.
     if (this.pad) {
-      this.pad.releaseAll();
-      this.padNotes = this.padNotesFor(s);
-      this.pad.triggerAttack(this.padNotes);
+      const notes = this.padNotesFor(s);
+      if (!sameNotes(notes, this.padNotes)) {
+        this.pad.releaseAll();
+        this.pad.triggerAttack(notes);
+        this.padNotes = notes;
+      }
     }
     if (this.bass) this.bass.frequency.rampTo(midiToFreq(def.root - 12), time);
 
@@ -530,9 +567,15 @@ export class AudioEngine {
   /** Transport tick (eighth notes): schedule a melody note + close-up accents. */
   private onStep(time: number): void {
     if (this.muted) return;
-    const def = SCENES[this.scene];
-    this.scheduleStep(def, time);
-    if (this.detail > 0.5) this.maybeAccent(def, time);
+    // Guard the scheduled callback: a stray Tone error must not tear down the
+    // Transport (which would silence the whole engine).
+    try {
+      const def = SCENES[this.scene];
+      this.scheduleStep(def, time);
+      if (this.detail > 0.5) this.maybeAccent(def, time);
+    } catch {
+      /* skip this step */
+    }
     this.step = (this.step + 1) % 16;
     this.tick++;
   }
