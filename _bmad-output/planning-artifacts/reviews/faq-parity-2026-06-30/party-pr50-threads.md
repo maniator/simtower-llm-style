@@ -1,5 +1,7 @@
 # Party Mode Roundtable — PR #50 Open Review Threads
 
+> _Historical record. The project was later renamed to **Verticopolis**; "Tower Tycoon" below is the name that was in use at the time of this review._
+
 Date: 2026-06-30
 Feature: Tower Tycoon milestones (RECOGNITION-ONLY by design — no cash payout)
 Facilitator convergence over 9 open threads, each verified against current source.

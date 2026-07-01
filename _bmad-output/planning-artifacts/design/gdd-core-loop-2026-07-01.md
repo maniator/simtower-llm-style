@@ -1,6 +1,6 @@
 ---
 title: "GDD Slice — Core Loop, Progression & Economy Balance"
-game: Tower Tycoon (browser SimTower clone)
+game: Verticopolis (browser SimTower clone)
 author: Samus Shepard (Game Designer — BMAD gds agent)
 date: 2026-07-01
 status: Review

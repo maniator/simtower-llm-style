@@ -1,5 +1,5 @@
 ---
-title: Tower Tycoon — A Browser SimTower Clone
+title: Verticopolis — A Browser SimTower Clone
 created: 2026-06-30
 updated: 2026-06-30
 version: 0.1 (Draft)
@@ -7,13 +7,13 @@ status: Draft
 source_of_truth: SimTower (1994, Maxis / OPeNBooK)
 ---
 
-# PRD: Tower Tycoon — A Browser SimTower Clone
-*Working title — "Tower Tycoon" is the in-repo name; confirm if a different public title is wanted.*
+# PRD: Verticopolis — A Browser SimTower Clone
+*Working title — "Verticopolis" is the in-repo name; confirm if a different public title is wanted.*
 
 ## 0. Document Purpose
 
 This PRD is for the maintainers and downstream BMAD workflow owners (UX,
-architecture, epics/stories, QA) of **Tower Tycoon**, a from-scratch,
+architecture, epics/stories, QA) of **Verticopolis**, a from-scratch,
 browser-native clone of the 1994 game **SimTower**. It is a *brownfield* PRD: a
 working implementation already exists, so this document formalizes the
 requirements the build must satisfy rather than proposing something new. The
@@ -33,7 +33,7 @@ sources and are the canonical balance values for this build.
 
 ## 1. Vision
 
-Tower Tycoon recreates the quiet, absorbing loop that made SimTower a classic:
+Verticopolis recreates the quiet, absorbing loop that made SimTower a classic:
 you start with an empty lot and two million dollars, lay floors, drop in offices
 and shops and hotel rooms, thread elevators up the spine of a growing high-rise,
 and watch tiny people stream through the building you designed. When the
@@ -45,7 +45,7 @@ coveted **TOWER** rank.
 It matters because SimTower is a 32-year-old DOS/Windows/Mac artifact that is
 hard to run on modern machines, and no faithful, zero-install, browser-native
 version exists that respects the original's mechanics rather than reskinning a
-generic builder. Tower Tycoon is that version: it runs in any modern browser
+generic builder. Verticopolis is that version: it runs in any modern browser
 with no download, draws every sprite in code (no ripped art assets — it is a
 clean-room homage, not a ROM), and can even be exported as a single
 self-contained HTML file you open from `file://`.
@@ -610,8 +610,8 @@ as implemented and test-covered.)*
 
 ## 8. Open Questions
 
-1. Public title — keep "Tower Tycoon", or pick a different name? (Repo/README
-   use "Tower Tycoon".)
+1. Public title — keep "Verticopolis", or pick a different name? (Repo/README
+   use "Verticopolis".)
 2. Is floor-100-only the intended hard constraint for the Wedding Hall, or
    should any top-most floor qualify? (FR-19)
 3. *(Resolved 2026-06-30)* Express auto-restriction is confirmed in

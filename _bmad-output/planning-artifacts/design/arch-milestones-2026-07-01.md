@@ -1,6 +1,6 @@
 ---
 title: "Architecture — Milestone / Optional-Goals System"
-game: Tower Tycoon
+game: Verticopolis
 author: Cloud Dragonborn (Game Architect — BMAD gds agent)
 date: 2026-07-01
 status: Approved-for-build
