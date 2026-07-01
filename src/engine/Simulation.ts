@@ -1,7 +1,7 @@
 import { Clock } from "./Clock";
 import { Crowd } from "./Crowd";
 import { EconomySystem } from "./EconomySystem";
-import { ECON, rentOf, rentConfig } from "./econConfig";
+import { ECON, rentOf, rentConfig, resaleRefund } from "./econConfig";
 import { ElevatorDispatch } from "./ElevatorDispatch";
 import { EventSystem } from "./EventSystem";
 import type { SimContext } from "./SimContext";
@@ -321,7 +321,7 @@ export class Simulation implements SimContext {
       if (u.state === "fire") return false;
       this.tower.removeUnit(u.id);
       // A gutted shell has no salvage value; everything else refunds half.
-      this.money += u.state === "gutted" ? 0 : Math.floor(FACILITIES[u.kind].cost * 0.5);
+      this.money += u.state === "gutted" ? 0 : resaleRefund(u.kind);
       // If the last Wedding Hall is gone before the VIP arrived, cancel the
       // pending inspection so it can't keep re-failing and spamming the log.
       if (u.kind === "weddingHall" && !this.tower.builtWeddingHall && !this.evaluatedTower) {
@@ -331,12 +331,12 @@ export class Simulation implements SimContext {
     }
     if (t) {
       this.tower.removeTransport(t.id);
-      this.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+      this.money += resaleRefund(t.kind);
       return true;
     }
     if (u) {
       this.tower.removeUnit(u.id);
-      this.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      this.money += resaleRefund(u.kind);
       return true;
     }
     return false;
@@ -1051,6 +1051,12 @@ export class Simulation implements SimContext {
    * on Security/Medical coverage of that floor), tower-wide in v1. */
   fireContainmentChance(floor: number): number {
     return this.events.controlChance(floor);
+  }
+
+  /** Daily probability a new fire breaks out, after the fire-defense reductions
+   * from any operational Security / Medical center. */
+  fireIgnitionChance(): number {
+    return this.events.fireChance();
   }
 
   // ---- Derived stats for UI ---------------------------------------------

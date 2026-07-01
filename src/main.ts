@@ -1,6 +1,7 @@
 import { Simulation } from "./engine/Simulation";
+import { UndoHistory, towerStateSig } from "./engine/UndoHistory";
 import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
-import { ECON, rentConfig, rentOf } from "./engine/econConfig";
+import { ECON, rentConfig, rentOf, resaleRefund, extendBill } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
 import { isOperational } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
@@ -73,14 +74,10 @@ class GameApp {
   private kbCursor: { tile: number; floor: number } | null = null;
   private kbAnchor: { tile: number; floor: number } | null = null;
 
-  /** Undo/redo: serialized snapshots taken *before* each player action. A
-   *  gesture (drag) coalesces into ONE step — the snapshot is captured on the
-   *  first mutation and committed on gesture-end only if the tower actually
-   *  changed (so misfires/pans never create empty steps). Restores go through
-   *  the normal load path (adoptSim). */
-  private undoStack: { snap: string; label: string }[] = [];
-  private redoStack: { snap: string; label: string }[] = [];
-  private pendingUndo: { snap: string; sig: string; label: string } | null = null;
+  /** Undo/redo: snapshot-based history (see {@link UndoHistory}). Built in the
+   *  constructor once `sim`/`ui` exist; its ports close over `this` so they
+   *  always see the live sim across an adoptSim() swap. */
+  private history!: UndoHistory;
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
@@ -145,6 +142,15 @@ class GameApp {
         SaveGame.deleteSlot(n);
         this.ui.toast(`Deleted slot ${n}.`, "info");
       },
+    });
+
+    // Undo/redo history — ports close over `this` so snapshot / signature /
+    // restore always target the *current* sim (adoptSim swaps it).
+    this.history = new UndoHistory({
+      snapshot: () => JSON.stringify(this.sim.serialize()),
+      restore: (snap) => this.adoptSim(Simulation.deserialize(JSON.parse(snap)), true),
+      signature: () => towerStateSig(this.sim.tower, this.sim.money),
+      notify: (msg) => this.ui.toast(msg, "info"),
     });
 
     this.wireEngine();
@@ -791,7 +797,7 @@ class GameApp {
       rows.push(`<span class="k">Scrap value</span><span class="v">$0</span>`);
       rows.push(`<span class="k">⚠</span><span class="v">Gutted — bulldoze and rebuild.</span>`);
     } else {
-      rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
+      rows.push(`<span class="k">Resale value</span><span class="v">$${resaleRefund(f.kind).toLocaleString()}</span>`);
     }
 
     let actions = "";
@@ -846,7 +852,7 @@ class GameApp {
       rows.push(`<span class="k">Capacity</span><span class="v" data-field="capacity">${vol.capacity}</span>`);
       rows.push(`<span class="k">Stops</span><span class="v" data-field="stops">${vol.stops}</span>`);
     }
-    rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
+    rows.push(`<span class="k">Resale value</span><span class="v">$${resaleRefund(f.kind).toLocaleString()}</span>`);
 
     let actions = "";
     if (isEl) {
@@ -895,25 +901,22 @@ class GameApp {
       this.extendHwm = { id: t.id, top: t.top, bottom: t.bottom };
       this.captureUndo("Extend");
     }
-    let nb = t.bottom;
-    let nt = t.top;
-    if (end === "up") nt = Math.max(t.bottom + 1, targetFloor);
-    else nb = Math.min(t.top - 1, targetFloor);
-
-    // Bill only floors past the gesture's high-water mark, and clamp the growth
-    // to what the player can afford — so a fast drag grows the shaft as far as
-    // the budget allows (matching a slow drag) instead of being rejected, and a
-    // broke drag simply stops growing without spamming a toast every frame.
-    const PER_FLOOR = ECON.transportFloorCost;
-    const budgetFloors = Math.floor(this.sim.money / PER_FLOOR);
-    if (nt > this.extendHwm.top) nt = this.extendHwm.top + Math.min(nt - this.extendHwm.top, budgetFloors);
-    if (nb < this.extendHwm.bottom) nb = this.extendHwm.bottom - Math.min(this.extendHwm.bottom - nb, budgetFloors);
+    // Bill only floors past the gesture's high-water mark, clamped to what the
+    // player can afford — a fast drag grows as far as the budget allows (matching
+    // a slow drag), and a broke drag simply stops growing (no per-frame toast).
+    const { nb, nt, added } = extendBill(
+      { bottom: t.bottom, top: t.top },
+      this.extendHwm,
+      end,
+      targetFloor,
+      this.sim.money,
+      ECON.transportFloorCost,
+    );
     if (nb === t.bottom && nt === t.top) return; // nothing changed this step
 
-    const added = Math.max(0, nt - this.extendHwm.top) + Math.max(0, this.extendHwm.bottom - nb);
     const res = this.sim.tower.resizeTransport(t.id, nb, nt);
     if (res.ok) {
-      this.sim.money -= added * PER_FLOOR;
+      this.sim.money -= added * ECON.transportFloorCost;
       this.extendHwm.top = Math.max(this.extendHwm.top, nt);
       this.extendHwm.bottom = Math.min(this.extendHwm.bottom, nb);
       this.audio.sfx(added > 0 ? "build" : "click");
@@ -951,7 +954,7 @@ class GameApp {
         }
         this.sim.tower.removeUnit(u.id);
         // A gutted shell has no salvage value; everything else refunds half.
-        this.sim.money += u.state === "gutted" ? 0 : Math.floor(FACILITIES[u.kind].cost * 0.5);
+        this.sim.money += u.state === "gutted" ? 0 : resaleRefund(u.kind);
         this.audio.sfx("sell");
         this.commitUndo();
         return this.clearSelection();
@@ -978,13 +981,13 @@ class GameApp {
       if (!t) return this.clearSelection();
       if (action === "sell") {
         this.sim.tower.removeTransport(t.id);
-        this.sim.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+        this.sim.money += resaleRefund(t.kind);
         this.audio.sfx("sell");
         this.commitUndo();
         return this.clearSelection();
       }
       if (action === "addcar") {
-        if (this.sim.tower.setCars(t.id, t.cars + 1)) this.sim.money -= 40000;
+        if (this.sim.tower.setCars(t.id, t.cars + 1)) this.sim.money -= ECON.addCarCost;
         this.audio.sfx("build");
         this.refreshEditor();
       } else if (action === "removecar") {
@@ -1198,12 +1201,12 @@ class GameApp {
       }
       this.sim.tower.removeUnit(u.id);
       // A gutted shell has no salvage value; everything else refunds half.
-      this.sim.money += u.state === "gutted" ? 0 : Math.floor(FACILITIES[u.kind].cost * 0.5);
+      this.sim.money += u.state === "gutted" ? 0 : resaleRefund(u.kind);
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === p.id);
       if (!t) return;
       this.sim.tower.removeTransport(t.id);
-      this.sim.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+      this.sim.money += resaleRefund(t.kind);
     }
     this.audio.sfx("sell");
     if (this.selected && this.selected.id === p.id) this.clearSelection();
@@ -1290,62 +1293,27 @@ class GameApp {
       // A *different* tower (New Tower / Load / a slot / Import) invalidates the
       // undo trail — otherwise Undo could resurrect an unrelated old tower and a
       // later autosave persist it. Undo/redo restores pass preserveHistory.
-      this.undoStack.length = 0;
-      this.redoStack.length = 0;
-      this.pendingUndo = null;
+      this.history.clear();
     }
   }
 
-  // ---- Undo / redo --------------------------------------------------------
+  // ---- Undo / redo (state + logic live in engine/UndoHistory) -------------
+  // Thin delegators kept so the many gesture call sites read unchanged.
 
-  /** A cheap fingerprint of everything a *player action* can change (structure,
-   *  transport config, labels, rents, cinema booking policy, money) — but NOT
-   *  time, so a press where only the clock ticked doesn't register as a change. */
-  private stateSig(): string {
-    const t = this.sim.tower;
-    const u = t.units
-      .map((x) => `${x.kind}@${x.floor},${x.x}:${x.label ?? ""}:${x.rent ?? ""}:${x.filmPolicy ?? ""}`)
-      .join(";");
-    const r = t.transports
-      .map((x) => `${x.kind}@${x.x}:${x.bottom}-${x.top}:${x.cars}:${(x.skipFloors ?? []).join(".")}`)
-      .join(";");
-    return `${this.sim.money}|${u}|${r}`;
-  }
-
-  /** Capture the pre-action snapshot. Called once at the start of each gesture
-   *  (a drag's first mutation, or a discrete edit click), so a whole drag
-   *  coalesces into a single undo step. */
   private captureUndo(label: string): void {
-    this.pendingUndo = { snap: JSON.stringify(this.sim.serialize()), sig: this.stateSig(), label };
+    this.history.capture(label);
   }
 
-  /** Finalize the captured snapshot, but only if the action actually changed
-   *  something — a misfired or empty gesture leaves no undo step. */
   private commitUndo(): void {
-    const p = this.pendingUndo;
-    this.pendingUndo = null;
-    if (!p || this.stateSig() === p.sig) return;
-    this.undoStack.push({ snap: p.snap, label: p.label });
-    if (this.undoStack.length > 40) this.undoStack.shift();
-    this.redoStack.length = 0; // a fresh action invalidates the redo trail
+    this.history.commit();
   }
 
   private undo(): void {
-    this.commitUndo(); // finalize any in-flight gesture first
-    const entry = this.undoStack.pop();
-    if (!entry) return this.ui.toast("Nothing to undo.", "info");
-    this.redoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
-    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)), true);
-    this.ui.toast(`Undid: ${entry.label}`, "info");
+    this.history.undo();
   }
 
   private redo(): void {
-    this.commitUndo(); // finalize any in-flight gesture first (matches undo)
-    const entry = this.redoStack.pop();
-    if (!entry) return this.ui.toast("Nothing to redo.", "info");
-    this.undoStack.push({ snap: JSON.stringify(this.sim.serialize()), label: entry.label });
-    this.adoptSim(Simulation.deserialize(JSON.parse(entry.snap)), true);
-    this.ui.toast(`Redid: ${entry.label}`, "info");
+    this.history.redo();
   }
 
   private save(silent = false): void {

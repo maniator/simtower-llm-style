@@ -176,11 +176,20 @@ export class EventSystem {
    * Security (buildable from 2★) is the free front-line defense; a medical
    * center's fast emergency response cuts the odds further. Building both makes
    * fires rare — investing in safety visibly pays off.
+   *
+   * Rates are per in-game day, and days elapse fast at top speed (~12s/day), so
+   * the base is deliberately low and Security is a strong deterrent — otherwise
+   * fires read as constant rather than the occasional emergency they are in the
+   * original. Approx. mean gap between fires at top speed: ~8 min with nothing
+   * built, ~18 min once you have Security, ~35 min with Security + Medical.
+   *
+   * Only *operational* stations count (not one under construction or itself on
+   * fire), matching the spatial v2 containment check.
    */
-  private fireChance(): number {
-    let chance = 0.05;
-    if (this.sim.hasAny("security")) chance *= 0.6;
-    if (this.sim.hasAny("medical")) chance *= 0.5;
+  fireChance(): number {
+    let chance = 0.025;
+    if (this.sim.hasOperational("security")) chance *= 0.45;
+    if (this.sim.hasOperational("medical")) chance *= 0.5;
     return chance;
   }
 
