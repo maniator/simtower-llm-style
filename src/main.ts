@@ -661,13 +661,16 @@ class GameApp {
     const c = this.sim.clock;
     const next = this.sim.nextStarThreshold;
     const fmt = (n: number) => n.toLocaleString();
+    // Modal-only diagnostics — a full scan and a flood-fill, computed here at
+    // modal-build time so they never run on the ~6 Hz HUD stats() path.
+    const ratingPop = this.sim.ratingPopulation();
+    const parkingWorking = this.sim.tower.functionalParkingSet().size;
+    const stranded = this.sim.strandedFloors().length; // BFS-bearing
     // Only when hotels have dropped out of the rating (3★+) and actually diverge.
     const ratingRow =
-      s.star >= 3 && s.ratingPopulation < s.population
-        ? `<span class="k">Counts toward stars</span><span class="v">${fmt(s.ratingPopulation)}</span>`
+      s.star >= 3 && ratingPop < s.population
+        ? `<span class="k">Counts toward stars</span><span class="v">${fmt(ratingPop)}</span>`
         : "";
-    // BFS-bearing, so computed here at modal-build time only — never in stats().
-    const stranded = this.sim.strandedFloors().length;
     return `<div class="stats-grid">
       <div class="stats-section">Overview</div>
       <div class="col">
@@ -702,7 +705,7 @@ class GameApp {
         <span class="k">Stranded floors</span><span class="v" style="color:${stranded ? "var(--bad)" : "var(--good)"}">${stranded || "None"}</span>
         ${
           s.parkingSpaces > 0
-            ? `<span class="k">Parking spaces</span><span class="v" style="color:${s.parkingWorking < s.parkingSpaces ? "var(--bad)" : "var(--good)"}">${s.parkingWorking} / ${s.parkingSpaces} working</span>`
+            ? `<span class="k">Parking spaces</span><span class="v" style="color:${parkingWorking < s.parkingSpaces ? "var(--bad)" : "var(--good)"}">${parkingWorking} / ${s.parkingSpaces} working</span>`
             : ""
         }
       </div>

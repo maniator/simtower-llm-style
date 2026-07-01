@@ -12,7 +12,7 @@ function layFull(sim: Simulation, kind: "floor" | "lobby", floor: number): void 
 }
 
 describe("Legibility — functionalParkingSet (Tower)", () => {
-  it("exposes the chained set; count delegates; dead space excluded; memoised", () => {
+  it("exposes the chained set; count delegates; dead space excluded", () => {
     const sim = Simulation.newGame(1);
     sim.money = 1e12;
     layFull(sim, "lobby", 1);
@@ -107,7 +107,7 @@ describe("Legibility — rating & stats (Simulation)", () => {
     expect(sim.ratingPopulation()).toBeLessThan(sim.population); // hotels excluded at 3★+
   });
 
-  it("stats() exposes cheap legibility fields; parking row omitted for a garage-less tower", () => {
+  it("stats() exposes only the cheap parkingSpaces count (garage-less → 0)", () => {
     const sim = Simulation.newGame(7);
     sim.money = 1e12;
     layFull(sim, "lobby", 1);
@@ -116,9 +116,9 @@ describe("Legibility — rating & stats (Simulation)", () => {
     sim.tower.place("parkingRamp", 0, C);
     sim.tower.place("parking", 0, C + 6);
     sim.tower.place("parking", 0, C + 100); // dead
-    const s = sim.stats();
-    expect(s.parkingSpaces).toBe(2);
-    expect(s.parkingWorking).toBe(1); // only the chained one works
-    expect(s.ratingPopulation).toBe(sim.ratingPopulation());
+    expect(sim.stats().parkingSpaces).toBe(2);
+    // The working count is a flood-fill computed at modal-build time (NOT in the
+    // 6 Hz stats()), so assert it via the source method directly.
+    expect(sim.tower.functionalParkingSet().size).toBe(1); // only the chained one works
   });
 });

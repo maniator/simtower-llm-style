@@ -1071,10 +1071,11 @@ export class Simulation implements SimContext {
     }
     return {
       population: this.population,
-      // Cheap legibility fields (no BFS — safe on the ~6 Hz HUD refresh):
-      ratingPopulation: this.ratingPopulation(),
+      // Cheap loop-counter field only. The modal-only diagnostics that need a
+      // full scan / flood-fill (ratingPopulation, functional parking count) are
+      // computed in buildStatsHtml at modal-build time — NOT here, since stats()
+      // runs on the ~6 Hz HUD refresh (UI.update).
       parkingSpaces,
-      parkingWorking: this.tower.functionalParkingSet().size, // parking flood-fill (fresh; cheap)
       money: this.money,
       star: this.star,
       offices,

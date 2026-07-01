@@ -767,9 +767,10 @@ export class TowerEngine {
 
   private syncScene(): void {
     const tower = this.sim.tower;
-    // Cached per revision; a parking space absent from this set is "dead" and
-    // gets a static red X. Included in the room signature so it re-bakes only
-    // when connectivity flips (build/bulldoze), never on the tick/lighting loop.
+    // Fresh flood-fill (not cached — it depends on unit state); read ONCE here
+    // per sync. A parking space absent from this set is "dead" and gets a static
+    // red X, encoded in the room signature so it re-bakes only when connectivity
+    // flips, not on the tick/lighting loop.
     const parkingOK = tower.functionalParkingSet();
     const seenS = new Set<number>();
     const seenR = new Set<number>();

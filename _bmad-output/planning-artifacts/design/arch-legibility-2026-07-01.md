@@ -159,7 +159,7 @@ New/extended specs alongside the existing suite (`src/tests/`):
 1. Ramp + contiguous spaces → set contains all chained space ids; `functionalParkingSpots() === set.size` (delegation invariant).
 2. Space with no ramp chain → its id absent from the set (the "dead X" case).
 3. Two stacked spaces with no ramp between → not connected (vertical step only through a ramp).
-4. Memoization: same set instance/contents across calls until a build bumps `revision`.
+4. Fresh compute: contents are correct after construction-complete / fire transitions (which don't bump `revision`) — the reason it is deliberately NOT revision-memoised.
 
 **`crowd.test.ts` / `simulation.test.ts` — reachability**
 5. `floorReachable(1) === true` always.
