@@ -14,7 +14,8 @@
  * World Y grows downward and floor `f` sits at `y = -f * floorPx`, so the top of
  * the world (highest floor) is the most-negative Y and basements are positive Y.
  *
- * @param desiredY   the camera-center Y the player is trying to move to
+ * @param desiredY   the camera-center Y the player is trying to move to; a
+ *                   non-finite value falls back to the world midpoint
  * @param viewHeight viewport height in screen pixels
  * @param zoom       camera zoom (screen pixels per world pixel); non-positive or
  *                   non-finite values fall back to 1 so the result stays finite
@@ -42,6 +43,9 @@ export function clampCameraY(
   // letting the tower float over empty void.
   if (bottomY - topY <= 2 * halfH) return bottomY - halfH;
 
-  // Otherwise keep the visible window inside [topY, bottomY].
-  return Math.max(topY + halfH, Math.min(bottomY - halfH, desiredY));
+  // Normalize a non-finite target (NaN/Infinity) to the world midpoint so the
+  // Math.min/Math.max below can't propagate NaN — the result is always finite.
+  const target = Number.isFinite(desiredY) ? desiredY : (topY + bottomY) / 2;
+  // Keep the visible window inside [topY, bottomY].
+  return Math.max(topY + halfH, Math.min(bottomY - halfH, target));
 }

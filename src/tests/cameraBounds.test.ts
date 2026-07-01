@@ -1,10 +1,14 @@
 import { describe, it, expect } from "vitest";
 import { clampCameraY } from "../render/cameraBounds";
+import { GRID } from "../engine/facilities";
 
-// Mirror the real world constants (TowerEngine FLOOR, facilities GRID).
+// Pull the buildable bounds from the real GRID so the test can't drift if the
+// tower geometry changes. FLOOR (world px per floor) lives in the Excalibur-
+// bound TowerEngine module; since the helper is parameterized by floorPx, any
+// positive value works here — use a representative one to keep the test pure.
 const FLOOR = 34;
-const MIN_FLOOR = -9; // B10 — deepest buildable
-const MAX_FLOOR = 100;
+const MIN_FLOOR = GRID.minFloor; // deepest buildable (B10)
+const MAX_FLOOR = GRID.maxFloor;
 const VIEW_H = 800;
 
 // The world edges the clamp is built around.
@@ -52,6 +56,12 @@ describe("clampCameraY", () => {
     for (const bad of [0, -1, NaN, Infinity]) {
       const y = clamp(0, bad);
       expect(Number.isFinite(y)).toBe(true);
+    }
+  });
+
+  it("stays finite for a non-finite desired Y", () => {
+    for (const bad of [NaN, Infinity, -Infinity]) {
+      expect(Number.isFinite(clamp(bad, 1))).toBe(true);
     }
   });
 
