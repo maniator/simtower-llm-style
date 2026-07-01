@@ -506,7 +506,7 @@ export class TowerEngine {
     this.cam.pos = ex.vec((GRID.width / 2) * TILE, -(Math.max(6, hi) / 2) * FLOOR);
   }
 
-  /** Zoom by a factor about the current centre (keyboard +/- zoom). */
+  /** Zoom by a factor about the current center (keyboard +/- zoom). */
   zoomBy(factor: number): void {
     this.cam.zoom = clampZoom(this.cam.zoom * factor);
     this.cam.pos = ex.vec(
@@ -820,7 +820,7 @@ export class TowerEngine {
       );
     }
     // Fed-up figure carries BOTH the red tint AND a shape marker (a "!" with a
-    // white halo above the head), so "this tenant is fed up" reads without colour.
+    // white halo above the head), so "this tenant is fed up" reads without color.
     this.personGfxRed = new ex.Canvas({
       width: 8,
       height: 16,

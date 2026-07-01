@@ -256,7 +256,7 @@ class GameApp {
     this.refreshCursorPreview();
   }
 
-  /** Color-blind-safe traffic cue: word + shape-coded bar glyph (never colour
+  /** Color-blind-safe traffic cue: word + shape-coded bar glyph (never color
    *  alone), driven by the same congestion value the engine reads, with boundary
    *  hysteresis so it doesn't flicker. */
   private updateTraffic(): void {

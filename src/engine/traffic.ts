@@ -3,7 +3,7 @@
  * Kept pure and headless so it's unit-testable and shared by the HUD chip and
  * any future overlay. Thresholds mirror the engine's stress gate
  * (`d.stress = clamp(congestion - 1)`); tier ≥ 2 is exactly when frustrated
- * walkers turn red (stress > 0.25 ⇒ congestion > 1.25), so shape and colour agree.
+ * walkers turn red (stress > 0.25 ⇒ congestion > 1.25), so shape and color agree.
  */
 export type TrafficTier = 0 | 1 | 2 | 3;
 
@@ -17,7 +17,7 @@ export function trafficTier(congestion: number): TrafficTier {
 export const TRAFFIC_LABELS = ["Smooth", "Busy", "Backed up", "Gridlock"] as const;
 
 /** A shape-coded 4-step bar glyph (▁▃▅▇ filled to the tier) — legible in
- *  grayscale, so the cue never depends on colour alone. */
+ *  grayscale, so the cue never depends on color alone. */
 export function trafficGlyph(tier: TrafficTier): string {
   const on = "▮";
   const off = "▯";

@@ -1044,7 +1044,7 @@ dialog#modal {
 }
 
 /* Accessibility: user-toggled reduced motion (mirrors the OS @media rule so it
-   also applies when the OS preference is off). Neutralises CSS animations and
+   also applies when the OS preference is off). Neutralizes CSS animations and
    transitions; canvas ambient motion is frozen separately by the engine. */
 html.reduce-motion *,
 html.reduce-motion *::before,
@@ -1056,7 +1056,7 @@ html.reduce-motion *::after {
 }
 
 /* Color-blind-safe traffic cue: the bar glyph carries the level in shape, so it
-   reads in grayscale; the warn colour is a redundant extra, never the only cue. */
+   reads in grayscale; the warn color is a redundant extra, never the only cue. */
 #traffic-glyph { font-family: "Courier New", monospace; letter-spacing: -1px; }
 #status .traffic-warn { color: var(--bad); font-weight: 700; }
 

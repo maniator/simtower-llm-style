@@ -7,7 +7,7 @@
 export interface Prefs {
   /** Force reduced motion even when the OS `prefers-reduced-motion` is off. */
   reducedMotion?: boolean;
-  /** Colour-blind redundant cues (default on; only gates optional markers). */
+  /** Color-blind redundant cues (default on; only gates optional markers). */
   colorblindCue?: boolean;
 }
 
