@@ -11,8 +11,10 @@ describe("resaleRefund", () => {
       expect(resaleRefund(kind)).toBe(Math.floor(FACILITIES[kind].cost * 0.5));
     }
   });
+});
 
-  it("names the add-car cost as a constant", () => {
+describe("ECON constants", () => {
+  it("names the add-car cost", () => {
     expect(ECON.addCarCost).toBe(40_000);
   });
 });
