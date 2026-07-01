@@ -140,6 +140,16 @@ export class TowerEngine {
   /** Set by the controller from the game speed: when paused, the decorative
    *  animation clock stops so on-screen people freeze with everything else. */
   paused = false;
+  /** When true, the decorative animation clock is frozen (accessibility). Every
+   *  `d.anim`-driven decoration stops — the ambient bed (clouds, rain streaks,
+   *  pacing walkers, metro train) and the smaller flourishes in the sprite code
+   *  (construction crane hook, flame flicker, cinema marquee). All of it is purely
+   *  cosmetic: elevator cars and the routed crowd move from sim state (not
+   *  `d.anim`), so functional motion keeps running while the animation stops. */
+  reducedMotion = false;
+  setReducedMotion(on: boolean): void {
+    this.reducedMotion = on;
+  }
   /** Wall-clock-derived animation time that only advances while unpaused. */
   private animClock = 0;
   private lastAnimWall = 0;
@@ -362,7 +372,9 @@ export class TowerEngine {
     // and street just like the simulated crowd and elevators.
     const nowWall = (globalThis.performance ? performance.now() : 0) / 1000;
     if (this.lastAnimWall === 0) this.lastAnimWall = nowWall;
-    if (!this.paused) this.animClock += nowWall - this.lastAnimWall;
+    // Freeze the decorative clock when paused OR reduced-motion is on; functional
+    // motion (cars, routed crowd) advances from sim state, not this clock.
+    if (!this.paused && !this.reducedMotion) this.animClock += nowWall - this.lastAnimWall;
     this.lastAnimWall = nowWall;
     this.d.anim = this.animClock;
     this.d.hour = c.hour;
@@ -493,6 +505,31 @@ export class TowerEngine {
   center(): void {
     const hi = this.sim.tower.highestFloor;
     this.cam.pos = ex.vec((GRID.width / 2) * TILE, -(Math.max(6, hi) / 2) * FLOOR);
+  }
+
+  /** Zoom by a factor about the current center (keyboard +/- zoom). */
+  zoomBy(factor: number): void {
+    this.cam.zoom = clampZoom(this.cam.zoom * factor);
+    this.clamp(); // bound both axes, same as pointer zoom
+  }
+
+  /** Pan the camera the minimum amount so tile/floor sits within the viewport
+   *  (with a margin) — used to follow the keyboard build cursor. */
+  ensureVisible(tile: number, floor: number): void {
+    const wx = tile * TILE;
+    const wy = -floor * FLOOR;
+    const halfW = this.viewWidth / 2 / this.cam.zoom;
+    const halfH = this.viewHeight / 2 / this.cam.zoom;
+    const mx = TILE * 3;
+    const my = FLOOR * 1.5;
+    let px = this.cam.pos.x;
+    let py = this.cam.pos.y;
+    if (wx < px - halfW + mx) px = wx + halfW - mx;
+    else if (wx > px + halfW - mx) px = wx - halfW + mx;
+    if (wy < py - halfH + my) py = wy + halfH - my;
+    else if (wy > py + halfH - my) py = wy - halfH + my;
+    this.cam.pos = ex.vec(px, py);
+    this.clamp(); // bound both axes, same as pointer pan
   }
   setCamera(tileX: number, floor: number, zoom: number): void {
     // Validate zoom to the supported range: the vertical clamp divides by zoom,
@@ -781,7 +818,24 @@ export class TowerEngine {
         new ex.Canvas({ width: 8, height: 14, cache: true, draw: (ctx) => person(ctx, 2.5, 13, 1.1, 7, false, color) }),
       );
     }
-    this.personGfxRed = new ex.Canvas({ width: 8, height: 14, cache: true, draw: (ctx) => person(ctx, 2.5, 13, 1.1, 7, false, "#C24A3A") });
+    // Fed-up figure carries BOTH the red tint AND a shape marker (a "!" with a
+    // white halo above the head), so "this tenant is fed up" reads without color.
+    this.personGfxRed = new ex.Canvas({
+      width: 8,
+      height: 16,
+      cache: true,
+      draw: (ctx) => {
+        ctx.save();
+        ctx.translate(0, 2); // shift the figure down to make room for the marker
+        person(ctx, 2.5, 13, 1.1, 7, false, "#C24A3A");
+        ctx.restore();
+        ctx.fillStyle = "#ffffff"; // halo
+        ctx.fillRect(2, 0, 4, 5);
+        ctx.fillStyle = "#000000"; // "!"
+        ctx.fillRect(3, 0, 2, 2);
+        ctx.fillRect(3, 3, 2, 1);
+      },
+    });
   }
 
   // ---- Retained-scene reconciliation (no full rebuild) --------------------
@@ -896,14 +950,18 @@ export class TowerEngine {
         // hour or the dead-bit). deadParking is computed once per sync from the
         // caller's single functionalParkingSet() read — no per-unit recompute.
         if (deadParking) {
-          ctx.strokeStyle = "#C24A3A";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(2, 2);
-          ctx.lineTo(w - 2, h - 2);
-          ctx.moveTo(w - 2, 2);
-          ctx.lineTo(2, h - 2);
-          ctx.stroke();
+          // Dark under-stroke so the X reads as a SHAPE independent of hue
+          // (color-blind cue), then the red X on top.
+          for (const [style, wd] of [["#111", 4] as const, ["#C24A3A", 2] as const]) {
+            ctx.strokeStyle = style;
+            ctx.lineWidth = wd;
+            ctx.beginPath();
+            ctx.moveTo(2, 2);
+            ctx.lineTo(w - 2, h - 2);
+            ctx.moveTo(w - 2, 2);
+            ctx.lineTo(2, h - 2);
+            ctx.stroke();
+          }
         }
       },
     });

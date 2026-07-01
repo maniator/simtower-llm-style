@@ -5,6 +5,8 @@ import type { FacilityKind } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
+import { loadPrefs, savePrefs, reducedMotionActive, type Prefs } from "./storage/Prefs";
+import { trafficTier, TRAFFIC_LABELS, trafficGlyph, type TrafficTier } from "./engine/traffic";
 import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
 import { OnboardingController, shouldArm } from "./ui/Onboarding";
@@ -61,6 +63,14 @@ class GameApp {
   /** High-water mark of a shaft's extent during an extend-arrow drag, so a
    *  back-and-forth wiggle is only charged for floors genuinely added. */
   private extendHwm: { id: number; top: number; bottom: number } | null = null;
+  /** Per-device accessibility preferences (localStorage, off the save). */
+  private prefs: Prefs = loadPrefs();
+  private reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+  /** Last shown traffic tier (for boundary hysteresis, so the chip doesn't flicker). */
+  private lastTrafficTier: TrafficTier = 0;
+  /** Keyboard build cursor + a pending transport anchor (mouse-free play). */
+  private kbCursor: { tile: number; floor: number } | null = null;
+  private kbAnchor: { tile: number; floor: number } | null = null;
 
   /** Undo/redo: serialized snapshots taken *before* each player action. A
    *  gesture (drag) coalesces into ONE step — the snapshot is captured on the
@@ -78,6 +88,7 @@ class GameApp {
     this.ui = new UI({
       onSelectTool: (t) => {
         this.tool = t;
+        this.kbAnchor = null; // don't carry a pending transport anchor across tools
         this.engine.preview = null;
         this.engine.transportPreview = null;
       },
@@ -99,6 +110,12 @@ class GameApp {
       onUndo: () => this.undo(),
       onRedo: () => this.redo(),
       onEditAction: (action, root) => this.handleEditAction(action, root),
+      onToggleReducedMotion: () => {
+        this.prefs.reducedMotion = !this.prefs.reducedMotion;
+        savePrefs(this.prefs);
+        this.applyReducedMotion();
+        return reducedMotionActive(this.prefs, this.reduceMq.matches);
+      },
       onReplayOnboarding: () => {
         if (document.getElementById("splash")) return; // never arm behind the splash
         OnboardingController.clearOnboarded();
@@ -132,6 +149,10 @@ class GameApp {
     this.wireEngine();
     this.bindKeys();
     void this.engine.start();
+
+    // Accessibility: apply reduced motion now and whenever the OS pref flips.
+    this.applyReducedMotion();
+    this.reduceMq.addEventListener("change", () => this.applyReducedMotion());
 
     // First-run splash + onboarding (chrome only; the engine is untouched).
     this.onboarding = new OnboardingController({
@@ -174,6 +195,162 @@ class GameApp {
     window.setInterval(() => {
       if (!document.getElementById("splash")) this.save(true);
     }, 30000);
+  }
+
+  // ---- Keyboard play (mouse-free build cursor) ---------------------------
+
+  /** Announce to the screen-reader live region. */
+  private announce(msg: string): void {
+    const el = document.getElementById("a11y-live");
+    if (el) el.textContent = msg;
+  }
+
+  /** The inspectable/bulldozable entity at a cell (room or transport), if any. */
+  private pickedAt(floor: number, tile: number): Picked | null {
+    const u = this.sim.tower.unitAt(floor, tile);
+    if (u && u.kind !== "floor" && u.kind !== "lobby") return { type: "unit", id: u.id, kind: u.kind };
+    const t = this.sim.tower.transports.find(
+      (tr) => tile >= tr.x && tile < tr.x + FACILITIES[tr.kind].width && floor >= tr.bottom && floor <= tr.top,
+    );
+    return t ? { type: "transport", id: t.id, kind: t.kind } : null;
+  }
+
+  private moveCursor(dTile: number, dFloor: number): void {
+    const c = this.kbCursor ?? { tile: Math.floor(GRID.width / 2), floor: 1 };
+    this.kbCursor = {
+      tile: Math.max(0, Math.min(GRID.width - 1, c.tile + dTile)),
+      floor: Math.max(GRID.minFloor, Math.min(GRID.maxFloor, c.floor + dFloor)),
+    };
+    this.engine.ensureVisible(this.kbCursor.tile, this.kbCursor.floor);
+    this.refreshCursorPreview();
+    this.announceCursor();
+  }
+
+  private refreshCursorPreview(): void {
+    const c = this.kbCursor;
+    if (!c) return;
+    if (this.kbAnchor && this.tool.type === "build" && this.isTransportTool()) {
+      const kind = this.tool.kind;
+      const bottom = Math.min(this.kbAnchor.floor, c.floor);
+      const top = Math.max(this.kbAnchor.floor, c.floor);
+      this.engine.transportPreview = {
+        kind,
+        x: this.kbAnchor.tile,
+        bottom,
+        top,
+        valid: this.sim.tower.placeTransportDryRun(kind, this.kbAnchor.tile, bottom, top) && this.sim.isUnlocked(kind),
+      };
+      this.engine.preview = null;
+    } else {
+      this.updateBuildPreview(c.tile, c.floor);
+    }
+  }
+
+  private announceCursor(): void {
+    const c = this.kbCursor;
+    if (!c) return;
+    const loc = c.floor >= 1 ? `floor ${c.floor}` : `basement ${1 - c.floor}`;
+    const here = this.pickedAt(c.floor, c.tile);
+    this.announce(`Cursor: ${loc}, column ${c.tile} — ${here ? FACILITIES[here.kind].name : "empty"}`);
+  }
+
+  private commitCursor(): void {
+    if (!this.kbCursor) {
+      this.moveCursor(0, 0); // first press: just reveal the cursor
+      return;
+    }
+    const c = this.kbCursor;
+    if (this.tool.type === "inspect") {
+      const p = this.pickedAt(c.floor, c.tile);
+      this.selectPicked(p);
+      this.announce(p ? `Selected ${FACILITIES[p.kind].name}` : "Nothing to inspect here");
+      return;
+    }
+    if (this.tool.type === "bulldoze") {
+      this.bulldozeCursor();
+      return;
+    }
+    if (this.tool.type !== "build") return;
+    const kind = this.tool.kind;
+    if (kind === "floor" || kind === "lobby") {
+      this.paintBrush(kind, c.tile, c.floor);
+      this.announce(`Placed ${FACILITIES[kind].name} on floor ${c.floor}`);
+      this.refreshCursorPreview();
+    } else if (this.isTransportTool()) {
+      if (!this.kbAnchor) {
+        // Snap the anchor column like the mouse path, so a wide shaft near the
+        // right edge places instead of failing.
+        this.kbAnchor = { tile: this.snapX(kind, c.tile), floor: c.floor };
+        this.refreshCursorPreview();
+        this.announce(`${FACILITIES[kind].name} anchored at floor ${c.floor}. Move to the other end and press Enter.`);
+      } else {
+        const bottom = Math.min(this.kbAnchor.floor, c.floor);
+        const top = Math.max(this.kbAnchor.floor, c.floor);
+        const res = this.sim.buildTransport(kind, this.kbAnchor.tile, bottom, top);
+        this.kbAnchor = null;
+        this.engine.transportPreview = null;
+        if (res.ok) {
+          this.audio.sfx("build");
+          this.announce(`${FACILITIES[kind].name} built, floors ${bottom} to ${top}`);
+        } else {
+          this.audio.sfx("error");
+          if (res.reason) this.ui.toast(res.reason, "bad");
+          this.announce(res.reason ?? "Can't build there");
+        }
+        this.refreshCursorPreview();
+      }
+    } else {
+      const x = this.snapX(kind, c.tile);
+      const before = this.sim.tower.units.length;
+      this.tryBuild(kind, c.floor, x);
+      this.announce(
+        this.sim.tower.units.length > before ? `Placed ${FACILITIES[kind].name}` : `Can't place ${FACILITIES[kind].name} here`,
+      );
+    }
+  }
+
+  private bulldozeCursor(): void {
+    const c = this.kbCursor;
+    if (!c) return;
+    const p = this.pickedAt(c.floor, c.tile);
+    if (!p) {
+      this.announce("Nothing to bulldoze here");
+      return;
+    }
+    const name = FACILITIES[p.kind].name;
+    this.bulldozePicked(p);
+    this.announce(`Bulldozed ${name}`);
+    this.refreshCursorPreview();
+  }
+
+  /** Color-blind-safe traffic cue: word + shape-coded bar glyph (never color
+   *  alone), driven by the same congestion value the engine reads, with boundary
+   *  hysteresis so it doesn't flicker. */
+  private updateTraffic(): void {
+    const cong = this.sim.congestion();
+    const B = [1.0, 1.25, 1.6]; // tier boundaries
+    const raw = trafficTier(cong);
+    if (raw > this.lastTrafficTier && cong >= B[this.lastTrafficTier] + 0.03) this.lastTrafficTier = raw;
+    else if (raw < this.lastTrafficTier && cong <= B[this.lastTrafficTier - 1] - 0.03) this.lastTrafficTier = raw;
+    const tier = this.lastTrafficTier;
+    const label = TRAFFIC_LABELS[tier];
+    const glyphEl = document.getElementById("traffic-glyph");
+    const labelEl = document.getElementById("traffic-label");
+    const wrapEl = document.getElementById("traffic");
+    if (glyphEl && glyphEl.textContent !== trafficGlyph(tier)) glyphEl.textContent = trafficGlyph(tier);
+    if (labelEl && labelEl.textContent !== label) {
+      labelEl.textContent = label;
+      wrapEl?.setAttribute("aria-label", `Traffic: ${label}`);
+      wrapEl?.classList.toggle("traffic-warn", tier >= 2); // red is a redundant cue, not the only one
+    }
+  }
+
+  /** Push the effective reduced-motion state (OS pref OR user pref) to the DOM
+   *  (a class CSS keys off) and the engine (freezes ambient canvas motion). */
+  private applyReducedMotion(): void {
+    const on = reducedMotionActive(this.prefs, this.reduceMq.matches);
+    document.documentElement.classList.toggle("reduce-motion", on);
+    this.engine.setReducedMotion(on);
   }
 
   // ---- Engine wiring (all input/camera goes through Excalibur) ------------
@@ -298,30 +475,74 @@ class GameApp {
 
   private bindKeys(): void {
     window.addEventListener("keydown", (e) => {
-      // Don't let speed keys run the paused engine behind the first-run splash.
-      if (document.getElementById("splash")) return;
-      // Undo / redo — but not while typing in a field (let it keep its own edit
-      // history, e.g. the rename box).
-      const el = document.activeElement;
-      const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
-      if (!typing && (e.ctrlKey || e.metaKey)) {
-        const k = e.key.toLowerCase();
-        if (k === "z" && !e.shiftKey) {
-          e.preventDefault();
-          return this.undo();
-        }
-        if ((k === "z" && e.shiftKey) || k === "y") {
-          e.preventDefault();
-          return this.redo();
+      // Undo / redo (Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z or +Y) — handled BEFORE the
+      // modifier bail below so it isn't swallowed; skipped while typing in a field
+      // (which keeps its own edit history, e.g. the rename box).
+      {
+        const el = document.activeElement;
+        const typing = !!el && (el.tagName === "INPUT" || el.tagName === "TEXTAREA");
+        if (!typing && (e.ctrlKey || e.metaKey)) {
+          const k = e.key.toLowerCase();
+          if (k === "z" && !e.shiftKey) {
+            e.preventDefault();
+            return this.undo();
+          }
+          if ((k === "z" && e.shiftKey) || k === "y") {
+            e.preventDefault();
+            return this.redo();
+          }
         }
       }
+      // Never hijack other browser/OS shortcuts (Ctrl/Cmd/Alt + key).
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      // Typing controls swallow every game key.
+      const ae = document.activeElement as HTMLElement | null;
+      if (ae && (ae.tagName === "INPUT" || ae.tagName === "TEXTAREA" || ae.tagName === "SELECT" || ae.isContentEditable))
+        return;
+      // A focused button / palette item owns Enter/Space activation — don't ALSO
+      // fire the build cursor on those keys. Movement/zoom/bulldoze keys still get
+      // through, so keyboard play flows right after picking a tool from the palette.
+      const onControl = !!ae && (ae.tagName === "BUTTON" || ae.tagName === "A" || ae.getAttribute("role") === "button");
+      const activationKey = e.key === "Enter" || e.key === " " || e.key === "Spacebar";
+      if (onControl && activationKey) return;
+      if ((document.getElementById("modal") as HTMLDialogElement | null)?.open) return;
+      // Don't let game keys run the paused engine behind the first-run splash.
+      if (document.getElementById("splash")) return;
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
         this.engine.paused = SPEEDS[this.speed] === 0;
         document.querySelectorAll("#speed button[data-speed]").forEach((b) =>
           b.classList.toggle("active", (b as HTMLElement).dataset.speed === e.key),
         );
+        return;
       }
+
+      // Keyboard play (F50–52): a virtual build cursor moved with arrows/WASD,
+      // committed with Enter, bulldozed with Delete/X — full mouse-free play.
+      const step = e.shiftKey ? 10 : 1;
+      switch (e.key) {
+        case "ArrowLeft": case "a": case "A": this.moveCursor(-step, 0); break;
+        case "ArrowRight": case "d": case "D": this.moveCursor(step, 0); break;
+        case "ArrowUp": case "w": case "W": this.moveCursor(0, step); break;
+        case "ArrowDown": case "s": case "S": this.moveCursor(0, -step); break;
+        case "Enter": case " ": case "Spacebar": this.commitCursor(); break;
+        case "Delete": case "Backspace": case "x": case "X": this.bulldozeCursor(); break;
+        case "+": case "=": this.engine.zoomBy(1.15); return;
+        case "-": case "_": this.engine.zoomBy(1 / 1.15); return;
+        case "c": case "C":
+          if (this.kbCursor) this.engine.ensureVisible(this.kbCursor.tile, this.kbCursor.floor);
+          else this.engine.center();
+          return;
+        case "Escape":
+          this.kbAnchor = null;
+          this.engine.transportPreview = null;
+          this.refreshCursorPreview();
+          this.announce("Cancelled");
+          return;
+        default:
+          return; // not a game key — let it through
+      }
+      e.preventDefault(); // consumed a movement/commit/bulldoze key
     });
     // First interaction starts audio (browser autoplay policy).
     const kick = () => this.audio.start();
@@ -389,6 +610,7 @@ class GameApp {
       this.lastUiUpdate = now;
       this.audio.update(this.engine.focus());
       this.ui.update(this.sim);
+      this.updateTraffic();
       this.onboarding.tick(); // advance the first-run checklist on real progress (no-op when inactive)
       // Keep the open editor's live stats fresh. Refresh now patches only the
       // volatile cells in place (never the buttons or rename input), so this is

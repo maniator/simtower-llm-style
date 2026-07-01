@@ -1043,6 +1043,51 @@ dialog#modal {
   }
 }
 
+/* Accessibility: user-toggled reduced motion (mirrors the OS @media rule so it
+   also applies when the OS preference is off). Neutralizes CSS animations and
+   transitions; canvas ambient motion is frozen separately by the engine. */
+html.reduce-motion *,
+html.reduce-motion *::before,
+html.reduce-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Color-blind-safe traffic cue: the bar glyph carries the level in shape, so it
+   reads in grayscale; the warn color is a redundant extra, never the only cue. */
+#traffic-glyph { font-family: "Courier New", monospace; letter-spacing: -1px; }
+#status .traffic-warn { color: var(--bad); font-weight: 700; }
+
+/* Accessibility: screen-reader-only live region + visible keyboard focus. */
+.visually-hidden {
+  position: absolute !important;
+  width: 1px; height: 1px;
+  margin: -1px; padding: 0; border: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* Help dialog: keyboard-play key hints. */
+.help-keys { line-height: 1.9; }
+.help-keys kbd {
+  display: inline-block;
+  min-width: 1.1em;
+  padding: 0 5px;
+  margin: 0 1px;
+  font: 600 0.85em "Courier New", monospace;
+  text-align: center;
+  color: var(--ink, #1a1a1a);
+  background: #f4f4f4;
+  border: 1px solid #b5b5b5;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}
 /* ── First-run splash + onboarding (chrome only) ───────────────────────── */
 /* "Metropolis Dusk" title screen: full-bleed dusk sky, an art-deco skyline and
    a setting sun, under the Verticopolis wordmark. */

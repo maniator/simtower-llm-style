@@ -15,6 +15,7 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
+    <div id="a11y-live" class="visually-hidden" aria-live="polite" role="status"></div>
     <div id="app">
       <header id="topbar">
         <div class="brand">🏙️ <span>VERTICO<b>POLIS</b></span></div>
@@ -38,6 +39,11 @@
           <div class="stat" title="Total population">
             <span class="label">POP</span>
             <span id="stat-pop" class="value">0</span>
+          </div>
+          <div class="stat" title="Elevator traffic / congestion">
+            <span class="label">TRAFFIC</span>
+            <span id="traffic" class="value" aria-live="polite" aria-label="Traffic: Smooth"
+              ><span id="traffic-glyph" aria-hidden="true">▮▯▯▯</span> <span id="traffic-label">Smooth</span></span>
           </div>
         </div>
         <div id="speed">
