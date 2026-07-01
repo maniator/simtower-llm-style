@@ -661,12 +661,23 @@ class GameApp {
     const c = this.sim.clock;
     const next = this.sim.nextStarThreshold;
     const fmt = (n: number) => n.toLocaleString();
+    // Modal-only diagnostics — a full scan and a flood-fill, computed here at
+    // modal-build time so they never run on the ~6 Hz HUD stats() path.
+    const ratingPop = this.sim.ratingPopulation();
+    const parkingWorking = this.sim.tower.functionalParkingSet().size;
+    const stranded = this.sim.strandedFloors().length; // BFS-bearing
+    // Only when hotels have dropped out of the rating (3★+) and actually diverge.
+    const ratingRow =
+      s.star >= 3 && ratingPop < s.population
+        ? `<span class="k">Counts toward stars</span><span class="v">${fmt(ratingPop)}</span>`
+        : "";
     return `<div class="stats-grid">
       <div class="stats-section">Overview</div>
       <div class="col">
         <span class="k">Tower name</span><span class="v">${escapeAttr(this.sim.tower.towerName)}</span>
         <span class="k">Rating</span><span class="v">${s.star >= 6 ? "TOWER" : s.star + "★"}</span>
         <span class="k">Population</span><span class="v">${fmt(s.population)}</span>
+        ${ratingRow}
         <span class="k">Next star at</span><span class="v">${next ? fmt(next) : "—"}</span>
         <span class="k">Funds</span><span class="v">$${fmt(Math.round(this.sim.money))}</span>
         <span class="k">Date</span><span class="v">${c.dayName}, day ${c.day + 1}</span>
@@ -689,6 +700,28 @@ class GameApp {
         <span class="k">Shops / Food</span><span class="v">${s.shops} / ${s.restaurants}</span>
         <span class="k">On fire</span><span class="v" style="color:${s.fires ? "var(--bad)" : "var(--good)"}">${s.fires || "None"}</span>
       </div>
+      <div class="stats-section">Transport &amp; access</div>
+      <div class="col">
+        <span class="k">Stranded floors</span><span class="v" style="color:${stranded ? "var(--bad)" : "var(--good)"}">${stranded || "None"}</span>
+        ${
+          s.parkingSpaces > 0
+            ? `<span class="k">Parking spaces</span><span class="v" style="color:${parkingWorking < s.parkingSpaces ? "var(--bad)" : "var(--good)"}">${parkingWorking} / ${s.parkingSpaces} working</span>`
+            : ""
+        }
+      </div>
+      ${
+        stranded || ratingRow
+          ? `<div class="col">${
+              stranded
+                ? `<span class="k" style="color:var(--muted);grid-column:1/-1">Stranded = leased floors 3+ rides from the lobby; they earn rating but draw no visitors. Add a sky-lobby transfer.</span>`
+                : ""
+            }${
+              ratingRow
+                ? `<span class="k" style="color:var(--muted);grid-column:1/-1">Hotel guests count toward your star rating only until 3★.</span>`
+                : ""
+            }</div>`
+          : ""
+      }
       ${this.buildMilestonesHtml()}
     </div>`;
   }
@@ -817,13 +850,42 @@ class GameApp {
       }
       this.inspectAnchor = { x: u.x + u.width, floor: u.floor + facilityFloors(u.kind) - 1 };
       const f = FACILITIES[u.kind];
-      const served = this.sim.tower.isFloorServed(u.floor) ? "Yes" : "No";
+      // Access — the whole truth, not just "served": a floor can be connected yet
+      // sit 3+ rides from the lobby, in which case no commuter ever comes. Only
+      // shown for units that actually draw commuters/visitors (tenants + venues);
+      // parking/service work via ramp-chaining/coverage, not passenger trips, so
+      // an access warning on them would be a false alarm.
+      const needsAccess = f.population > 0 || ECON.dailyTrafficIncome[u.kind] !== undefined;
+      const served = this.sim.tower.isFloorServed(u.floor);
+      const access = !needsAccess
+        ? ""
+        : !served
+          ? `<div style="color:var(--bad)">Access: not connected — no elevator or stair reaches this floor.</div>`
+          : this.sim.floorReachable(u.floor)
+            ? `<div style="color:var(--good)">Access: reachable (≤2 rides from the lobby).</div>`
+            : `<div style="color:var(--bad)">Access: too far — 3+ rides from the lobby, so no one travels here. Add a sky-lobby transfer.</div>`;
+      // Silent rule: hotel guests stop counting toward the star rating at 3★.
+      const hotel = isHotelKind(u.kind)
+        ? this.sim.hotelsCountTowardRating()
+          ? `<div style="color:var(--good)">Counts toward next star: yes.</div>`
+          : `<div style="color:var(--bad)">Counts toward stars: no — hotel guests stop counting at 3★ (they still earn income).</div>`
+        : "";
+      // Silent rule: a parking space only works when it chains to a ramp. Skip
+      // the verdict while it's still building (or on fire) — "Status" covers that.
+      const parking =
+        u.kind === "parking" && u.state !== "construction" && u.state !== "fire"
+          ? this.sim.tower.functionalParkingSet().has(u.id)
+            ? `<div style="color:var(--good)">Ramp access: connected.</div>`
+            : `<div style="color:var(--bad)">Ramp access: none — this space is dead (no relief). Chain it to a Parking Ramp.</div>`
+          : "";
       this.ui.showInspector(
         `<h4>${f.name}</h4>` +
           `<div>${u.label !== f.name ? u.label + "<br>" : ""}${u.floor >= 1 ? "Floor " + u.floor : "B" + (1 - u.floor)}</div>` +
           `<div>Status: ${u.state}</div>` +
           (f.population ? `<div>Occupants: ${u.occupants}/${f.population}</div>` : "") +
-          `<div>Served by elevator: ${served}</div>` +
+          access +
+          hotel +
+          parking +
           `<div>Satisfaction: ${Math.round(u.satisfaction * 100)}%</div>`,
       );
     } else {

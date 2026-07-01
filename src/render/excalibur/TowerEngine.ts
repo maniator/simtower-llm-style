@@ -767,6 +767,12 @@ export class TowerEngine {
 
   private syncScene(): void {
     const tower = this.sim.tower;
+    // Fresh flood-fill (not cached — it depends on unit state); read ONCE here
+    // per sync. A parking space absent from this set is "dead" and gets a red X.
+    // The dead-bit joins the room signature, so a connectivity flip triggers a
+    // re-bake alongside the existing state/lighting/hour bits — it adds no
+    // per-frame work of its own.
+    const parkingOK = tower.functionalParkingSet();
     const seenS = new Set<number>();
     const seenR = new Set<number>();
     for (const u of tower.units) {
@@ -782,15 +788,20 @@ export class TowerEngine {
         // dawn would wrongly stay shuttered all day until the next lighting flip.
         const open = hasBusinessHours(u.kind) ? (isOpenAt(u.kind, this.d.hour) ? "o" : "c") : "";
         const lateNight = u.kind === "condo" && (this.d.hour >= 23 || this.d.hour < 6) ? "s" : "";
-        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}`;
+        // Only mark a SETTLED space dead — a mid-build (or burning) space is
+        // excluded from the set for other reasons and isn't a connectivity fault.
+        const dead =
+          u.kind === "parking" && u.state !== "construction" && u.state !== "fire" && !parkingOK.has(u.id) ? "x" : "";
+        const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}${dead}`;
+        const isDead = dead === "x";
         const a = this.roomActors.get(u.id);
         if (!a) {
-          this.addRoom(u);
+          this.addRoom(u, isDead);
           this.roomSig.set(u.id, sig);
         } else if (this.roomSig.get(u.id) !== sig) {
           a.kill();
           this.roomActors.delete(u.id);
-          this.addRoom(u);
+          this.addRoom(u, isDead);
           this.roomSig.set(u.id, sig);
         }
       }
@@ -844,7 +855,7 @@ export class TowerEngine {
     this.structActors.set(u.id, a);
   }
 
-  private addRoom(u: Unit): void {
+  private addRoom(u: Unit, deadParking = false): void {
     const hgt = facilityFloors(u.kind);
     const w = u.width * TILE;
     const h = hgt * FLOOR;
@@ -858,6 +869,21 @@ export class TowerEngine {
       draw: (ctx) => {
         this.d.ctx = ctx;
         drawUnit(this.d, u, 0, 0, w, h);
+        // Canon "red X" on a parking space that isn't chained to a ramp (dead —
+        // no relief). Baked into the sprite; the dead-bit participates in the room
+        // signature, so this re-bakes when the signature changes (state/lighting/
+        // hour or the dead-bit). deadParking is computed once per sync from the
+        // caller's single functionalParkingSet() read — no per-unit recompute.
+        if (deadParking) {
+          ctx.strokeStyle = "#C24A3A";
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.moveTo(2, 2);
+          ctx.lineTo(w - 2, h - 2);
+          ctx.moveTo(w - 2, 2);
+          ctx.lineTo(2, h - 2);
+          ctx.stroke();
+        }
       },
     });
     const a = new ex.Actor({ pos: ex.vec(this.worldX(u.x), this.worldYTop(u.floor, hgt)), width: w, height: h, anchor: ex.vec(0, 0), z: 0 });

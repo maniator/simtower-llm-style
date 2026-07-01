@@ -7,7 +7,7 @@ import { EventSystem } from "./EventSystem";
 import type { SimContext } from "./SimContext";
 import { Tower } from "./Tower";
 import { RNG } from "./rng";
-import { MILESTONES } from "./milestones";
+import { MILESTONES, isTenantFloorUnit } from "./milestones";
 
 export { ECON } from "./econConfig";
 import {
@@ -134,6 +134,10 @@ export class Simulation implements SimContext {
   private excavated = new Set<string>();
   /** Milestone ids already achieved (announced once); persisted. */
   private achievedMilestones = new Set<string>();
+  /** Edge-trigger latch for the "stranded floor" log nudge, so it fires once on
+   *  a 0→>0 crossing and re-arms only after the tower is fixed. Advisory only,
+   *  intentionally not persisted (re-nudges once after load if still stranded). */
+  private strandedNudged = false;
 
   /** Bookkeeping for period boundaries. */
   private lastDay = 0;
@@ -435,6 +439,23 @@ export class Simulation implements SimContext {
     this.checkVip();
     this.reportMoveIns();
     this.checkMilestones();
+    this.nudgeStranded();
+  }
+
+  /** Once-per-day, edge-triggered log nudge when a leased floor is 3+ rides from
+   *  the lobby (invisible otherwise). Log-only (never a toast); de-duped by a
+   *  latch so it can't repeat while the condition persists. */
+  private nudgeStranded(): void {
+    const stranded = this.strandedFloors().length > 0;
+    if (stranded && !this.strandedNudged) {
+      // "info", not "bad": the UI toasts every good/bad log entry, and this
+      // advisory is meant to be log-only (a quiet bulletin line, not a toast).
+      this.emit(
+        "A leased floor is 3+ elevator rides from the lobby — no visitors will come. Check it in the inspector.",
+        "info",
+      );
+    }
+    this.strandedNudged = stranded; // re-arms only after the condition clears
   }
 
   /** Announce any newly-satisfied optional milestones — once each, then persisted.
@@ -866,6 +887,44 @@ export class Simulation implements SimContext {
     return this.tower.units.some((u) => u.kind === kind);
   }
 
+  /** Whether hotel guests currently count toward the star rating (they stop at 3★). */
+  hotelsCountTowardRating(): boolean {
+    return this.star < 3;
+  }
+
+  /**
+   * True when a commuter can actually reach `floor` from the ground lobby in ≤2
+   * transport rides (the {@link Crowd.route} cap). A floor can be
+   * {@link Tower.isFloorServed} yet return false here — connected, but 3+ rides
+   * out, so no commuter ever spawns for it. Runs a fresh bounded (≤2-ride) BFS
+   * each call — only Crowd's ADJACENCY graph is cached by `tower.revision`, not
+   * the route result — so keep it off the tick/HUD path (inspect/modal/day only).
+   */
+  floorReachable(floor: number): boolean {
+    if (floor === 1) return true;
+    return this.crowd.route(this.tower, 1, floor) !== null;
+  }
+
+  /**
+   * Above-ground floors carrying a real tenant that are served (connected) but
+   * NOT ≤2-ride reachable — "stranded": they earn rating credit but draw no
+   * visitors. BFS-bearing — call only on modal-open or once/day, NEVER in
+   * {@link stats} or the tick loop.
+   */
+  strandedFloors(): number[] {
+    // Collect candidate floors first, so the ≤2-ride BFS runs once PER FLOOR,
+    // not once per tenant unit (many units share a floor).
+    const candidates = new Set<number>();
+    for (const u of this.tower.units) {
+      if (!isTenantFloorUnit(u)) continue;
+      if (!this.tower.isFloorServed(u.floor)) continue; // "not connected" is a separate, inspector-reported state
+      candidates.add(u.floor);
+    }
+    const out: number[] = [];
+    for (const floor of candidates) if (!this.floorReachable(floor)) out.push(floor);
+    return out.sort((a, b) => a - b);
+  }
+
   /** Like {@link hasAny} but only counts a facility that is finished and intact
    * (not under construction, not on fire). Used by the rating/TOWER gates. */
   hasOperational(kind: FacilityKind): boolean {
@@ -995,7 +1054,8 @@ export class Simulation implements SimContext {
       dirty = 0,
       shops = 0,
       restaurants = 0,
-      vacant = 0;
+      vacant = 0,
+      parkingSpaces = 0;
     for (const u of this.tower.units) {
       if (u.kind === "office") {
         offices++;
@@ -1010,9 +1070,15 @@ export class Simulation implements SimContext {
         if (u.state === "dirty") dirty++;
       } else if (u.kind === "shop") shops++;
       else if (u.kind === "restaurant" || u.kind === "fastFood") restaurants++;
+      else if (u.kind === "parking") parkingSpaces++;
     }
     return {
       population: this.population,
+      // Cheap loop-counter field only. The modal-only diagnostics that need a
+      // full scan / flood-fill (ratingPopulation, functional parking count) are
+      // computed in buildStatsHtml at modal-build time — NOT here, since stats()
+      // runs on the ~6 Hz HUD refresh (UI.update).
+      parkingSpaces,
       money: this.money,
       star: this.star,
       offices,
