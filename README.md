@@ -29,6 +29,26 @@ npm run lint         # eslint
 npm run screenshots  # build + headless-capture screenshots into docs/screenshots
 ```
 
+## Install it (PWA)
+
+The production build (`npm run build`) is an installable **Progressive Web App**.
+Open the served build in Chrome, Edge, or Safari and use **Install app** / **Add
+to Home Screen** to run Tower Tycoon in its own window, offline.
+
+It's built on **[`vite-plugin-pwa`](https://vite-pwa-org.netlify.app/)** (Workbox
+under the hood) — no hand-rolled service worker. A few details worth knowing:
+
+- **Always the latest, never a lost tower.** When a new version is deployed, the
+  game detects the waiting update, **forces a quick save first**, shows a brief
+  "updating…" toast, then swaps to the new assets. You always end up on the
+  current build and your tower survives the reload.
+- **Scoped to the game.** Only the main game registers the service worker; the
+  `gallery`/`preview`/`excalibur` tooling pages are excluded from its scope and
+  precache.
+- **Icons** live in `src/public/` and are generated from an in-code SVG (no
+  external art), matching the game's "every sprite drawn in code" ethos. Regen
+  with `npm run icons`.
+
 ## How to play
 
 - **Build floors first.** Lay `Floor` tiles, then place rooms on top of them.

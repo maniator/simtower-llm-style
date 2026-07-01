@@ -20,7 +20,8 @@
     "lint": "eslint src --ext .ts,.tsx",
     "lint:fix": "eslint src --ext .ts,.tsx --fix",
     "screenshots": "vite build && node scripts/serve-and-shoot.mjs",
-    "screenshots:docker": "bash scripts/shoot-docker.sh"
+    "screenshots:docker": "bash scripts/shoot-docker.sh",
+    "icons": "node scripts/gen-pwa-icons.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.2",
@@ -37,6 +38,7 @@
     "typescript": "^5.3.3",
     "typescript-eslint": "^8.54.0",
     "vite": "^7.3.1",
+    "vite-plugin-pwa": "^1.3.0",
     "vitest": "^4.0.18"
   },
   "dependencies": {
