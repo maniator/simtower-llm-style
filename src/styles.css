@@ -1084,15 +1084,16 @@ dialog#modal {
 .splash-sun {
   position: absolute;
   z-index: 0;
-  /* Low behind the skyline — a setting sun, not a spotlight on the text. */
-  top: 74%;
+  /* Sits low, mostly behind the skyline — a setting sun, kept clear of the copy
+     (on mobile the stacked buttons push the text down toward it). */
+  top: 82%;
   left: 50%;
   transform: translate(-50%, -50%);
-  width: min(50vmin, 250px);
-  height: min(50vmin, 250px);
+  width: min(44vmin, 210px);
+  height: min(44vmin, 210px);
   border-radius: 50%;
   background: radial-gradient(circle, #ffe6a0 0%, #ffc94a 52%, #f18f4b 100%);
-  box-shadow: 0 0 100px 34px rgba(255, 179, 87, 0.33);
+  box-shadow: 0 0 60px 16px rgba(255, 179, 87, 0.26);
 }
 .splash-skyline {
   position: absolute;
@@ -1140,6 +1141,7 @@ dialog#modal {
   margin: 18px auto 0;
   color: #e7ddf5;
   line-height: 1.45;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 .splash-actions {
   display: flex;
@@ -1165,15 +1167,18 @@ dialog#modal {
   background: transparent;
   box-shadow: none;
   border-color: transparent;
-  color: #ffd9a8;
+  color: #ffe6bf;
   text-decoration: underline;
+  /* Reads even when it overlaps the bright sun (mobile stacks push it down). */
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
 }
 .splash-attrib {
   max-width: 60ch;
   margin: 22px auto 0;
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.72);
+  color: rgba(255, 255, 255, 0.85);
   line-height: 1.4;
+  text-shadow: 0 1px 4px rgba(0, 0, 0, 0.85);
 }
 .splash-version {
   position: absolute;
