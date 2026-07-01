@@ -1,10 +1,12 @@
 import type { Tower } from "./Tower";
 
 /**
- * A cheap fingerprint of everything a *player action* can change (structure,
- * transport config, labels, rents, cinema booking policy, money) — but NOT
- * time, so a press where only the clock ticked doesn't register as a change.
- * Used by {@link UndoHistory} to drop no-op gestures.
+ * A cheap fingerprint of the player-mutable state — structure, transport config,
+ * labels, rents, cinema booking policy, and money. It deliberately omits the
+ * clock/time fields, so the sub-second time delta *within a single gesture* isn't
+ * mistaken for a change when {@link UndoHistory} compares capture-vs-commit to
+ * drop no-op gestures. (Money IS included; over long spans income can move it,
+ * but a gesture is far too short for that to matter.)
  */
 export function towerStateSig(tower: Tower, money: number): string {
   const u = tower.units
@@ -54,7 +56,15 @@ export class UndoHistory {
 
   constructor(private readonly ports: UndoPorts) {}
 
-  /** Capture the pre-action snapshot at the start of a gesture. */
+  /**
+   * Capture the pre-action snapshot at the start of a gesture. Called exactly
+   * once per gesture (a drag's first mutation, or a discrete edit click), and it
+   * deliberately *overwrites* any prior pending: gesture-start hooks fire once,
+   * and overwriting self-heals a gesture that captured but bailed before
+   * committing (e.g. an edit that hit an early return). A "capture only if empty"
+   * guard would instead strand that stale snapshot and mis-anchor the next
+   * gesture, so overwrite is intentional here.
+   */
   capture(label: string): void {
     this.pending = { snap: this.ports.snapshot(), sig: this.ports.signature(), label };
   }

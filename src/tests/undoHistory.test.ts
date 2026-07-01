@@ -103,19 +103,17 @@ describe("UndoHistory — stack semantics", () => {
 });
 
 describe("towerStateSig", () => {
-  it("changes on money/structure but not when only time passes", () => {
+  it("includes money but not the clock", () => {
     const sim = Simulation.newGame(1);
-    const sig0 = towerStateSig(sim.tower, sim.money);
-    const money0 = sim.money;
+    const FIXED = 500_000; // hold money constant so we isolate the clock's effect
+    const sig0 = towerStateSig(sim.tower, FIXED);
     const units0 = sim.tower.units.length;
 
-    sim.tick(30); // a bare starter tower earns/spends nothing in 30 minutes
-    expect(sim.money).toBe(money0);
-    expect(sim.tower.units.length).toBe(units0);
-    expect(towerStateSig(sim.tower, sim.money)).toBe(sig0); // time excluded
+    sim.tick(30); // advance only the clock
+    expect(sim.tower.units.length).toBe(units0); // structure unchanged
+    expect(towerStateSig(sim.tower, FIXED)).toBe(sig0); // clock is not in the sig
 
-    sim.money -= 1;
-    expect(towerStateSig(sim.tower, sim.money)).not.toBe(sig0); // money included
+    expect(towerStateSig(sim.tower, FIXED + 1)).not.toBe(sig0); // money is
   });
 
   it("changes when structure is added", () => {
