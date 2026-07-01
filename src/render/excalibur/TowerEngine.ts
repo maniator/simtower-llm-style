@@ -5,10 +5,17 @@ import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/ty
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { person, SHIRTS } from "../pixelSprites";
 import type { Person } from "../../engine/Crowd";
+import { clampCameraY } from "../cameraBounds";
 
 /** World pixels per tile / per floor. */
 export const TILE = 11;
 export const FLOOR = 34;
+
+/** Camera zoom range (screen pixels per world pixel). */
+export const MIN_ZOOM = 0.3;
+export const MAX_ZOOM = 3;
+const clampZoom = (z: number): number =>
+  Number.isFinite(z) ? Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z)) : MIN_ZOOM;
 
 /**
  * The crowd advances on *game* time, not real time, so the speed control only
@@ -470,14 +477,17 @@ export class TowerEngine {
   }
   zoomAt(factor: number, sx: number, sy: number): void {
     const before = this.screenToWorld(sx, sy);
-    this.cam.zoom = Math.max(0.3, Math.min(3, this.cam.zoom * factor));
+    this.cam.zoom = clampZoom(this.cam.zoom * factor);
     const after = this.screenToWorld(sx, sy);
     this.cam.pos = ex.vec(this.cam.pos.x + (before.x - after.x), this.cam.pos.y + (before.y - after.y));
     this.clamp();
   }
   private clamp(): void {
     const x = Math.max(0, Math.min(GRID.width * TILE, this.cam.pos.x));
-    const y = Math.max(-(GRID.maxFloor + 2) * FLOOR, Math.min((2 - GRID.minFloor) * FLOOR, this.cam.pos.y));
+    // Zoom-aware vertical clamp: bound the visible top/bottom edges (not just
+    // the center) so panning/zooming out never exposes empty void below the
+    // deepest buildable basement. See {@link clampCameraY}.
+    const y = clampCameraY(this.cam.pos.y, this.viewHeight, this.cam.zoom, FLOOR, GRID.minFloor, GRID.maxFloor);
     this.cam.pos = ex.vec(x, y);
   }
   center(): void {
@@ -485,8 +495,10 @@ export class TowerEngine {
     this.cam.pos = ex.vec((GRID.width / 2) * TILE, -(Math.max(6, hi) / 2) * FLOOR);
   }
   setCamera(tileX: number, floor: number, zoom: number): void {
+    // Validate zoom to the supported range: the vertical clamp divides by zoom,
+    // so a zero/negative/NaN value here would poison later pan/zoom math.
+    this.cam.zoom = clampZoom(zoom);
     this.cam.pos = ex.vec(tileX * TILE, -floor * FLOOR);
-    this.cam.zoom = zoom;
   }
 
   // ---- Static scene elements ----------------------------------------------
