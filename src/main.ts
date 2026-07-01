@@ -9,6 +9,7 @@ import { loadPrefs, savePrefs, reducedMotionActive, type Prefs } from "./storage
 import { trafficTier, TRAFFIC_LABELS, trafficGlyph, type TrafficTier } from "./engine/traffic";
 import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
+import { OnboardingController, shouldArm } from "./ui/Onboarding";
 import { registerPWA } from "./pwa";
 
 /** Game speeds → in-game minutes advanced per real second. */
@@ -54,6 +55,8 @@ class GameApp {
   private inspectAnchor: { x: number; floor: number } | null = null;
   /** Cached so per-frame anchoring doesn't construct a MediaQueryList each tick. */
   private mobileMq = window.matchMedia("(max-width: 860px)");
+  /** First-run splash + onboarding (pure DOM chrome). */
+  private onboarding!: OnboardingController;
   /** Whether the panels currently carry an inline anchor (so the mobile branch
    *  only resets them once, not every frame). */
   private panelsAnchored = false;
@@ -102,6 +105,14 @@ class GameApp {
         this.applyReducedMotion();
         return reducedMotionActive(this.prefs, this.reduceMq.matches);
       },
+      onReplayOnboarding: () => {
+        if (document.getElementById("splash")) return; // never arm behind the splash
+        OnboardingController.clearOnboarded();
+        this.ui.closeModal();
+        if (!this.onboarding.arm(this.sim)) {
+          this.ui.toast("You've already completed Getting Started.", "info");
+        }
+      },
       onRenameTower: (name) => (this.sim.tower.towerName = name),
       onShowStats: () => this.ui.showStats(this.buildStatsHtml()),
       onShowSaves: () => this.ui.showSaves(SaveGame.listSlots()),
@@ -132,8 +143,47 @@ class GameApp {
     this.applyReducedMotion();
     this.reduceMq.addEventListener("change", () => this.applyReducedMotion());
 
-    // Autosave periodically.
-    window.setInterval(() => this.save(true), 30000);
+    // First-run splash + onboarding (chrome only; the engine is untouched).
+    this.onboarding = new OnboardingController({
+      mq: this.mobileMq,
+      showHelp: () => this.ui.showHelp(),
+      pauseForSplash: (paused) => {
+        this.speed = paused ? 0 : 1;
+        this.engine.paused = paused;
+        document.querySelectorAll("#speed button[data-speed]").forEach((b) =>
+          b.classList.toggle("active", Number((b as HTMLElement).dataset.speed) === this.speed),
+        );
+      },
+      chime: () => this.audio.sfx("promote"),
+    });
+    this.onboarding.showSplash({
+      hasSave: SaveGame.hasSave(),
+      onContinue: () => {
+        /* sim already loaded at construction; splash teardown resumes the engine */
+      },
+      onNewTower: (dismiss) => {
+        // Guard the same data-loss as the toolbar's New button: starting fresh
+        // overwrites the single autosave slot. Keep the splash up (paused) behind
+        // the confirmation — only dismiss + start once the player accepts, so a
+        // cancel leaves the title screen intact and no time passes.
+        if (SaveGame.hasSave()) {
+          this.ui.confirmModal("Start a new tower?", "This abandons your current tower (it is not auto-saved).", () => {
+            dismiss();
+            this.newGame();
+          });
+        } else {
+          dismiss();
+          this.newGame();
+        }
+      },
+    });
+
+    // Autosave periodically — but never while the first-run splash is up, so an
+    // idle first visit can't persist the throwaway boot sim (which would flip
+    // hasSave() true for a tower the player never started).
+    window.setInterval(() => {
+      if (!document.getElementById("splash")) this.save(true);
+    }, 30000);
   }
 
   // ---- Keyboard play (mouse-free build cursor) ---------------------------
@@ -423,6 +473,8 @@ class GameApp {
       )
         return;
       if ((document.getElementById("modal") as HTMLDialogElement | null)?.open) return;
+      // Don't let game keys run the paused engine behind the first-run splash.
+      if (document.getElementById("splash")) return;
 
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
@@ -527,6 +579,7 @@ class GameApp {
       this.audio.update(this.engine.focus());
       this.ui.update(this.sim);
       this.updateTraffic();
+      this.onboarding.tick(); // advance the first-run checklist on real progress (no-op when inactive)
       // Keep the open editor's live stats fresh. Refresh now patches only the
       // volatile cells in place (never the buttons or rename input), so this is
       // safe while renaming; the pointer guard still skips the rare full rebuild
@@ -1219,6 +1272,11 @@ class GameApp {
   private newGame(): void {
     this.adoptSim(Simulation.newGame(Date.now() & 0x7fffffff));
     this.ui.toast("New tower founded. Good luck!", "good");
+    // Auto-arm onboarding only for a genuine first-timer. A returning player (a
+    // save exists) is treated as already onboarded even if the localStorage flag
+    // was cleared, so they're never re-onboarded unexpectedly (Replay via Help
+    // still re-arms explicitly).
+    if (shouldArm(true) && !SaveGame.hasSave()) this.onboarding.arm(this.sim);
   }
 }
 

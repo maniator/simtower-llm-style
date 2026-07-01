@@ -28,6 +28,7 @@ export interface UICallbacks {
   onEditAction(action: string, root: HTMLElement): void;
   /** Toggle reduced motion; returns the new effective state. */
   onToggleReducedMotion(): boolean;
+  onReplayOnboarding(): void;
   onRenameTower(name: string): void;
   onShowStats(): void;
   onShowSaves(): void;
@@ -465,7 +466,7 @@ export class UI {
     dialog.innerHTML = "";
   }
 
-  private confirmModal(title: string, body: string, onYes: () => void): void {
+  confirmModal(title: string, body: string, onYes: () => void): void {
     const box = this.openModal(
       `<h2>${title}</h2><p>${body}</p>
        <div class="modal-actions"><button data-act="no">Cancel</button><button class="primary" data-act="yes">Confirm</button></div>`,
@@ -544,7 +545,11 @@ export class UI {
     });
   }
 
-  private showHelp(): void {
+  showHelp(): void {
+    // Replaying the intro is meaningless while the title screen is still up (the
+    // handler no-ops behind #splash), so disable that button there.
+    const onSplash = !!document.getElementById("splash");
+    const replayAttr = onSplash ? ' disabled title="Start a tower first, then you can replay the intro."' : "";
     const box = this.openModal(`
       <h2>How to play</h2>
       <p>Build a thriving high-rise and earn your way to a coveted <b>TOWER</b> rating.</p>
@@ -567,7 +572,7 @@ export class UI {
         <li><kbd>Delete</kbd> / <kbd>X</kbd> bulldoze at the cursor · <kbd>Esc</kbd> cancel</li>
         <li><kbd>+</kbd> / <kbd>−</kbd> zoom · <kbd>C</kbd> re-center · <kbd>0</kbd>–<kbd>3</kbd> game speed</li>
       </ul>
-      <div class="modal-actions"><button data-act="reduce-motion"></button><button class="primary" data-act="close">Got it</button></div>
+      <div class="modal-actions"><button data-act="reduce-motion"></button><button data-act="replay-onboard"${replayAttr}>Replay Getting Started</button><button class="primary" data-act="close">Got it</button></div>
     `);
     const rm = box.querySelector<HTMLButtonElement>('[data-act="reduce-motion"]')!;
     // When the OS forces reduced motion on, the user pref can't override it — show
@@ -581,6 +586,10 @@ export class UI {
     label(document.documentElement.classList.contains("reduce-motion"));
     rm.addEventListener("click", () => label(this.cb.onToggleReducedMotion()));
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    // Only wire replay when it can actually run (not while the splash is up).
+    if (!onSplash) {
+      box.querySelector('[data-act="replay-onboard"]')!.addEventListener("click", () => this.cb.onReplayOnboarding());
+    }
   }
 
   /** A two-choice emergency modal (fire rescue / bomb ransom). Calls `onResolve`

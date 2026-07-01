@@ -117,6 +117,32 @@ function frame({ floor, zoom }) {
   g.engine.setCamera(Math.floor(g.grid.width / 2), floor, zoom);
 }
 
+/** Remove the first-run splash/onboarding chrome, mark it seen, and resume the
+ *  engine (the splash pauses it), so the remaining shots frame the game cleanly. */
+async function dismissFirstRun(pg) {
+  await pg.evaluate(() => {
+    try {
+      localStorage.setItem("tt.onboarded", "1");
+    } catch {
+      /* ignore */
+    }
+    // Prefer the splash's own CTA so the app runs its real teardown (drops the
+    // Esc listener, resumes via its pause path); node removal is the safety net.
+    document.querySelector("#splash [data-splash='continue'], #splash [data-splash='new']")?.click();
+    document.getElementById("splash")?.remove();
+    document.getElementById("onboard")?.remove();
+    document.querySelectorAll(".tt-pulse").forEach((n) => n.classList.remove("tt-pulse"));
+    const g = window.game;
+    if (g) {
+      g.speed = 2;
+      g.engine.paused = false;
+      document
+        .querySelectorAll("#speed button[data-speed]")
+        .forEach((b) => b.classList.toggle("active", Number(b.dataset.speed) === g.speed));
+    }
+  });
+}
+
 async function main() {
   const browser = await chromium.launch({ executablePath: EXECUTABLE });
   const page = await browser.newPage({ viewport: { width: 1280, height: 800 } });
@@ -124,6 +150,25 @@ async function main() {
 
   await page.goto(BASE, { waitUntil: "networkidle" });
   await page.waitForFunction(() => !!window.game, null, { timeout: 10000 });
+
+  // 0) First-run splash (shown on a fresh browser before anything else).
+  await page.waitForSelector("#splash", { timeout: 4000 }).catch(() => {});
+  await page.waitForTimeout(300);
+  await page.screenshot({ path: `${OUT}/00-splash.png` });
+  console.log("captured 00-splash");
+
+  // 0b) First-run onboarding in action: press "New Tower" to arm the
+  // Getting-Started checklist, then frame the empty lot so the checklist,
+  // the pulsed Floor palette item, and the device hint bar are all visible.
+  await page.click('#splash [data-splash="new"]');
+  await page.waitForSelector("#onboard", { timeout: 4000 }).catch(() => {});
+  await page.evaluate(frame, { floor: 4, zoom: 1.0 });
+  await page.waitForTimeout(500);
+  await page.screenshot({ path: `${OUT}/00b-onboarding.png` });
+  console.log("captured 00b-onboarding");
+
+  // Dismiss the first-run chrome so the remaining shots frame the game cleanly.
+  await dismissFirstRun(page);
 
   // 1) Fresh tower / empty lot — zoomed in on the starter lobby.
   await page.evaluate(frame, { floor: 3, zoom: 1.2 });
@@ -210,6 +255,11 @@ async function main() {
   });
   await mobile.goto(BASE, { waitUntil: "networkidle" });
   await mobile.waitForFunction(() => !!window.game, null, { timeout: 10000 });
+  // Capture the mobile splash, then dismiss it before building the demo tower.
+  await mobile.waitForSelector("#splash", { timeout: 4000 }).catch(() => {});
+  await mobile.waitForTimeout(300);
+  await mobile.screenshot({ path: `${OUT}/00-splash-mobile.png` });
+  await dismissFirstRun(mobile);
   await mobile.evaluate(buildDemoScript);
   await mobile.evaluate(() => {
     const g = window.game;
