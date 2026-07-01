@@ -1,6 +1,6 @@
 ---
 title: "UX Spec — The Legibility Pass (surface three silent rules)"
-game: Tower Tycoon (browser SimTower clone)
+game: Verticopolis (browser SimTower clone)
 author: Samus Shepard (Game Designer — BMAD gds agent)
 date: 2026-07-01
 status: Ready for dev

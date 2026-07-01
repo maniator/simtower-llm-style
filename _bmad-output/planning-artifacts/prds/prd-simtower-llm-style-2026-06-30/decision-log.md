@@ -1,4 +1,4 @@
-# Decision Log — Tower Tycoon PRD
+# Decision Log — Verticopolis PRD
 
 Chronological record of decisions, scope calls, and version transitions for the
 PRD at `prd.md`. Newest entries at the bottom.
@@ -8,7 +8,7 @@ PRD at `prd.md`. Newest entries at the bottom.
 ## 2026-06-30 — Session 1 (Create intent, Express mode)
 
 - **State:** Draft v0.1 created.
-- **Intent:** Create. Brownfield — a working clone (`Tower Tycoon`) already
+- **Intent:** Create. Brownfield — a working clone (`Verticopolis`) already
   exists; the PRD is being written *after* implementation to formalize the
   requirements against the canonical source.
 - **Source of truth:** SimTower (1994, Maxis / OPeNBooK). Every requirement
@@ -83,3 +83,10 @@ the shipped code and fixed:
   `simulation.test.ts:286` covers floor 1→8). Updated FR-25 to state express
   skips intermediate non-lobby floors **except its shaft endpoints**. Open
   Question 3 marked resolved; the obsolete FR-25 `[ASSUMPTION]` removed from §9.
+
+- **Decision — rename the product to Verticopolis (2026-07-01).** The working
+  title "Tower Tycoon" was renamed to **Verticopolis** across the repo, package,
+  README and manifest (PR #64). Living specs (this PRD, addendum, design docs) are
+  updated to the new name; dated point-in-time review/party snapshots are preserved
+  verbatim with a provenance note. Installer-managed  config is not
+  hand-edited — the durable override lives in .
