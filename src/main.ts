@@ -291,10 +291,12 @@ class GameApp {
       this.lastUiUpdate = now;
       this.audio.update(this.engine.focus());
       this.ui.update(this.sim);
-      // Keep the open editor's live stats fresh (unless the user is typing).
+      // Keep the open editor's live stats fresh — but never while the user is
+      // typing in it or pressing one of its buttons (a rebuild mid-click would
+      // swallow the click, e.g. "+ rent" not always registering).
       if (this.selected && this.ui.isEditorOpen()) {
         const editing = document.activeElement?.id === "ed-name";
-        if (!editing) this.refreshEditor();
+        if (!editing && !this.ui.isEditorBusy()) this.refreshEditor();
       }
       // A jingle on every star promotion (2★–5★), not just the TOWER win.
       if (this.sim.star > this.lastStar) {

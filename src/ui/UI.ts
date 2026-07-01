@@ -64,6 +64,20 @@ export class UI {
     this.buildPalette();
     this.wireControls();
     this.selectTool({ type: "inspect" });
+    // While the pointer is pressed inside the editor card, suppress the periodic
+    // rebuild — otherwise a refresh landing between press and release would
+    // replace the button mid-click and swallow it (the "+ rent sometimes does
+    // nothing" bug). The container itself persists across innerHTML swaps.
+    this.el.editor.addEventListener("pointerdown", () => (this.editorBusy = true));
+    const release = () => (this.editorBusy = false);
+    document.addEventListener("pointerup", release);
+    document.addEventListener("pointercancel", release);
+  }
+
+  /** True while the user is pressing something inside the editor card. */
+  private editorBusy = false;
+  isEditorBusy(): boolean {
+    return this.editorBusy;
   }
 
   private buildPalette(): void {
