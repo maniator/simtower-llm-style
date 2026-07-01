@@ -7,7 +7,7 @@ import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
 import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
-import { OnboardingController } from "./ui/Onboarding";
+import { OnboardingController, shouldArm } from "./ui/Onboarding";
 import { registerPWA } from "./pwa";
 
 /** Game speeds → in-game minutes advanced per real second. */
@@ -89,9 +89,12 @@ class GameApp {
       },
       onEditAction: (action, root) => this.handleEditAction(action, root),
       onReplayOnboarding: () => {
+        if (document.getElementById("splash")) return; // never arm behind the splash
         OnboardingController.clearOnboarded();
         this.ui.closeModal();
-        this.onboarding.arm(this.sim);
+        if (!this.onboarding.arm(this.sim)) {
+          this.ui.toast("You've already completed Getting Started.", "info");
+        }
       },
       onRenameTower: (name) => (this.sim.tower.towerName = name),
       onShowStats: () => this.ui.showStats(this.buildStatsHtml()),
@@ -137,11 +140,25 @@ class GameApp {
       onContinue: () => {
         /* sim already loaded at construction; splash teardown resumes the engine */
       },
-      onNewTower: () => this.newGame(),
+      onNewTower: () => {
+        // Guard the same data-loss as the toolbar's New button: starting fresh
+        // overwrites the single autosave slot.
+        if (SaveGame.hasSave()) {
+          this.ui.confirmModal("Start a new tower?", "This abandons your current tower (it is not auto-saved).", () =>
+            this.newGame(),
+          );
+        } else {
+          this.newGame();
+        }
+      },
     });
 
-    // Autosave periodically.
-    window.setInterval(() => this.save(true), 30000);
+    // Autosave periodically — but never while the first-run splash is up, so an
+    // idle first visit can't persist the throwaway boot sim (which would flip
+    // hasSave() true for a tower the player never started).
+    window.setInterval(() => {
+      if (!document.getElementById("splash")) this.save(true);
+    }, 30000);
   }
 
   // ---- Engine wiring (all input/camera goes through Excalibur) ------------
@@ -257,6 +274,8 @@ class GameApp {
 
   private bindKeys(): void {
     window.addEventListener("keydown", (e) => {
+      // Don't let speed keys run the paused engine behind the first-run splash.
+      if (document.getElementById("splash")) return;
       if (e.key >= "0" && e.key <= "3") {
         this.speed = Number(e.key);
         this.engine.paused = SPEEDS[this.speed] === 0;
@@ -1024,7 +1043,7 @@ class GameApp {
   private newGame(): void {
     this.adoptSim(Simulation.newGame(Date.now() & 0x7fffffff));
     this.ui.toast("New tower founded. Good luck!", "good");
-    if (!OnboardingController.isOnboarded()) this.onboarding.arm(this.sim);
+    if (shouldArm(true)) this.onboarding.arm(this.sim);
   }
 }
 

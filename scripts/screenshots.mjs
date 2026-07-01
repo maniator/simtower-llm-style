@@ -133,6 +133,9 @@ async function dismissFirstRun(pg) {
     if (g) {
       g.speed = 2;
       g.engine.paused = false;
+      document
+        .querySelectorAll("#speed button[data-speed]")
+        .forEach((b) => b.classList.toggle("active", Number(b.dataset.speed) === g.speed));
     }
   });
 }

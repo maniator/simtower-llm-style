@@ -119,11 +119,23 @@ export class OnboardingController {
   private active = false;
   private step = 0;
   private splashEl: HTMLElement | null = null;
+  private splashKey: ((e: KeyboardEvent) => void) | null = null;
   private panelEl: HTMLElement | null = null;
-  private mqListener: (() => void) | null = null;
   private sendOff: ReturnType<typeof setTimeout> | null = null;
+  private readonly onMq = () => (this.active ? this.applyHintAndPulse() : this.setDefaultHint());
 
-  constructor(private opts: OnboardingOpts) {}
+  constructor(private opts: OnboardingOpts) {
+    // The controller is the single owner of the #hint bar: seed a device-aware
+    // default immediately (so mobile never shows the hard-coded desktop line) and
+    // keep it correct across rotate/resize. ONE listener for the controller's
+    // life — no per-session add/remove to leak.
+    this.setDefaultHint();
+    this.opts.mq.addEventListener("change", this.onMq);
+  }
+
+  private setDefaultHint(): void {
+    if (this.hintEl) this.hintEl.textContent = this.opts.mq.matches ? DEFAULT_HINT_MOBILE : DEFAULT_HINT_DESKTOP;
+  }
 
   private get hintEl(): HTMLElement | null {
     return document.getElementById("hint");
@@ -154,7 +166,7 @@ export class OnboardingController {
       `<button class="splash-btn ${o.hasSave ? "" : "primary"}" data-splash="new">＋ New Tower</button>` +
       `<button class="splash-btn ghost" data-splash="help">？ How to Play</button>` +
       `</div>` +
-      `<p class="splash-attrib">An unofficial, from-scratch homage to SimTower (1994). Original code and art — no ripped assets. Not affiliated with Maxis / OPeNBooK / Vivarium.</p>` +
+      `<p class="splash-attrib">An unofficial, from-scratch homage to SimTower (1994). Original code and art — no ripped assets. Not affiliated with or endorsed by Maxis / OPeNBooK / Vivarium.</p>` +
       `<p class="splash-version">v${APP_VERSION}</p>` +
       `</div>`;
     document.body.appendChild(el);
@@ -171,9 +183,27 @@ export class OnboardingController {
     });
     // Help stacks over the splash (its own modal); the splash stays behind it.
     q('[data-splash="help"]')?.addEventListener("click", () => this.opts.showHelp());
+
+    // Esc / backdrop resolve to the SAFE default: Continue if a save exists,
+    // otherwise no-op (New Tower must be an explicit press so intent is never
+    // wiped). Backdrop = a click on the overlay outside the card.
+    const safeDismiss = () => {
+      if (!o.hasSave) return;
+      this.teardownSplash();
+      o.onContinue();
+    };
+    el.addEventListener("click", (e) => {
+      if (e.target === el) safeDismiss();
+    });
+    this.splashKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") safeDismiss();
+    };
+    document.addEventListener("keydown", this.splashKey);
   }
 
   private teardownSplash(): void {
+    if (this.splashKey) document.removeEventListener("keydown", this.splashKey);
+    this.splashKey = null;
     this.splashEl?.remove();
     this.splashEl = null;
     this.opts.pauseForSplash(false);
@@ -181,22 +211,25 @@ export class OnboardingController {
 
   // ---- Checklist / onboarding --------------------------------------------
 
-  /** Begin (or resume) onboarding on `sim`. No-ops if already onboarded. */
-  arm(sim: Simulation): void {
-    if (isOnboarded()) return;
+  /** Begin (or resume) onboarding on `sim`. Idempotent — tears down any live
+   *  session first so a re-arm (e.g. Replay) can't stack panels. No-ops (returns
+   *  false) if already onboarded or if there's nothing left to teach. */
+  arm(sim: Simulation): boolean {
+    if (isOnboarded()) return false;
+    this.clearSession(); // re-entrancy guard: never leave a second panel behind
     this.sim = sim;
     this.step = firstIncompleteStep(sim);
     if (this.step >= ONBOARD_STEPS.length) {
-      // Nothing left to teach (e.g. replay on a built tower) — just finish.
+      // Nothing left to teach (e.g. replay on an already-built tower).
       markOnboarded();
-      return;
+      this.setDefaultHint();
+      return false;
     }
     this.active = true;
     this.mountPanel();
     this.render();
     this.applyHintAndPulse();
-    this.mqListener = () => this.applyHintAndPulse();
-    this.opts.mq.addEventListener("change", this.mqListener);
+    return true;
   }
 
   /** Called from the host's throttled update loop (~6 Hz). Advances on real progress. */
@@ -251,35 +284,31 @@ export class OnboardingController {
   private finish(): void {
     markOnboarded();
     this.active = false;
+    document.querySelectorAll(".tt-pulse").forEach((n) => n.classList.remove("tt-pulse"));
+    this.setDefaultHint();
     if (this.panelEl) {
       this.panelEl.innerHTML = `<div class="ob-head">Nice — you're a landlord!</div><p class="ob-sendoff">The rest is in Help (？). Build up! 🏙️</p>`;
+      this.panelEl.addEventListener("click", () => this.clearSession(), { once: true });
     }
-    if (this.hintEl) this.hintEl.textContent = this.opts.mq.matches ? DEFAULT_HINT_MOBILE : DEFAULT_HINT_DESKTOP;
-    document.querySelectorAll(".tt-pulse").forEach((n) => n.classList.remove("tt-pulse"));
-    this.detachMq();
-    this.panelEl?.addEventListener("click", () => this.teardownPanel(), { once: true });
-    this.sendOff = setTimeout(() => this.teardownPanel(), 6000);
+    if (this.sendOff) clearTimeout(this.sendOff);
+    this.sendOff = setTimeout(() => this.clearSession(), 6000);
   }
 
   /** Skip / early-dismiss — marks done so it never nags again. */
   private dismiss(): void {
     markOnboarded();
-    this.active = false;
-    this.teardownPanel();
+    this.clearSession();
   }
 
-  private teardownPanel(): void {
+  /** Tear down a live onboarding session (panel + pulse + timer), leaving the
+   *  persistent hint listener in place. Safe to call when nothing is mounted. */
+  private clearSession(): void {
     if (this.sendOff) clearTimeout(this.sendOff);
     this.sendOff = null;
+    this.active = false;
     this.panelEl?.remove();
     this.panelEl = null;
     document.querySelectorAll(".tt-pulse").forEach((n) => n.classList.remove("tt-pulse"));
-    if (this.hintEl) this.hintEl.textContent = this.opts.mq.matches ? DEFAULT_HINT_MOBILE : DEFAULT_HINT_DESKTOP;
-    this.detachMq();
-  }
-
-  private detachMq(): void {
-    if (this.mqListener) this.opts.mq.removeEventListener("change", this.mqListener);
-    this.mqListener = null;
+    this.setDefaultHint();
   }
 }

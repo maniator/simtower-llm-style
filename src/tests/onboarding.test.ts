@@ -68,3 +68,67 @@ describe("Onboarding — steps advance on real progress", () => {
     }
   });
 });
+
+import { OnboardingController } from "../ui/Onboarding";
+
+function makeController(mobile = false) {
+  document.body.innerHTML = '<div id="hint"></div><div id="palette-scroll"></div><div id="speed"></div>';
+  const mq = { matches: mobile, addEventListener() {}, removeEventListener() {} } as unknown as MediaQueryList;
+  return new OnboardingController({ mq, showHelp() {}, pauseForSplash() {}, chime() {} });
+}
+
+describe("Onboarding — controller lifecycle", () => {
+  beforeEach(() => clearOnboarded());
+
+  it("sets a device-aware default hint on construction (mobile ≠ desktop)", () => {
+    makeController(true);
+    const mobileHint = document.getElementById("hint")!.textContent;
+    makeController(false);
+    const desktopHint = document.getElementById("hint")!.textContent;
+    expect(mobileHint).not.toBe(desktopHint);
+    expect(mobileHint).toMatch(/[Tt]ap/);
+  });
+
+  it("arm() is re-entrant — re-arming never stacks a second panel", () => {
+    const sim = Simulation.newGame(1);
+    const c = makeController();
+    expect(c.arm(sim)).toBe(true);
+    c.arm(sim); // e.g. Replay while active
+    c.arm(sim);
+    expect(document.querySelectorAll("#onboard").length).toBe(1);
+  });
+
+  it("Skip marks onboarding done (once-only) and removes the panel", () => {
+    const sim = Simulation.newGame(1);
+    const c = makeController();
+    c.arm(sim);
+    document.querySelector<HTMLElement>('[data-onboard="skip"]')!.click();
+    expect(isOnboarded()).toBe(true);
+    expect(document.getElementById("onboard")).toBeNull();
+    expect(c.arm(sim)).toBe(false); // never re-nags
+  });
+
+  it("resumes at the first uncompleted step when re-armed on a progressed tower", () => {
+    const sim = Simulation.newGame(2);
+    sim.money = 1e9;
+    const cX = Math.floor(GRID.width / 2);
+    for (let x = cX - 6; x < cX + 6; x++) sim.tower.place("floor", 2, x); // step 1
+    sim.tower.place("office", 2, cX - 4); // step 2
+    const c = makeController();
+    c.arm(sim);
+    expect(document.querySelector("#onboard .ob-cur")!.textContent).toContain("Connect it"); // step 3
+  });
+
+  it("arm() returns false and shows no panel on an already-complete tower", () => {
+    const sim = Simulation.newGame(3);
+    sim.money = 1e9;
+    const cX = Math.floor(GRID.width / 2);
+    for (let x = cX - 6; x < cX + 6; x++) sim.tower.place("floor", 2, x);
+    const r = sim.tower.place("office", 2, cX - 4);
+    sim.tower.units.find((u) => u.id === r.unitId)!.state = "occupied";
+    sim.tower.placeTransport("elevatorStandard", cX + 5, 1, 2);
+    const c = makeController();
+    expect(c.arm(sim)).toBe(false); // all four steps already satisfied
+    expect(document.getElementById("onboard")).toBeNull();
+  });
+});

@@ -463,7 +463,7 @@ export class UI {
     dialog.innerHTML = "";
   }
 
-  private confirmModal(title: string, body: string, onYes: () => void): void {
+  confirmModal(title: string, body: string, onYes: () => void): void {
     const box = this.openModal(
       `<h2>${title}</h2><p>${body}</p>
        <div class="modal-actions"><button data-act="no">Cancel</button><button class="primary" data-act="yes">Confirm</button></div>`,
