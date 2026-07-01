@@ -1060,6 +1060,12 @@ dialog#modal {
   font-family: var(--r-font);
   background: linear-gradient(#161634 0%, #241f4c 34%, #5b3560 62%, #c65a63 86%, #ef8560 100%);
 }
+.splash-stars,
+.splash-sun,
+.splash-skyline {
+  /* Decorative only — let backdrop clicks (safe-dismiss) fall through to #splash. */
+  pointer-events: none;
+}
 .splash-stars {
   position: absolute;
   inset: 0;
