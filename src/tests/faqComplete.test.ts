@@ -346,13 +346,14 @@ describe("Fine FAQ mechanics", () => {
     lay(sim, "lobby", 1);
     lay(sim, "floor", 2);
     lay(sim, "floor", 3);
-    sim.tower.place("cinema", 2, 0); // only maintained thing → monthly cost is the booking
+    sim.tower.place("cinema", 2, 0); // the cinema's monthly cost = film booking + its operating overhead
     for (let d = 0; d < 365; d++) sim.tick(60 * 24);
+    const oh = ECON.overheadPerLeasableUnitMonthly; // the cinema is a leasable/overhead unit
     const bookings = sim.log
       .filter((e) => e.text.startsWith("Monthly maintenance"))
       .map((e) => Number(e.text.replace(/[^0-9]/g, "")));
-    expect(bookings.some((c) => c === ECON.cinemaBookingBlockbuster)).toBe(true); // some blockbuster months
-    expect(bookings.some((c) => c === ECON.cinemaBookingMonthly)).toBe(true); // some average months
+    expect(bookings.some((c) => c === ECON.cinemaBookingBlockbuster + oh)).toBe(true); // some blockbuster months
+    expect(bookings.some((c) => c === ECON.cinemaBookingMonthly + oh)).toBe(true); // some average months
   });
 
   it("strict parking alignment: only ramp-chained spaces function", () => {

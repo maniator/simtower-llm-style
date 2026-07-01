@@ -418,7 +418,10 @@ class GameApp {
       if (!u) return this.clearSelection();
       this.engine.selectedId = u.id;
       const adjuster = !!rentConfig(u.kind) && !(u.kind === "condo" && u.everOccupied);
-      this.ui.renderEditor(`unit:${u.id}:${adjuster ? "r" : ""}`, () => this.unitEditorHtml(u), this.unitEditorVolatile(u));
+      // The Booking button label lives in the built HTML, so fold the policy into
+      // the key — cycling it bumps the key and rebuilds the button.
+      const film = u.kind === "cinema" ? `:${u.filmPolicy ?? "auto"}` : "";
+      this.ui.renderEditor(`unit:${u.id}:${adjuster ? "r" : ""}${film}`, () => this.unitEditorHtml(u), this.unitEditorVolatile(u));
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
       if (!t) return this.clearSelection();
@@ -445,6 +448,11 @@ class GameApp {
     if (rentConfig(u.kind)) {
       vol.rent = `$${rentOf(u).toLocaleString()}${isHotelKind(u.kind) ? "/night" : ""}`;
     }
+    if (u.kind === "cinema") {
+      const operational = u.state !== "construction" && u.state !== "fire";
+      // A mid-build / burning cinema books no film — show "—", not a fake feature.
+      vol.showing = !operational ? "—" : this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
+    }
     return vol;
   }
 
@@ -465,6 +473,9 @@ class GameApp {
       const label = u.kind === "condo" ? "Sale price" : isHotelKind(u.kind) ? "Room rate" : "Quarterly rent";
       rows.push(`<span class="k">${label}</span><span class="v" data-field="rent">${vol.rent}</span>`);
     }
+    if (u.kind === "cinema") {
+      rows.push(`<span class="k">Now showing</span><span class="v" data-field="showing">${vol.showing}</span>`);
+    }
     rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
 
     let actions = "";
@@ -475,6 +486,10 @@ class GameApp {
     if (rcfg && !(u.kind === "condo" && u.everOccupied)) {
       const what = u.kind === "condo" ? "price" : "rent";
       actions += `<div class="ed-row"><button data-edit="rentDown">– ${what}</button><button data-edit="rentUp">+ ${what}</button></div>`;
+    }
+    if (u.kind === "cinema") {
+      const pol = { auto: "Auto", feature: "Feature", blockbuster: "Blockbuster" }[u.filmPolicy ?? "auto"];
+      actions += `<div class="ed-row"><button data-edit="filmPolicy">Booking: ${pol} ▸</button></div>`;
     }
     actions += `<div class="ed-row"><button class="danger" data-edit="sell">Sell / Bulldoze</button></div>`;
 
@@ -608,6 +623,12 @@ class GameApp {
           this.audio.sfx("click");
           this.refreshEditor();
         }
+      } else if (action === "filmPolicy") {
+        const order = ["auto", "feature", "blockbuster"] as const;
+        const next = order[(order.indexOf(u.filmPolicy ?? "auto") + 1) % order.length];
+        this.sim.setFilmPolicy(u.id, next);
+        this.audio.sfx("click");
+        this.refreshEditor();
       }
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);

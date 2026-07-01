@@ -799,6 +799,20 @@ export class Simulation implements SimContext {
     return u.rent;
   }
 
+  /** Set a cinema's monthly film-booking policy. Returns the new policy, or null
+   *  if the unit isn't a cinema. */
+  setFilmPolicy(id: number, policy: "auto" | "feature" | "blockbuster"): "auto" | "feature" | "blockbuster" | null {
+    const u = this.tower.units.find((x) => x.id === id);
+    if (!u || u.kind !== "cinema") return null;
+    u.filmPolicy = policy;
+    return policy;
+  }
+
+  /** Whether a cinema is currently showing a blockbuster (this month's booking). */
+  isShowingBlockbuster(id: number): boolean {
+    return this.economy.blockbusterIds.includes(id);
+  }
+
   private moveIn(u: Unit): void {
     u.state = "occupied";
     u.satisfaction = 1;
@@ -1175,6 +1189,12 @@ export class Simulation implements SimContext {
         // Coerce the optional player-set price too, so a corrupt save can't
         // inject a non-number rent (which would poison income / rentOf math).
         rent: u.rent === undefined ? undefined : num(u.rent, rentConfig(u.kind)?.default ?? 0),
+        // Coerce the film policy so a hand-edited save can't inject a bad value
+        // (undefined ⇒ auto, the legacy behavior).
+        filmPolicy:
+          u.filmPolicy === "feature" || u.filmPolicy === "blockbuster" || u.filmPolicy === "auto"
+            ? u.filmPolicy
+            : undefined,
       }));
     sim.tower.transports = (data.transports ?? [])
       .filter((t) => isFacilityKind(t.kind))

@@ -105,6 +105,9 @@ export interface Unit {
   rent?: number;
   /** Name shown when inspected (e.g. tenant company / guest). */
   label: string;
+  /** Per-cinema film-booking policy. `undefined` ⇒ "auto" (the legacy 40% roll),
+   *  so old saves and demo towers behave identically. */
+  filmPolicy?: "auto" | "feature" | "blockbuster";
   /** Game-clock minute at which construction finishes (for the build phase). */
   completeAt?: number;
 }
