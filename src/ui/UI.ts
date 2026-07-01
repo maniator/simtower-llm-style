@@ -543,6 +543,10 @@ export class UI {
   }
 
   showHelp(): void {
+    // Replaying the intro is meaningless while the title screen is still up (the
+    // handler no-ops behind #splash), so disable that button there.
+    const onSplash = !!document.getElementById("splash");
+    const replayAttr = onSplash ? ' disabled title="Start a tower first, then you can replay the intro."' : "";
     const box = this.openModal(`
       <h2>How to play</h2>
       <p>Build a thriving high-rise and earn your way to a coveted <b>TOWER</b> rating.</p>
@@ -557,10 +561,13 @@ export class UI {
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
       </ul>
       <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
-      <div class="modal-actions"><button data-act="replay-onboard">Replay Getting Started</button><button class="primary" data-act="close">Got it</button></div>
+      <div class="modal-actions"><button data-act="replay-onboard"${replayAttr}>Replay Getting Started</button><button class="primary" data-act="close">Got it</button></div>
     `);
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
-    box.querySelector('[data-act="replay-onboard"]')!.addEventListener("click", () => this.cb.onReplayOnboarding());
+    // Only wire replay when it can actually run (not while the splash is up).
+    if (!onSplash) {
+      box.querySelector('[data-act="replay-onboard"]')!.addEventListener("click", () => this.cb.onReplayOnboarding());
+    }
   }
 
   /** A two-choice emergency modal (fire rescue / bomb ransom). Calls `onResolve`
