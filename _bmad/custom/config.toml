@@ -5,3 +5,10 @@
 #
 # [agents.bmad-agent-pm]
 # description = "Prefers short, bulleted PRDs over narrative drafts."
+
+# Tower Tycoon is a BROWSER game (TypeScript + Excalibur.js), not a
+# Unity/Unreal/Godot project. Pin the game-dev module's platform so the gds
+# agents don't assume an engine editor / C#/C++/GDScript workflow. (The
+# installer default is '["unity", "unreal", "godot", "other"]'.)
+[modules.gds]
+primary_platform = "web"
