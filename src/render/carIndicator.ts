@@ -23,10 +23,14 @@ export interface CarIndicator {
  * @param cap  car capacity
  */
 export function carIndicator(dir: number, load: number, cap: number): CarIndicator {
-  const safeCap = cap > 0 ? cap : 1;
-  const clampedLoad = Math.max(0, load);
-  const riders = Math.max(0, Math.min(4, Math.round((clampedLoad / safeCap) * 4)));
-  const arrow: CarArrow = dir > 0 ? "up" : dir < 0 ? "down" : null;
-  const full = cap > 0 && load >= cap;
+  // Treat any non-finite input as a safe default so a stray NaN can never leak
+  // into a cache key or the draw call.
+  const validCap = Number.isFinite(cap) && cap > 0;
+  const safeCap = validCap ? cap : 1;
+  const safeLoad = Number.isFinite(load) ? Math.max(0, load) : 0;
+  const safeDir = Number.isFinite(dir) ? dir : 0;
+  const riders = Math.max(0, Math.min(4, Math.round((safeLoad / safeCap) * 4)));
+  const arrow: CarArrow = safeDir > 0 ? "up" : safeDir < 0 ? "down" : null;
+  const full = validCap && safeLoad >= cap;
   return { riders, arrow, full };
 }

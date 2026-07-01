@@ -16,12 +16,12 @@ import {
   MAX_CARS,
   STAR_THRESHOLDS,
   TOWER_POPULATION,
-  TRANSPORT_CAPACITY,
   buildMinutes,
   facilityFloors,
   isElevatorKind,
   isFacilityKind,
   isHotelKind,
+  transportCarCapacity,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit, WeatherKind } from "./types";
 import { isOperational } from "./types";
@@ -612,7 +612,7 @@ export class Simulation implements SimContext {
     }
     let capacity = 0;
     for (const t of this.tower.transports) {
-      const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
+      const per = transportCarCapacity(t.kind);
       if (isElevatorKind(t.kind)) capacity += t.cars * per;
       else capacity += per; // stairs / escalator
     }
@@ -644,7 +644,7 @@ export class Simulation implements SimContext {
 
   /** Capacity of a single transport (riders served per trip). */
   transportCapacity(t: { kind: FacilityKind; cars: number }): number {
-    const per = TRANSPORT_CAPACITY[t.kind] ?? 0;
+    const per = transportCarCapacity(t.kind);
     return isElevatorKind(t.kind) ? t.cars * per : per;
   }
 

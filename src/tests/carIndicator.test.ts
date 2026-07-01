@@ -30,4 +30,14 @@ describe("carIndicator", () => {
     expect(Number.isFinite(z.riders)).toBe(true);
     expect(z.full).toBe(false); // no capacity → never "full"
   });
+
+  it("treats non-finite inputs as safe defaults", () => {
+    const n = carIndicator(NaN, NaN, NaN);
+    expect(n.riders).toBe(0);
+    expect(n.arrow).toBeNull();
+    expect(n.full).toBe(false);
+    // A stray NaN in any single field can't leak a NaN into the result.
+    expect(Number.isFinite(carIndicator(1, NaN, 16).riders)).toBe(true);
+    expect(carIndicator(Infinity, 8, 16).arrow).toBeNull(); // non-finite dir → idle
+  });
 });
