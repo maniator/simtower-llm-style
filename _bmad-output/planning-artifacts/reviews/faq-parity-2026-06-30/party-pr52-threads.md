@@ -2,6 +2,8 @@
 
 Date: 2026-07-01 · Worktree: `.claude/worktrees/faq-legib` · HEAD: `3335cb8`
 
+> **UPDATE (post-party):** the T2/T7 (bad→info) and T3 (per-floor dedupe + docstring) fixes are now COMMITTED (64d5334); later Codex/Copilot waves were also addressed (b02b2e4, a7ff3a2). This file is a point-in-time record of the party session — the "uncommitted" note below was true only at that moment.
+
 Verification note: the worktree has **uncommitted local edits** to `src/engine/Simulation.ts`
 that already implement the T2/T7 (bad→info) and T3 (per-floor dedupe) fixes. HEAD itself
 still ships the old "bad" severity. So those threads are *edited-but-not-committed*, not

@@ -72,8 +72,9 @@ line that distinguishes the three states the engine already knows:
 Rendering notes:
 - Compute once, at inspect time (a click), from `this.sim`:
   `served = tower.isFloorServed(u.floor)`, and only if served,
-  `reachable = this.sim.crowd.route(tower, 1, u.floor) !== null`. `route()` is
-  cached by `tower.revision`, so this is effectively free and never runs on the
+  `reachable = this.sim.crowd.route(tower, 1, u.floor) !== null`. `route()`
+  runs a bounded (≤2-ride) BFS per call — only Crowd's ADJACENCY is cached by
+  `tower.revision`, not the route result — cheap for an inspect-time call but must never run on the
   tick loop.
 - Colour: use the existing status vocabulary — `not connected` and `too far` in
   `var(--bad)`, `reachable` in `var(--good)`. Do **not** invent new colours.

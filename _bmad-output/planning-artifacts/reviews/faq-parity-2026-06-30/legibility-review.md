@@ -1,5 +1,7 @@
 # PR #52 — Legibility Pass — Merge-Readiness Review
 
+> **RESOLVED (post-review):** every finding below was fixed on this branch — parking cache dropped (fresh flood-fill), construction/fire gating added, the stranded nudge made log-only, `stats()` kept cheap, and the docs corrected. The "NOT SAFE TO MERGE" verdict was the point-in-time finding; the PR is now clean (157 tests, 0 unresolved threads). Kept as the review record.
+
 **Verdict:** NOT SAFE TO MERGE as committed — one confirmed **blocker** (revision-keyed parking cache goes stale on construction/fire state transitions, silently regressing parking economy + the very legibility signal this PR ships). A complete fix already exists **uncommitted in the working tree**; commit it, update the arch doc, and this becomes mergeable pending two minor/info follow-ups.
 
 - **Highest-severity item:** `Tower.functionalParkingSet()` memoised by `this.revision`, but its flood-fill depends on `unit.state` (`construction`/`fire`) — transitions that never bump `revision` — so freshly-completed (and burning) parking reads stale.

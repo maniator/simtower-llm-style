@@ -38,7 +38,7 @@ floorReachable(floor: number): boolean {
   return this.crowd.route(this.tower, 1, floor) !== null;
 }
 ```
-`this.crowd` is already `readonly` and public (`Simulation.ts:107`); `route()` caches its adjacency by `tower.revision` (`Crowd.ts:114`), so an inspect-time call is effectively free.
+`this.crowd` is already `readonly` and public (`Simulation.ts:107`); `route()` runs a bounded (≤2-ride) BFS per call over its revision-cached ADJACENCY (`Crowd.ts:114`) — the route result itself is NOT cached — so an inspect-time call is cheap, but it must stay off hot paths.
 
 ### 1c. `Simulation.strandedFloors(): number[]` — the tower-wide roll-up (NOT in stats())
 Mirror `milestones.ts:everyOccupiedFloorServed` (`src/engine/milestones.ts:24`), tightened from "served" to "reachable":
@@ -69,13 +69,14 @@ hotelsCountTowardRating(): boolean { return this.star < 3; }
 ```
 `ratingPopulation()` (`Simulation.ts:854`) and the `population` getter (`Simulation.ts:976`) already exist for the Stats divergence line.
 
-### 1e. `stats()` additions — cheap fields only
-Extend the object returned by `Simulation.stats()` (`Simulation.ts:985`) with **only O(units)/cached** values:
-- `parkingSpaces` — count of `u.kind === "parking"` units (add to the existing single loop).
-- `parkingWorking` — `this.tower.functionalParkingSet().size` (per-revision cached).
-- `ratingPopulation` — `this.ratingPopulation()` (O(units), no BFS).
-
-**Do not** add `strandedFloors` here. The HUD (`UI.ts:394`) ignores the new fields; only `buildStatsHtml` reads them plus a direct `strandedFloors()` call made at modal-build time.
+### 1e. `stats()` additions — cheap field only  (CORRECTION, review)
+`stats()` runs on the ~6 Hz HUD refresh, so it carries **only** the truly cheap
+`parkingSpaces` counter (added to the existing single loop). `ratingPopulation()`
+(a full O(units) scan) and `functionalParkingSet().size` (a flood-fill — NOT
+revision-cached, since it depends on unit state) are computed in `buildStatsHtml`
+at **modal-build time**, alongside `strandedFloors()`. None run on the HUD path.
+(Earlier drafts put parkingWorking/ratingPopulation in `stats()`; moved out after
+review to keep the 6 Hz path cheap.)
 
 ---
 
