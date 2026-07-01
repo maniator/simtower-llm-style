@@ -26,6 +26,7 @@ export interface UICallbacks {
   onNew(): void;
   onToggleAudio(): boolean; // returns new muted state
   onEditAction(action: string, root: HTMLElement): void;
+  onReplayOnboarding(): void;
   onRenameTower(name: string): void;
   onShowStats(): void;
   onShowSaves(): void;
@@ -541,7 +542,7 @@ export class UI {
     });
   }
 
-  private showHelp(): void {
+  showHelp(): void {
     const box = this.openModal(`
       <h2>How to play</h2>
       <p>Build a thriving high-rise and earn your way to a coveted <b>TOWER</b> rating.</p>
@@ -556,9 +557,10 @@ export class UI {
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
       </ul>
       <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
-      <div class="modal-actions"><button class="primary" data-act="close">Got it</button></div>
+      <div class="modal-actions"><button data-act="replay-onboard">Replay Getting Started</button><button class="primary" data-act="close">Got it</button></div>
     `);
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    box.querySelector('[data-act="replay-onboard"]')!.addEventListener("click", () => this.cb.onReplayOnboarding());
   }
 
   /** A two-choice emergency modal (fire rescue / bomb ransom). Calls `onResolve`

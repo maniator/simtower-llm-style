@@ -1042,3 +1042,121 @@ dialog#modal {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── First-run splash + onboarding (chrome only) ───────────────────────── */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--r-desktop);
+  padding: 16px;
+}
+.splash-card {
+  width: min(680px, 96vw);
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--bevel-out);
+  border: 1px solid var(--line);
+  padding: 22px 26px 16px;
+  text-align: center;
+  position: relative;
+  font-family: var(--r-font);
+}
+.splash-sky {
+  height: 84px;
+  margin: -4px -6px 10px;
+  border: 1px solid var(--r-dark);
+  background:
+    /* lit windows */
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(255, 214, 92, 0.55) 6px 9px, transparent 9px 16px),
+    /* building silhouettes */
+    linear-gradient(to top, #1a2238 0 60%, transparent 60%),
+    repeating-linear-gradient(90deg, #26304e 0 34px, #1b2440 34px 62px, #2c3860 62px 96px),
+    /* night sky */
+    linear-gradient(to bottom, #0b1024, #2a3560);
+  background-blend-mode: screen, normal, normal, normal;
+}
+.splash-title {
+  margin: 4px 0 2px;
+  color: var(--accent);
+  font-size: 34px;
+  letter-spacing: 3px;
+  font-weight: 800;
+}
+.splash-tagline { margin: 0 0 10px; font-weight: 700; }
+.splash-premise { margin: 0 auto 16px; max-width: 52ch; color: var(--muted); line-height: 1.4; }
+.splash-actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+.splash-btn {
+  font-family: var(--r-font);
+  font-size: 15px;
+  padding: 9px 16px;
+  min-height: 40px;
+  background: var(--panel-light);
+  box-shadow: var(--bevel-out);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.splash-btn:active { box-shadow: var(--bevel-in); }
+.splash-btn.primary { background: var(--accent); color: #fff; font-weight: 700; }
+.splash-btn.ghost { background: transparent; box-shadow: none; border-color: transparent; text-decoration: underline; }
+.splash-attrib { margin: 16px auto 2px; max-width: 60ch; font-size: 11px; color: var(--muted); line-height: 1.35; }
+.splash-version { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--muted); }
+#splash.splash--mobile .splash-card { padding: 16px; }
+#splash.splash--mobile .splash-title { font-size: 26px; }
+#splash.splash--mobile .splash-actions { flex-direction: column; }
+#splash.splash--mobile .splash-btn { width: 100%; min-height: 48px; }
+
+#onboard {
+  position: fixed;
+  left: 10px;
+  bottom: 44px;
+  z-index: 25;
+  width: 260px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--bevel-out);
+  border: 1px solid var(--line);
+  font-family: var(--r-font);
+  font-size: 13px;
+}
+#onboard.onboard--mobile { left: 8px; right: 8px; width: auto; top: 58px; bottom: auto; }
+.ob-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--r-title);
+  color: var(--r-title-fg);
+  font-weight: 700;
+  padding: 5px 8px;
+}
+.ob-skip {
+  font-family: var(--r-font);
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--panel-light);
+  box-shadow: var(--bevel-out);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.ob-list { list-style: none; margin: 0; padding: 8px; display: grid; gap: 6px; }
+.ob-step { display: flex; gap: 7px; align-items: flex-start; line-height: 1.3; }
+.ob-mark { width: 14px; text-align: center; font-weight: 700; }
+.ob-done { color: var(--good); }
+.ob-done .ob-text { text-decoration: line-through; opacity: 0.7; }
+.ob-cur .ob-mark { color: var(--accent); }
+.ob-todo { opacity: 0.65; }
+.ob-sub { display: block; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.ob-sendoff { margin: 0; padding: 8px 10px 10px; color: var(--muted); }
+
+/* Attention pulse on the control the current onboarding step points at. */
+@keyframes tt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 0, 128, 0.0); }
+  50% { box-shadow: 0 0 0 3px rgba(0, 0, 128, 0.65); }
+}
+.tt-pulse { animation: tt-pulse 1.1s ease-in-out infinite; position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .tt-pulse { animation: none; box-shadow: 0 0 0 3px rgba(0, 0, 128, 0.65); }
+}
