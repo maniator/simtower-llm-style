@@ -212,9 +212,28 @@ export class OnboardingController {
     });
     // Help stacks over the splash (its own modal); the splash stays behind it.
     q('[data-splash="help"]')?.addEventListener("click", () => this.opts.showHelp());
-    // Move initial focus into the overlay so keyboard users can't tab into the
-    // controls behind it; land on the primary CTA (Continue if a save exists).
+    // Move initial focus into the overlay, then TRAP Tab within it so keyboard
+    // users can't reach the game behind the modal (its buttons are the only
+    // focusable controls, so Tab just cycles among them).
     (q('[data-splash="continue"]') ?? q('[data-splash="new"]'))?.focus();
+    el.addEventListener("keydown", (e) => {
+      if (e.key !== "Tab") return;
+      const items = Array.from(el.querySelectorAll<HTMLElement>("button:not([disabled])"));
+      if (items.length === 0) return;
+      const first = items[0];
+      const last = items[items.length - 1];
+      const active = document.activeElement;
+      if (!el.contains(active)) {
+        e.preventDefault();
+        first.focus();
+      } else if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    });
 
     // Esc / backdrop resolve to the SAFE default: Continue if a save exists,
     // otherwise no-op (New Tower must be an explicit press so intent is never
