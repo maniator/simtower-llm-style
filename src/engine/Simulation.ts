@@ -7,6 +7,7 @@ import { EventSystem } from "./EventSystem";
 import type { SimContext } from "./SimContext";
 import { Tower } from "./Tower";
 import { RNG } from "./rng";
+import { MILESTONES } from "./milestones";
 
 export { ECON } from "./econConfig";
 import {
@@ -131,6 +132,8 @@ export class Simulation implements SimContext {
   /** Basement tiles already excavated, so buried treasure is a one-time find per
    * tile and can't be farmed by repeatedly building and bulldozing the same spot. */
   private excavated = new Set<string>();
+  /** Milestone ids already achieved (announced + paid once); persisted. */
+  private achievedMilestones = new Set<string>();
 
   /** Bookkeeping for period boundaries. */
   private lastDay = 0;
@@ -431,6 +434,24 @@ export class Simulation implements SimContext {
     this.maybeVipStay();
     this.checkVip();
     this.reportMoveIns();
+    this.checkMilestones();
+  }
+
+  /** Announce any newly-satisfied optional milestones — once each, then persisted.
+   *  Recognition-only (no cash): they're pacing goals, not an income source. */
+  private checkMilestones(): void {
+    for (const m of MILESTONES) {
+      if (this.achievedMilestones.has(m.id)) continue;
+      if (!m.test(this)) continue;
+      this.achievedMilestones.add(m.id);
+      this.emit(`🏅 Milestone: ${m.label}`, "good");
+    }
+  }
+
+  /** Milestone progress for the UI (achieved count + per-milestone done flags). */
+  milestoneProgress(): { achieved: number; total: number; list: { label: string; desc: string; done: boolean }[] } {
+    const list = MILESTONES.map((m) => ({ label: m.label, desc: m.desc, done: this.achievedMilestones.has(m.id) }));
+    return { achieved: list.filter((m) => m.done).length, total: MILESTONES.length, list };
   }
 
   /** One quiet log line summarising the day's tenancy churn, so the player feels
@@ -1038,6 +1059,7 @@ export class Simulation implements SimContext {
       events: this.events.saveState(),
       excavated: [...this.excavated],
       blockbusters: this.economy.blockbusterIds,
+      milestones: [...this.achievedMilestones],
     };
   }
 
@@ -1066,6 +1088,10 @@ export class Simulation implements SimContext {
     }
     // Restore this month's blockbuster bookings (already paid for pre-save).
     if (Array.isArray(data.blockbusters)) sim.economy.restoreBlockbusters(data.blockbusters);
+    // Restore achieved milestones so reload doesn't re-announce or re-pay them.
+    if (Array.isArray(data.milestones)) {
+      for (const id of data.milestones) if (typeof id === "string") sim.achievedMilestones.add(id);
+    }
     // Reject any unit/transport with an unrecognized kind from untrusted saves,
     // and coerce the numeric fields that drive the loop to finite values so a
     // hand-edited or foreign save can't poison the math with NaN/undefined.

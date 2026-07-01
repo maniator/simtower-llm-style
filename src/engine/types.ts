@@ -165,6 +165,9 @@ export interface SerializedGame {
   /** Cinema unit ids showing a blockbuster this month (paid at booking), so a
    * mid-month reload keeps the boost. Optional for older saves. */
   blockbusters?: number[];
+  /** Ids of optional milestones already achieved, so reload doesn't re-announce
+   * or re-pay them. Optional for older saves. */
+  milestones?: string[];
 }
 
 /** Result of attempting to place a facility. */

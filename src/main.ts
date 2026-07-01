@@ -648,7 +648,27 @@ class GameApp {
         <span class="k">Shops / Food</span><span class="v">${s.shops} / ${s.restaurants}</span>
         <span class="k">On fire</span><span class="v" style="color:${s.fires ? "var(--bad)" : "var(--good)"}">${s.fires || "None"}</span>
       </div>
+      ${this.buildMilestonesHtml()}
     </div>`;
+  }
+
+  /** The optional-goals checklist for the stats modal. */
+  private buildMilestonesHtml(): string {
+    const mp = this.sim.milestoneProgress();
+    const half = Math.ceil(mp.list.length / 2);
+    const col = (items: typeof mp.list) =>
+      `<div class="col">${items
+        .map(
+          (m) =>
+            `<span class="k" style="color:${m.done ? "var(--good)" : "var(--muted)"}">${m.done ? "✓" : "·"} ${escapeAttr(m.label)}</span>` +
+            `<span class="v" style="color:var(--muted)">${escapeAttr(m.desc)}</span>`,
+        )
+        .join("")}</div>`;
+    return (
+      `<div class="stats-section">🏅 Milestones (${mp.achieved}/${mp.total})</div>` +
+      col(mp.list.slice(0, half)) +
+      col(mp.list.slice(half))
+    );
   }
 
   private snapX(kind: FacilityKind, tile: number): number {
