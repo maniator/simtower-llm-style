@@ -151,13 +151,13 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
     const bare = sim.fireIgnitionChance();
     expect(bare).toBeCloseTo(0.025, 5); // base daily chance with no defense
 
-    sim.tower.place("security", 2, C);
+    expect(sim.tower.place("security", 2, C).ok).toBe(true);
     const withSecurity = sim.fireIgnitionChance();
     expect(withSecurity).toBeCloseTo(0.025 * 0.45, 5);
     // Security more than halves the fire rate — building it is clearly worth it.
     expect(withSecurity).toBeLessThan(bare * 0.5);
 
-    sim.tower.place("medical", 2, C + 8);
+    expect(sim.tower.place("medical", 2, C + 8).ok).toBe(true);
     const withBoth = sim.fireIgnitionChance();
     expect(withBoth).toBeCloseTo(0.025 * 0.45 * 0.5, 5);
     expect(withBoth).toBeLessThan(withSecurity);
@@ -166,8 +166,9 @@ describe("F15 / Step 3 — service coverage radius (v2): placement matters", () 
   it("a Security office that is still under construction or on fire does not protect", () => {
     const sim = tallTower(1);
     const bare = sim.fireIgnitionChance();
-    const { unitId } = sim.tower.place("security", 2, C);
-    const sec = sim.tower.units.find((u) => u.id === unitId)!;
+    const placed = sim.tower.place("security", 2, C);
+    expect(placed.ok).toBe(true);
+    const sec = sim.tower.units.find((u) => u.id === placed.unitId)!;
 
     sec.state = "construction"; // not finished → no protection yet
     expect(sim.fireIgnitionChance()).toBeCloseTo(bare, 5);
