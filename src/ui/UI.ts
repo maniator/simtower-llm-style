@@ -1,5 +1,5 @@
 import { ALL_KINDS, FACILITIES } from "../engine/facilities";
-import type { Simulation, LogEntry } from "../engine/Simulation";
+import type { Simulation, LogEntry, BatchTarget, BatchRentOptions, BatchRentResult } from "../engine/Simulation";
 import type { SlotInfo } from "../storage/SaveGame";
 import type { FacilityCategory, FacilityKind } from "../engine/types";
 
@@ -449,6 +449,75 @@ export class UI {
     }, 3600);
     this.toastTimers.push(timer);
     while (this.el.toast.children.length > 5) this.el.toast.firstElementChild?.remove();
+  }
+
+  /** Batch-pricing dialog, pre-scoped to one priced kind. Live honest preview
+   *  (same engine core as apply); Apply is disabled at zero changes. */
+  showBatchPricingDialog(
+    ctx: { kind: FacilityKind; kindLabel: string; band: { default: number; min: number; max: number; step: number } },
+    cb: {
+      preview: (target: BatchTarget, opts: BatchRentOptions) => BatchRentResult;
+      apply: (target: BatchTarget, opts: BatchRentOptions) => BatchRentResult;
+      onApplied: (summary: string) => void;
+    },
+  ): void {
+    const { kind, band } = ctx;
+    const noun = ctx.kindLabel.toLowerCase() + "s";
+    const priceWord = kind === "condo" ? "price" : "rent";
+    const money = (n: number) => `$${n.toLocaleString()}`;
+    const box = this.openModal(`
+      <h2>Set all ${noun}</h2>
+      <div class="batch-modes">
+        <label><input type="radio" name="bp-mode" value="set" checked /> Set ${priceWord} to</label>
+        <span class="bp-amount"><button type="button" data-bp="dec" aria-label="decrease">–</button>
+          <input id="bp-price" type="number" inputmode="numeric" value="${band.default}" min="${band.min}" max="${band.max}" step="${band.step}" />
+          <button type="button" data-bp="inc" aria-label="increase">+</button></span>
+        <div class="bp-band">Range ${money(band.min)}–${money(band.max)}</div>
+        <label><input type="radio" name="bp-mode" value="default" /> Reset to default (${money(band.default)})</label>
+      </div>
+      <label class="bp-only"><input id="bp-only" type="checkbox" /> Only ${noun} still on the default price</label>
+      <p id="bp-preview" class="bp-preview" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button class="primary" id="bp-apply" data-act="apply">Apply</button>
+        <button data-act="close">Cancel</button>
+      </div>`);
+    const priceEl = box.querySelector<HTMLInputElement>("#bp-price")!;
+    const onlyEl = box.querySelector<HTMLInputElement>("#bp-only")!;
+    const previewEl = box.querySelector<HTMLElement>("#bp-preview")!;
+    const applyBtn = box.querySelector<HTMLButtonElement>("#bp-apply")!;
+    const mode = () => box.querySelector<HTMLInputElement>('input[name="bp-mode"]:checked')!.value;
+    const target = (): BatchTarget => (mode() === "default" ? "default" : Math.round(Number(priceEl.value) || 0));
+    const opts = (): BatchRentOptions => ({ onlyDefaultPriced: onlyEl.checked });
+    const priceText = (t: BatchTarget) =>
+      t === "default" ? `the default (${money(band.default)})` : money(Math.max(band.min, Math.min(band.max, t)));
+
+    const refresh = () => {
+      priceEl.disabled = mode() === "default";
+      const r = cb.preview(target(), opts());
+      let msg = `Set ${r.changed} of ${r.matched} ${noun} to ${priceText(target())}.`;
+      if (r.skippedCustom) msg += ` ${r.skippedCustom} custom-priced left as-is.`;
+      if (r.skippedSold) msg += ` ${r.skippedSold} sold skipped.`;
+      if (r.clampedHigh) msg += ` Clamped to the ${money(band.max)} max.`;
+      if (r.clampedLow) msg += ` Clamped to the ${money(band.min)} min.`;
+      previewEl.textContent = msg;
+      applyBtn.disabled = r.changed === 0;
+    };
+    const step = (dir: 1 | -1) => {
+      priceEl.value = String(Math.max(band.min, Math.min(band.max, (Number(priceEl.value) || 0) + dir * band.step)));
+      refresh();
+    };
+    box.querySelector('[data-bp="inc"]')!.addEventListener("click", () => step(1));
+    box.querySelector('[data-bp="dec"]')!.addEventListener("click", () => step(-1));
+    priceEl.addEventListener("input", refresh);
+    onlyEl.addEventListener("change", refresh);
+    box.querySelectorAll('input[name="bp-mode"]').forEach((el) => el.addEventListener("change", refresh));
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    applyBtn.addEventListener("click", () => {
+      const r = cb.apply(target(), opts());
+      cb.onApplied(`Set ${r.changed} ${noun} to ${priceText(target())}.`);
+      this.closeModal();
+    });
+    refresh();
   }
 
   // ---- Modals ------------------------------------------------------------

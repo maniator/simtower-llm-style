@@ -45,6 +45,9 @@ export const ECON = {
   } as Record<string, number>,
 } as const;
 
+/** Unit kinds whose price the player sets (and can batch-edit). */
+export const PRICED_KINDS = ["office", "condo", "hotelSingle", "hotelDouble", "hotelSuite"] as const;
+
 /** The price band for a unit kind, or null if its price isn't player-set. */
 export function rentConfig(kind: string): { default: number; min: number; max: number; step: number } | null {
   return ECON.rent[kind] ?? null;

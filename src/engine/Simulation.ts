@@ -67,6 +67,22 @@ export interface LogEntry {
   kind: "info" | "good" | "bad" | "money";
 }
 
+/** Batch-pricing target: an exact price, or "default" to clear the override. */
+export type BatchTarget = number | "default";
+export interface BatchRentOptions {
+  /** Only touch units still on the default price (skip hand-tuned ones). */
+  onlyDefaultPriced?: boolean;
+}
+export interface BatchRentResult {
+  matched: number; // priced units of this kind (incl. sold condos)
+  eligible: number; // matched − skippedSold − skippedCustom
+  changed: number; // units whose effective price actually differs after the write
+  skippedSold: number; // condo && everOccupied
+  skippedCustom: number; // had a custom price and onlyDefaultPriced was set
+  clampedLow: number; // eligible units whose target was below the band minimum
+  clampedHigh: number; // eligible units whose target was above the band maximum
+}
+
 /**
  * Simulation drives time, money, population and ratings. The renderer and UI
  * read its state; they never mutate the model directly except via build/sell.
@@ -791,6 +807,18 @@ export class Simulation implements SimContext {
     return Math.max(0.15, Math.min(1.6, 2 - ratio));
   }
 
+  /** Set one unit's price to a clamped target, honoring the condo-sold gate.
+   *  The single choke point for every price write (nudge and batch), so the
+   *  band clamp and the "can't reprice a sold condo" rule live in one place.
+   *  Returns the new price, or null if the unit isn't repriceable. */
+  private priceUnit(u: Unit, target: number): number | null {
+    const cfg = rentConfig(u.kind);
+    if (!cfg) return null;
+    if (u.kind === "condo" && u.everOccupied) return null; // already sold
+    u.rent = Math.max(cfg.min, Math.min(cfg.max, target));
+    return u.rent;
+  }
+
   /** Nudge a unit's price one step within its band — offices/hotels any time,
    *  condos only while unsold. Returns the new price, or null if not adjustable. */
   adjustRent(id: number, dir: 1 | -1): number | null {
@@ -798,9 +826,67 @@ export class Simulation implements SimContext {
     if (!u) return null;
     const cfg = rentConfig(u.kind);
     if (!cfg) return null;
-    if (u.kind === "condo" && u.everOccupied) return null; // already sold
-    u.rent = Math.max(cfg.min, Math.min(cfg.max, rentOf(u) + dir * cfg.step));
-    return u.rent;
+    return this.priceUnit(u, rentOf(u) + dir * cfg.step);
+  }
+
+  /**
+   * Set the price of EVERY unit of one priced kind at once. `target` is an exact
+   * price or "default" (clears the per-unit override). With `onlyDefaultPriced`,
+   * units the player has hand-tuned are left alone. Sold condos are always
+   * skipped. `preview` computes the result without mutating; `apply` writes it —
+   * both run the same core, so what you preview is exactly what commits. Returns
+   * null for a non-priced kind. Pure (no RNG / clock) and save-safe (writes only
+   * the existing `Unit.rent`). */
+  previewRentBatch(kind: FacilityKind, target: BatchTarget, opts: BatchRentOptions = {}): BatchRentResult | null {
+    return this.computeBatch(kind, target, opts, false);
+  }
+  applyRentBatch(kind: FacilityKind, target: BatchTarget, opts: BatchRentOptions = {}): BatchRentResult | null {
+    return this.computeBatch(kind, target, opts, true);
+  }
+
+  private computeBatch(
+    kind: FacilityKind,
+    target: BatchTarget,
+    opts: BatchRentOptions,
+    mutate: boolean,
+  ): BatchRentResult | null {
+    const cfg = rentConfig(kind);
+    if (!cfg) return null; // not a priced kind
+    const onlyDefault = opts.onlyDefaultPriced ?? false;
+    const r: BatchRentResult = {
+      matched: 0,
+      eligible: 0,
+      changed: 0,
+      skippedSold: 0,
+      skippedCustom: 0,
+      clampedLow: 0,
+      clampedHigh: 0,
+    };
+    for (const u of this.tower.units) {
+      if (u.kind !== kind) continue;
+      r.matched++;
+      if (u.kind === "condo" && u.everOccupied) {
+        r.skippedSold++;
+        continue;
+      }
+      if (onlyDefault && u.rent !== undefined) {
+        r.skippedCustom++;
+        continue;
+      }
+      r.eligible++;
+      const before = rentOf(u);
+      if (target === "default") {
+        if (before !== cfg.default) r.changed++;
+        if (mutate) u.rent = undefined; // clear the override → falls back to default
+      } else {
+        if (target < cfg.min) r.clampedLow++;
+        else if (target > cfg.max) r.clampedHigh++;
+        const clamped = Math.max(cfg.min, Math.min(cfg.max, target));
+        if (before !== clamped) r.changed++;
+        if (mutate) u.rent = clamped;
+      }
+    }
+    return r;
   }
 
   /** Set a cinema's monthly film-booking policy. Returns the new policy, or null

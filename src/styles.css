@@ -1287,3 +1287,13 @@ html.reduce-motion *::after {
 @media (prefers-reduced-motion: reduce) {
   .tt-pulse { animation: none; box-shadow: 0 0 0 3px rgba(0, 0, 128, 0.65); }
 }
+
+/* Batch-pricing dialog. */
+.batch-modes { display: grid; gap: 8px; margin: 10px 0; }
+.batch-modes label { display: flex; align-items: center; gap: 6px; }
+.bp-amount { display: inline-flex; align-items: center; gap: 4px; margin-left: 22px; }
+.bp-amount input { width: 8em; text-align: right; }
+.bp-amount button { min-width: 28px; }
+.bp-band { margin-left: 22px; color: var(--muted); font-size: 0.85em; }
+.bp-only { display: flex; align-items: center; gap: 6px; margin: 6px 0; }
+.bp-preview { min-height: 2.4em; color: var(--accent); font-weight: 600; }
