@@ -1,7 +1,7 @@
 import { Clock } from "./Clock";
 import { Crowd } from "./Crowd";
 import { EconomySystem } from "./EconomySystem";
-import { ECON, rentOf, rentConfig } from "./econConfig";
+import { ECON, rentOf, rentConfig, resaleRefund } from "./econConfig";
 import { ElevatorDispatch } from "./ElevatorDispatch";
 import { EventSystem } from "./EventSystem";
 import type { SimContext } from "./SimContext";
@@ -319,7 +319,7 @@ export class Simulation implements SimContext {
       // so every removal path upholds the anti-cheat.
       if (u.state === "fire") return false;
       this.tower.removeUnit(u.id);
-      this.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      this.money += resaleRefund(u.kind);
       // If the last Wedding Hall is gone before the VIP arrived, cancel the
       // pending inspection so it can't keep re-failing and spamming the log.
       if (u.kind === "weddingHall" && !this.tower.builtWeddingHall && !this.evaluatedTower) {
@@ -329,12 +329,12 @@ export class Simulation implements SimContext {
     }
     if (t) {
       this.tower.removeTransport(t.id);
-      this.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+      this.money += resaleRefund(t.kind);
       return true;
     }
     if (u) {
       this.tower.removeUnit(u.id);
-      this.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      this.money += resaleRefund(u.kind);
       return true;
     }
     return false;

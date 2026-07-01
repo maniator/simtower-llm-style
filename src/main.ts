@@ -1,7 +1,7 @@
 import { Simulation } from "./engine/Simulation";
 import { UndoHistory, towerStateSig } from "./engine/UndoHistory";
 import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
-import { ECON, rentConfig, rentOf } from "./engine/econConfig";
+import { ECON, rentConfig, rentOf, resaleRefund, extendBill } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
@@ -792,7 +792,7 @@ class GameApp {
     if (u.kind === "cinema") {
       rows.push(`<span class="k">Now showing</span><span class="v" data-field="showing">${vol.showing}</span>`);
     }
-    rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
+    rows.push(`<span class="k">Resale value</span><span class="v">$${resaleRefund(f.kind).toLocaleString()}</span>`);
 
     let actions = "";
     if (canRename) {
@@ -846,7 +846,7 @@ class GameApp {
       rows.push(`<span class="k">Capacity</span><span class="v" data-field="capacity">${vol.capacity}</span>`);
       rows.push(`<span class="k">Stops</span><span class="v" data-field="stops">${vol.stops}</span>`);
     }
-    rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
+    rows.push(`<span class="k">Resale value</span><span class="v">$${resaleRefund(f.kind).toLocaleString()}</span>`);
 
     let actions = "";
     if (isEl) {
@@ -895,25 +895,22 @@ class GameApp {
       this.extendHwm = { id: t.id, top: t.top, bottom: t.bottom };
       this.captureUndo("Extend");
     }
-    let nb = t.bottom;
-    let nt = t.top;
-    if (end === "up") nt = Math.max(t.bottom + 1, targetFloor);
-    else nb = Math.min(t.top - 1, targetFloor);
-
-    // Bill only floors past the gesture's high-water mark, and clamp the growth
-    // to what the player can afford — so a fast drag grows the shaft as far as
-    // the budget allows (matching a slow drag) instead of being rejected, and a
-    // broke drag simply stops growing without spamming a toast every frame.
-    const PER_FLOOR = ECON.transportFloorCost;
-    const budgetFloors = Math.floor(this.sim.money / PER_FLOOR);
-    if (nt > this.extendHwm.top) nt = this.extendHwm.top + Math.min(nt - this.extendHwm.top, budgetFloors);
-    if (nb < this.extendHwm.bottom) nb = this.extendHwm.bottom - Math.min(this.extendHwm.bottom - nb, budgetFloors);
+    // Bill only floors past the gesture's high-water mark, clamped to what the
+    // player can afford — a fast drag grows as far as the budget allows (matching
+    // a slow drag), and a broke drag simply stops growing (no per-frame toast).
+    const { nb, nt, added } = extendBill(
+      { bottom: t.bottom, top: t.top },
+      this.extendHwm,
+      end,
+      targetFloor,
+      this.sim.money,
+      ECON.transportFloorCost,
+    );
     if (nb === t.bottom && nt === t.top) return; // nothing changed this step
 
-    const added = Math.max(0, nt - this.extendHwm.top) + Math.max(0, this.extendHwm.bottom - nb);
     const res = this.sim.tower.resizeTransport(t.id, nb, nt);
     if (res.ok) {
-      this.sim.money -= added * PER_FLOOR;
+      this.sim.money -= added * ECON.transportFloorCost;
       this.extendHwm.top = Math.max(this.extendHwm.top, nt);
       this.extendHwm.bottom = Math.min(this.extendHwm.bottom, nb);
       this.audio.sfx(added > 0 ? "build" : "click");
@@ -950,7 +947,7 @@ class GameApp {
           return;
         }
         this.sim.tower.removeUnit(u.id);
-        this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+        this.sim.money += resaleRefund(u.kind);
         this.audio.sfx("sell");
         this.commitUndo();
         return this.clearSelection();
@@ -977,13 +974,13 @@ class GameApp {
       if (!t) return this.clearSelection();
       if (action === "sell") {
         this.sim.tower.removeTransport(t.id);
-        this.sim.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+        this.sim.money += resaleRefund(t.kind);
         this.audio.sfx("sell");
         this.commitUndo();
         return this.clearSelection();
       }
       if (action === "addcar") {
-        if (this.sim.tower.setCars(t.id, t.cars + 1)) this.sim.money -= 40000;
+        if (this.sim.tower.setCars(t.id, t.cars + 1)) this.sim.money -= ECON.addCarCost;
         this.audio.sfx("build");
         this.refreshEditor();
       } else if (action === "removecar") {
@@ -1196,12 +1193,12 @@ class GameApp {
         return;
       }
       this.sim.tower.removeUnit(u.id);
-      this.sim.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
+      this.sim.money += resaleRefund(u.kind);
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === p.id);
       if (!t) return;
       this.sim.tower.removeTransport(t.id);
-      this.sim.money += Math.floor(FACILITIES[t.kind].cost * 0.5);
+      this.sim.money += resaleRefund(t.kind);
     }
     this.audio.sfx("sell");
     if (this.selected && this.selected.id === p.id) this.clearSelection();
