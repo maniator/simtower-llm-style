@@ -98,10 +98,23 @@ describe("Batch pricing", () => {
     expect(rentOf(offices[0])).toBe(20_000);
   });
 
-  it("all PRICED_KINDS have a rent band and batch is deterministic", () => {
+  it("every PRICED_KIND has a rent band and preview is deterministic (no RNG/clock)", () => {
+    const { sim } = officeTower(1, 4);
     for (const k of PRICED_KINDS) {
-      const { sim } = officeTower(1, 0);
-      expect(sim.previewRentBatch(k, "default")).not.toBeNull();
+      const a = sim.previewRentBatch(k, 12_345);
+      const b = sim.previewRentBatch(k, 12_345);
+      expect(a).not.toBeNull();
+      expect(a).toEqual(b); // two identical previews → deterministic
     }
+  });
+
+  it("stores a batched-to-default price as no-override (never counted custom later)", () => {
+    const { sim, offices } = officeTower(1, 3);
+    sim.applyRentBatch("office", 10_000); // the office default
+    expect(offices.every((u) => u.rent === undefined)).toBe(true); // not stored as custom
+    // A later onlyDefaultPriced batch must treat them as default, not custom.
+    const res = sim.applyRentBatch("office", 15_000, { onlyDefaultPriced: true })!;
+    expect(res.skippedCustom).toBe(0);
+    expect(res.changed).toBe(3);
   });
 });

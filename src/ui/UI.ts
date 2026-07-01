@@ -486,13 +486,21 @@ export class UI {
     const previewEl = box.querySelector<HTMLElement>("#bp-preview")!;
     const applyBtn = box.querySelector<HTMLButtonElement>("#bp-apply")!;
     const mode = () => box.querySelector<HTMLInputElement>('input[name="bp-mode"]:checked')!.value;
-    const target = (): BatchTarget => (mode() === "default" ? "default" : Math.round(Number(priceEl.value) || 0));
+    // Snap a typed price to the band's step grid, so batch matches the ± adjuster's
+    // granularity (a typed 12,345 becomes 12,000 for a $1,000-step office).
+    const snap = (v: number) => {
+      const stepped = Math.round((v - band.min) / band.step) * band.step + band.min;
+      return Math.max(band.min, Math.min(band.max, stepped));
+    };
+    const target = (): BatchTarget => (mode() === "default" ? "default" : snap(Number(priceEl.value) || 0));
     const opts = (): BatchRentOptions => ({ onlyDefaultPriced: onlyEl.checked });
-    const priceText = (t: BatchTarget) =>
-      t === "default" ? `the default (${money(band.default)})` : money(Math.max(band.min, Math.min(band.max, t)));
+    const priceText = (t: BatchTarget) => (t === "default" ? `the default (${money(band.default)})` : money(t as number));
 
+    let resetArmed = false; // bulk "Reset to default" needs a confirming second click
     const refresh = () => {
       priceEl.disabled = mode() === "default";
+      resetArmed = false;
+      applyBtn.textContent = "Apply";
       const r = cb.preview(target(), opts());
       let msg = `Set ${r.changed} of ${r.matched} ${noun} to ${priceText(target())}.`;
       if (r.skippedCustom) msg += ` ${r.skippedCustom} custom-priced left as-is.`;
@@ -513,6 +521,12 @@ export class UI {
     box.querySelectorAll('input[name="bp-mode"]').forEach((el) => el.addEventListener("change", refresh));
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
     applyBtn.addEventListener("click", () => {
+      // A bulk reset clears everyone's custom price — require a confirming click.
+      if (mode() === "default" && !resetArmed) {
+        resetArmed = true;
+        applyBtn.textContent = "Confirm reset";
+        return;
+      }
       const r = cb.apply(target(), opts());
       cb.onApplied(`Set ${r.changed} ${noun} to ${priceText(target())}.`);
       this.closeModal();

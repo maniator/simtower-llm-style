@@ -816,8 +816,11 @@ export class Simulation implements SimContext {
     if (!cfg) return null;
     if (!Number.isFinite(target)) return null; // guard NaN/Infinity from any caller
     if (u.kind === "condo" && u.everOccupied) return null; // already sold
-    u.rent = Math.max(cfg.min, Math.min(cfg.max, target));
-    return u.rent;
+    const clamped = Math.max(cfg.min, Math.min(cfg.max, target));
+    // A price equal to the kind default is stored as "no override" (undefined), so
+    // a unit set/nudged back to default never counts as custom-priced.
+    u.rent = clamped === cfg.default ? undefined : clamped;
+    return clamped;
   }
 
   /** Nudge a unit's price one step within its band — offices/hotels any time,
@@ -885,7 +888,8 @@ export class Simulation implements SimContext {
         else if (target > cfg.max) r.clampedHigh++;
         const clamped = Math.max(cfg.min, Math.min(cfg.max, target));
         if (before !== clamped) r.changed++;
-        if (mutate) u.rent = clamped;
+        // Store default as "no override" (undefined) so it isn't counted custom later.
+        if (mutate) u.rent = clamped === cfg.default ? undefined : clamped;
       }
     }
     return r;
