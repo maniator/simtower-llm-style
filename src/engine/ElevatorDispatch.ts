@@ -1,5 +1,5 @@
 import type { Tower } from "./Tower";
-import { isElevatorKind, transportCapacity } from "./facilities";
+import { isElevatorKind, transportCarCapacity } from "./facilities";
 
 /**
  * Demand-driven elevator dispatch — a simplified SCAN controller, lifted out of
@@ -56,7 +56,7 @@ export class ElevatorDispatch {
         this.carDwell.set(t.id, dwell);
       }
       if (!t.carLoad || t.carLoad.length !== t.cars) t.carLoad = new Array(t.cars).fill(0);
-      const cap = transportCapacity(t.kind);
+      const cap = transportCarCapacity(t.kind);
 
       const v = dt * 0.4; // floors travelled this step
       // Floors another car in this shaft is already heading to this tick, so the

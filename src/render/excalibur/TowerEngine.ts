@@ -1,6 +1,6 @@
 import * as ex from "excalibur";
 import type { Simulation } from "../../engine/Simulation";
-import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt, transportCapacity } from "../../engine/facilities";
+import { GRID, facilityFloors, hasBusinessHours, isElevatorKind, isOpenAt, transportCarCapacity } from "../../engine/facilities";
 import type { FacilityKind, Transport, Unit, WeatherKind } from "../../engine/types";
 import { drawCar, drawMetroTrain, drawTransport, drawUnit, type DrawCtx } from "../sprites";
 import { carIndicator, type CarIndicator } from "../carIndicator";
@@ -1140,7 +1140,7 @@ export class TowerEngine {
       // cached per state so we only redraw when the state actually changes.
       const load = c.t.carLoad?.[c.i] ?? 0;
       const dir = c.t.carDir?.[c.i] ?? 0;
-      const ind = carIndicator(dir, load, transportCapacity(c.t.kind));
+      const ind = carIndicator(dir, load, transportCarCapacity(c.t.kind));
       const key = this.carKey(ind);
       if (key !== c.shown) {
         c.shown = key;

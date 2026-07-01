@@ -435,11 +435,13 @@ export const TRANSPORT_CAPACITY: Record<string, number> = {
 };
 
 /**
- * Passenger capacity for a transport kind, with a single shared fallback for
- * any kind missing from the table — so dispatch clamping and the renderer's
- * rider-fill / FULL indicator always agree on the same number.
+ * Per-car passenger capacity for a transport kind, with a single shared
+ * fallback for any kind missing from the table — so dispatch clamping and the
+ * renderer's rider-fill / FULL indicator always agree on the same number.
+ * (Distinct from `Simulation.transportCapacity`, which is the whole shaft's
+ * total: cars × this per-car number.)
  */
-export function transportCapacity(kind: FacilityKind): number {
+export function transportCarCapacity(kind: FacilityKind): number {
   return TRANSPORT_CAPACITY[kind] ?? 16;
 }
 
