@@ -676,18 +676,16 @@ export class Tower {
     return this.functionalParkingSet().size;
   }
 
-  private parkingSet?: Set<number>;
-  private parkingRev = -1;
-
   /**
    * The set of parking-SPACE unit ids that function — i.e. chain back to a ramp
-   * (see {@link functionalParkingSpots}). Memoised by {@link revision} like
-   * {@link servedFloorSet}, so the inspector, the dead-parking "red X" and the
-   * economy relief all share one cheap flood-fill. A space whose id is absent is
-   * a dead space (no relief).
+   * (see {@link functionalParkingSpots}). A space whose id is absent is dead (no
+   * relief). NOT memoised: it depends on unit STATE (construction/fire), and
+   * those transitions don't bump {@link revision} (finishConstruction / the fire
+   * handlers mutate `state` directly), so a revision cache would go stale. The
+   * flood-fill is bounded by the parking region with O(1) `roomAt`, so it's cheap
+   * enough for the callers (inspector, economy, and a once-per-sync render read).
    */
   functionalParkingSet(): ReadonlySet<number> {
-    if (this.parkingSet && this.parkingRev === this.revision) return this.parkingSet;
     const usable = (u?: Unit): boolean =>
       !!u && (u.kind === "parking" || u.kind === "parkingRamp") && u.state !== "construction" && u.state !== "fire";
     const stack: [number, number][] = [];
@@ -713,8 +711,6 @@ export class Tower {
       // them do NOT connect (they'd be dead Xs in the original).
       if (u!.kind === "parkingRamp") stack.push([f - 1, x], [f + 1, x]);
     }
-    this.parkingSet = reached;
-    this.parkingRev = this.revision;
     return reached;
   }
 

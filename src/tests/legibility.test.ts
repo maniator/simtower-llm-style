@@ -24,10 +24,8 @@ describe("Legibility — functionalParkingSet (Tower)", () => {
     expect(set.has(a.unitId!)).toBe(true);
     expect(set.has(b.unitId!)).toBe(false);
     expect(sim.tower.functionalParkingSpots()).toBe(set.size); // delegation invariant
-    expect(sim.tower.functionalParkingSet()).toBe(set); // same instance until a build bumps revision
-    sim.tower.place("parking", 0, C + 12); // chain-extends off a; bumps revision
-    expect(sim.tower.functionalParkingSet()).not.toBe(set);
-    expect(sim.tower.functionalParkingSet().size).toBe(2); // C+6 and C+12
+    sim.tower.place("parking", 0, C + 12); // chain-extends off a
+    expect(sim.tower.functionalParkingSet().size).toBe(2); // C+6 and C+12 now both chained
   });
 
   it("stacked parking with no ramp between floors is not connected", () => {

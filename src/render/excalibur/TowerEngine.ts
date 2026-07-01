@@ -788,14 +788,15 @@ export class TowerEngine {
         const lateNight = u.kind === "condo" && (this.d.hour >= 23 || this.d.hour < 6) ? "s" : "";
         const dead = u.kind === "parking" && !parkingOK.has(u.id) ? "x" : "";
         const sig = `${u.state}:${this.litState ? 1 : 0}:${u.width}:${u.occupants}:${open}${lateNight}${dead}`;
+        const isDead = dead === "x";
         const a = this.roomActors.get(u.id);
         if (!a) {
-          this.addRoom(u);
+          this.addRoom(u, isDead);
           this.roomSig.set(u.id, sig);
         } else if (this.roomSig.get(u.id) !== sig) {
           a.kill();
           this.roomActors.delete(u.id);
-          this.addRoom(u);
+          this.addRoom(u, isDead);
           this.roomSig.set(u.id, sig);
         }
       }
@@ -849,7 +850,7 @@ export class TowerEngine {
     this.structActors.set(u.id, a);
   }
 
-  private addRoom(u: Unit): void {
+  private addRoom(u: Unit, deadParking = false): void {
     const hgt = facilityFloors(u.kind);
     const w = u.width * TILE;
     const h = hgt * FLOOR;
@@ -865,8 +866,9 @@ export class TowerEngine {
         drawUnit(this.d, u, 0, 0, w, h);
         // Canon "red X" on a parking space that isn't chained to a ramp (dead —
         // no relief). Static: baked into the sprite, re-baked only when the sig's
-        // dead-bit flips on build/bulldoze.
-        if (u.kind === "parking" && !this.sim.tower.functionalParkingSet().has(u.id)) {
+        // dead-bit flips (deadParking is computed once per sync from the caller's
+        // single functionalParkingSet() read — no per-unit recompute).
+        if (deadParking) {
           ctx.strokeStyle = "#C24A3A";
           ctx.lineWidth = 2;
           ctx.beginPath();
