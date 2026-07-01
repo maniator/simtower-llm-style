@@ -2,6 +2,7 @@ import { Simulation } from "./engine/Simulation";
 import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
 import { ECON, rentConfig, rentOf } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
+import { isOperational } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
@@ -759,9 +760,8 @@ class GameApp {
       vol.rent = `$${rentOf(u).toLocaleString()}${isHotelKind(u.kind) ? "/night" : ""}`;
     }
     if (u.kind === "cinema") {
-      const operational = u.state !== "construction" && u.state !== "fire";
-      // A mid-build / burning cinema books no film — show "—", not a fake feature.
-      vol.showing = !operational ? "—" : this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
+      // A mid-build / burning / gutted cinema books no film — show "—", not a fake feature.
+      vol.showing = !isOperational(u) ? "—" : this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
     }
     return vol;
   }
@@ -788,7 +788,7 @@ class GameApp {
     }
     if (u.state === "gutted") {
       rows.push(`<span class="k">Scrap value</span><span class="v">$0</span>`);
-      rows.push(`<span class="k">⚠</span><span class="v">Gutted by fire — bulldoze and rebuild.</span>`);
+      rows.push(`<span class="k">⚠</span><span class="v">Gutted — bulldoze and rebuild.</span>`);
     } else {
       rows.push(`<span class="k">Resale value</span><span class="v">$${Math.floor(f.cost * 0.5).toLocaleString()}</span>`);
     }

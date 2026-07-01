@@ -56,7 +56,7 @@ export class EconomySystem {
     for (const u of this.sim.tower.units) {
       const daily = ECON.dailyTrafficIncome[u.kind];
       if (daily === undefined) continue;
-      if (u.state === "construction" || u.state === "fire") continue;
+      if (!isOperational(u)) continue; // gutted/burning/under-construction earn nothing (and must not be revived to "occupied" below)
       if (!this.sim.tower.isFloorServed(u.floor)) continue;
       if (!isOpenAt(u.kind, this.sim.clock.hour)) {
         // Closed for the night — no patrons.

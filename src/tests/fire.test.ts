@@ -102,6 +102,29 @@ describe("Fire aftermath — gutted shells (canon), not auto-repair", () => {
     expect(office.state).toBe("gutted"); // no re-ignite, no re-lease after load
   });
 
+  it("a gutted COMMERCIAL venue stays gutted and is never revived to earn income", () => {
+    // Regression: collectTrafficIncome() force-set commercial rooms to "occupied"
+    // each hour, resurrecting a gutted shop/restaurant/cinema and defeating the fix.
+    const sim = Simulation.newGame(11);
+    const x0 = Math.floor(GRID.width / 2) - 20;
+    for (let i = 0; i < 40; i++) sim.tower.place("floor", 2, x0 + i);
+    sim.buildTransport("elevatorStandard", x0, 1, 2); // served floor
+    sim.tower.place("shop", 2, 0 + x0); // the only flammable room (earns traffic income)
+    const shop = sim.tower.units.find((u) => u.kind === "shop")!;
+    shop.state = "occupied";
+    sim.startFire();
+    expect(shop.state).toBe("fire");
+    defend(sim, x0);
+    let g = 0;
+    while (sim.fires > 0 && g++ < 20) sim.tick(60 * 24);
+    expect(shop.state).toBe("gutted");
+    // Run several full (open-hours) days: a gutted venue must NOT flip back to
+    // "occupied" and must not earn — this assertion fails on the pre-fix code.
+    for (let d = 0; d < 5; d++) sim.tick(60 * 24);
+    expect(shop.state).toBe("gutted");
+    expect(shop.occupants).toBe(0);
+  });
+
   it("isOperational excludes construction, fire, and gutted", () => {
     expect(isOperational({ state: "occupied" })).toBe(true);
     expect(isOperational({ state: "empty" })).toBe(true);

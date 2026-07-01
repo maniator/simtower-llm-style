@@ -349,17 +349,15 @@ export class EventSystem {
           Math.abs(u.floor - epicentre) <= 2 &&
           u.kind !== "floor" &&
           u.kind !== "lobby" &&
-          u.state !== "construction"
+          u.state !== "construction" &&
+          u.state !== "gutted" // already destroyed — don't revive or double-count
         ) {
-          u.state = "empty";
-          u.occupants = 0;
-          u.everOccupied = false;
-          u.label = FACILITIES[u.kind].name;
           this.active.delete(u.id); // a burning unit caught in the blast is cleared
+          this.gut(u); // destroyed rooms become gutted shells (rebuild), like a fire
           destroyed++;
         }
       }
     }
-    this.sim.emit(`💣 A bomb detonated with no security to stop it — ${destroyed} room(s) across ~5 floors were destroyed, plus a $${fine.toLocaleString()} fine. Build Security!`, "bad");
+    this.sim.emit(`💣 A bomb detonated with no security to stop it — ${destroyed} room(s) across ~5 floors were gutted, plus a $${fine.toLocaleString()} fine. Build Security!`, "bad");
   }
 }
