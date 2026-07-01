@@ -116,12 +116,12 @@ research.]`
 - **Tower** — the entire building the player constructs; also the name of the
   final win-state rank (see **TOWER rank**). Disambiguated by context/casing.
 - **Lot** — the fixed buildable region: 100 floors above ground, 10 basement
-  levels below (B1…B10), 200 tiles wide.
+  levels below (B1…B10), 340 tiles wide.
 - **Two-layer grid** — the building model: a structural floor/corridor layer with
   a room layer placed on top of it. A Room cannot exist without a Floor beneath.
 - **Floor (structure)** — a single structural floor tile; must exist before a
   room can sit on it. The cheap base layer of the **two-layer grid**.
-- **Tile** — the unit of horizontal width on the grid (lot is 200 tiles wide).
+- **Tile** — the unit of horizontal width on the grid (lot is 340 tiles wide).
 - **Floor number** — continuous numbering: floor 1 = ground, floor 0 = B1,
   −1 = B2 … −9 = B10 (no gap at 0); top is floor 100. The basement therefore has
   10 levels (B1…B10).
@@ -187,7 +187,7 @@ Realizes **UJ-1**, **UJ-4**.
 **Functional Requirements:**
 - **FR-1** — The player can build within a lot of **100 floors above ground**,
   **10 basement levels below** (B1…B10, i.e. floor 0 down to floor −9), and
-  **200 tiles wide** [`GRID`: `maxFloor` 100, `minFloor` −9, `width` 200].
+  **340 tiles wide** [`GRID`: `maxFloor` 100, `minFloor` −9, `width` 340]. `[UPDATED 2026-06-30: widened 200→340 so the canonical 15,000 TOWER target is reachable — see FR-46/FR-67.]`
   Placement outside these bounds is rejected.
 - **FR-2** — Floor numbering is continuous with no gap at zero: floor 1 =
   ground, floor 0 = B1, down to −9 = B10; top = floor 100.
@@ -247,13 +247,20 @@ mitigate problems. Each facility type unlocks at a minimum star rating
 - **FR-16** — Food/retail/entertainment facilities keep **business hours** and
   display as **CLOSED** outside them; income accrues only while open
   [`isOpenAt`, `hasBusinessHours`].
+- **FR-16a** — Each **Cinema** books a film every month (canon): an **average
+  film** (~$150,000) or, some months, a **blockbuster** (~$300,000) that costs
+  more to book but draws a bigger crowd — a genuine upside in a busy tower and a
+  gamble in a quiet one [`cinemaBookingMonthly`, `cinemaBookingBlockbuster`].
 - **FR-17** — The player can place **Service** facilities — **Parking** (3★,
   basement), **Security** (2★), **Medical Center** (3★), **Housekeeping** (2★),
   **Recycling Center** (3★, basement, 2 floors) — which generate no income and
   provide rating/mitigation effects. Security, Medical, Housekeeping, and
   Recycling each charge monthly maintenance [`ECON.serviceMaintenanceMonthly`];
   Parking carries only its build cost (no monthly service maintenance) and
-  reduces stress for tenants who drive. `[NOTE: Security unlocks at 2★ — it is
+  reduces stress for tenants who drive. Parking has two parts (canon): a
+  **Parking Ramp** and **Parking Spaces**, and a space only functions when it
+  chains — through contiguous spaces — back to a ramp; unconnected spaces are
+  dead ("red X") and provide no relief. `[NOTE: Security unlocks at 2★ — it is
   the facility that GATES 3★ (FR-44), so it must be buildable while the tower is
   still 2★, otherwise the rating deadlocks. Medical (the 4★ gate) unlocks at 3★
   for the same reason.]`
@@ -384,8 +391,10 @@ passes a **VIP inspection**. Realizes **UJ-3**, **UJ-5**.
   (jingle / headline).
 - **FR-46** — The **TOWER rank** requires: **5★** + a built **Wedding Hall**
   (floor 100) + a **Metro Station** + passing the **VIP inspection** at a
-  population target of **8,000** [`TOWER_POPULATION`]. `[NOTE FOR PM: original
-  target is 15,000; reduced to 8,000 for the smaller-scale population model —
+  population target of **15,000** [`TOWER_POPULATION`]. `[RESOLVED 2026-06-30:
+  restored to the canonical 15,000 (from the interim 8,000) by widening the
+  buildable lot to 340 tiles so a well-zoned tower can actually reach it
+  (~15,066 occupants measured); population scale is no longer a divergence —
   see §4.10 / FR-67.]`
   `[DECISION 2026-06-30 (owner): "TOWER" measures OCCUPANT POPULATION (residents +
   office workers + hotel guests) exactly as the 1994 original did — NOT total
@@ -496,17 +505,20 @@ gaps. Full rationale and the complete source-of-truth mapping live in
 - **FR-66** — The floor-100 capstone is a **Wedding Hall**, a religion-agnostic
   stand-in for the original's **Cathedral**; it fills the identical role of
   triggering the TOWER evaluation (see FR-19, FR-46).
-- **FR-67** — The TOWER goal stays a **population census** as in the 1994 original
-  (residents + office workers + hotel guests; commercial visitors excluded), at a
-  target of **8,000** rather than the original's **15,000** — the only divergence
-  is the *number* (scaled to this build), not *what is counted*. The Phase-2
-  tolerance band may re-derive the number from the spatial model, but the metric
-  stays canonical (see the DECISION note on FR-46).
+- **FR-67** — The TOWER goal is a **population census** as in the 1994 original
+  (office workers + condo residents; hotel guests count only while the tower is
+  climbing to 3★, then drop out of the rating per canon; commercial visitors are
+  always excluded — `ratingPopulation()`), at the canonical target of **15,000**. The interim scaled-down number (8,000) was
+  restored to 15,000 on 2026-06-30 by widening the lot to 340 tiles so the target
+  is genuinely reachable under the spatial model — both the metric *and* the
+  number are now canonical (see the RESOLVED note on FR-46).
 - **FR-68** — Tower transport stress is driven by an **individually-routed
   crowd** (FR-30) layered over an **aggregate congestion model** (FR-34),
   whereas the original used a single aggregate model; the on-screen crowd is
   **capped** for performance (FR-35) while the full population is still
-  simulated.
+  simulated. Routing honors the original's **two-ride rule**: a trip uses at
+  most **two transport rides** (one sky-lobby transfer), so floors reachable only
+  via 3+ rides draw no commuters — the player must provide sky-lobby transfers.
 - **FR-69** — All art and audio are **generated in code** (FR-60), and saves use
   a **JSON format** with only a best-effort `.TWR` importer (FR-65), rather than
   the original's bundled assets and native `.TWR` save format.
@@ -523,8 +535,10 @@ gaps. Full rationale and the complete source-of-truth mapping live in
 - **No monetization** — no ads, IAP, or paywalls.
 - **No backend/server.** The game is fully client-side; saves live in the
   browser or in exported files.
-- **Not a 1:1 population-scale simulation.** Population is smaller-scale than the
-  original; the TOWER target is tuned to 8,000 (vs. 15,000) accordingly.
+- **Not a 1:1 population-scale simulation.** The TOWER target now matches the
+  canonical **15,000** (the lot was widened to 340 so it's reachable), but the
+  underlying density model is still a game-scale abstraction, not a tile-exact
+  recreation of the original's simulation.
 - **Not a full `.TWR` import tool.** Only a documented best-effort stub.
 
 ## 6. MVP Scope
@@ -555,8 +569,9 @@ as implemented and test-covered.)*
 - **Lossless `.TWR` import** — stub only (FR-65). `[NOTE FOR PM: faithful fans
   may want their old towers back; revisit if a robust decoder becomes feasible.]`
 - **Original assets / Cathedral naming** — permanent non-goal, not a deferral.
-- **Population at full original scale (15,000 TOWER)** — deferred pending a
-  larger-scale population model; 8,000 is the MVP target.
+- **Population at full original scale (15,000 TOWER)** — **DELIVERED 2026-06-30**
+  (no longer deferred): the lot was widened to 340 tiles so the canonical 15,000
+  is reachable, rather than building a new population model.
 - **Online features, accounts, leaderboards, mod support** — not planned.
 - **Additional disaster types beyond the original set** — none planned.
 
@@ -602,11 +617,12 @@ as implemented and test-covered.)*
 3. *(Resolved 2026-06-30)* Express auto-restriction is confirmed in
    `Tower.setExpressStops()`: express skips intermediate non-lobby floors but
    always keeps its shaft endpoints as stops. FR-25 updated accordingly.
-4. *(Resolved 2026-06-30)* The TOWER target was re-derived to **8,000** from the
-   lot's measured capacity under the v2 spatial model (a well-zoned 100×200 tower
-   tops out near ~8,900 occupants once shaft columns are reserved). The metric
-   stays a population census per the original; the number is a tolerance band the
-   owner can retune from playtest data. (FR-46 / FR-67)
+4. *(Resolved 2026-06-30)* The TOWER target is the canonical **15,000**. It was
+   briefly re-derived down to 8,000 because a 100×200 lot topped out near ~8,900
+   occupants under the v2 spatial model, but the owner chose to restore the
+   original number by **widening the lot to 340 tiles** — a well-zoned tower now
+   reaches ~15,066 occupants at healthy congestion, so both the metric (a
+   population census) and the number are canonical. (FR-46 / FR-67)
 5. What is the precise trigger/odds model for buried treasure, and is it strictly
    basement-excavation-tied? (FR-39)
 6. Accessibility targets (keyboard-only play, color-blind-safe red congestion
