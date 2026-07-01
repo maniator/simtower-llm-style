@@ -448,9 +448,11 @@ export class Simulation implements SimContext {
   private nudgeStranded(): void {
     const stranded = this.strandedFloors().length > 0;
     if (stranded && !this.strandedNudged) {
+      // "info", not "bad": the UI toasts every good/bad log entry, and this
+      // advisory is meant to be log-only (a quiet bulletin line, not a toast).
       this.emit(
         "A leased floor is 3+ elevator rides from the lobby — no visitors will come. Check it in the inspector.",
-        "bad",
+        "info",
       );
     }
     this.strandedNudged = stranded; // re-arms only after the condition clears
@@ -894,8 +896,9 @@ export class Simulation implements SimContext {
    * True when a commuter can actually reach `floor` from the ground lobby in ≤2
    * transport rides (the {@link Crowd.route} cap). A floor can be
    * {@link Tower.isFloorServed} yet return false here — connected, but 3+ rides
-   * out, so no commuter ever spawns for it. BFS-bearing but cached by
-   * `tower.revision`; call on inspect/modal, never on the tick/HUD path.
+   * out, so no commuter ever spawns for it. Runs a fresh bounded (≤2-ride) BFS
+   * each call — only Crowd's ADJACENCY graph is cached by `tower.revision`, not
+   * the route result — so keep it off the tick/HUD path (inspect/modal/day only).
    */
   floorReachable(floor: number): boolean {
     if (floor === 1) return true;
@@ -909,14 +912,17 @@ export class Simulation implements SimContext {
    * {@link stats} or the tick loop.
    */
   strandedFloors(): number[] {
-    const out = new Set<number>();
+    // Collect candidate floors first, so the ≤2-ride BFS runs once PER FLOOR,
+    // not once per tenant unit (many units share a floor).
+    const candidates = new Set<number>();
     for (const u of this.tower.units) {
       if (!isTenantFloorUnit(u)) continue;
       if (!this.tower.isFloorServed(u.floor)) continue; // "not connected" is a separate, inspector-reported state
-      if (this.floorReachable(u.floor)) continue;
-      out.add(u.floor);
+      candidates.add(u.floor);
     }
-    return [...out].sort((a, b) => a - b);
+    const out: number[] = [];
+    for (const floor of candidates) if (!this.floorReachable(floor)) out.push(floor);
+    return out.sort((a, b) => a - b);
   }
 
   /** Like {@link hasAny} but only counts a facility that is finished and intact
