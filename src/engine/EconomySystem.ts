@@ -1,5 +1,5 @@
 import type { SimContext } from "./SimContext";
-import { ECON, rentOf } from "./econConfig";
+import { ECON, rentOf, isOverheadKind } from "./econConfig";
 import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facilities";
 
 /**
@@ -188,17 +188,28 @@ export class EconomySystem {
     for (const u of this.sim.tower.units) {
       const m = ECON.serviceMaintenanceMonthly[u.kind];
       if (m) cost += m;
+      const operational = u.state !== "construction" && u.state !== "fire";
       // Property tax on an unsold condo: a real carrying cost for holding out
       // for a premium sale (scales with the asking price).
-      if (u.kind === "condo" && !u.everOccupied && u.state !== "construction" && u.state !== "fire") {
+      if (u.kind === "condo" && !u.everOccupied && operational) {
         cost += Math.ceil(rentOf(u) * ECON.condoMonthlyTaxRate);
       }
+      // Operating overhead on space HELD (regardless of occupancy/served) — makes
+      // a vacant or unserved floor pure carrying cost. Sold condos are exempt:
+      // their income was a one-time sale already banked, so a permanent per-month
+      // drain on them would be punitive rather than a live decision.
+      if (operational && isOverheadKind(u.kind) && !(u.kind === "condo" && u.everOccupied)) {
+        cost += ECON.overheadPerLeasableUnitMonthly;
+      }
       // A cinema books a film each month (canon: 150k average / 300k
-      // blockbuster). A blockbuster costs more but draws bigger crowds (applied
-      // in collectTrafficIncome). A cinema that is on fire / under construction
-      // books nothing this month (its stale flag was already cleared above).
-      if (u.kind === "cinema" && u.state !== "construction" && u.state !== "fire") {
-        if (this.sim.rng.chance(0.4)) {
+      // blockbuster). The player sets a per-cinema policy; only "auto" consumes
+      // RNG (in the same order as before), so default cinemas are stream-identical.
+      // On fire / under construction it books nothing (flag cleared above).
+      if (u.kind === "cinema" && operational) {
+        const policy = u.filmPolicy ?? "auto";
+        const blockbuster =
+          policy === "blockbuster" ? true : policy === "feature" ? false : this.sim.rng.chance(0.4);
+        if (blockbuster) {
           this.blockbusters.add(u.id);
           cost += ECON.cinemaBookingBlockbuster;
         } else {

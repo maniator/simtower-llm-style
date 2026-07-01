@@ -20,6 +20,12 @@ export const ECON = {
    *  higher sale costs money each month (and the higher the price, the more
    *  tax), so max-pricing is no longer a free, strictly-dominant choice. */
   condoMonthlyTaxRate: 0.015,
+  /** Monthly operating overhead per leasable/operational income unit, charged on
+   *  SPACE HELD regardless of occupancy or served-status (income stays charged on
+   *  occupancy). A vacant or unserved floor thus becomes pure carrying cost — the
+   *  soft transport-puzzle penalty the design review asked for — while a well-run
+   *  tower stays hugely profitable (~a 20% haircut, self-scaling, never punitive). */
+  overheadPerLeasableUnitMonthly: 700,
   /** Player-adjustable price ranges (per the original's rent dropdown). The
    *  `default` is what an un-set unit charges; income, move-in odds and tenant
    *  satisfaction all key off how far the chosen price sits from it. */
@@ -47,4 +53,13 @@ export function rentConfig(kind: string): { default: number; min: number; max: n
 /** The effective price for a unit — the player's choice, or the kind default. */
 export function rentOf(u: { kind: string; rent?: number }): number {
   return u.rent ?? ECON.rent[u.kind]?.default ?? 0;
+}
+
+/** True for a unit kind that holds leasable/operational space and therefore
+ *  carries monthly operating overhead: anything with a rent band
+ *  (office/condo/hotel*) or a foot-traffic income line
+ *  (shop/food/entertainment). Excludes pure service units (security/medical/…)
+ *  which already pay `serviceMaintenanceMonthly` and aren't leasable inventory. */
+export function isOverheadKind(kind: string): boolean {
+  return rentConfig(kind) !== null || ECON.dailyTrafficIncome[kind] !== undefined;
 }

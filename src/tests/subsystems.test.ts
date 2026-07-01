@@ -115,8 +115,9 @@ describe("EconomySystem", () => {
     soldU.everOccupied = true; // already sold — no carrying cost
     const ctx = context(tower);
     new EconomySystem(ctx).payMaintenance();
-    // Only the unsold condo is taxed, at the default-price rate.
+    // The unsold condo carries price-scaled tax AND flat operating overhead; the
+    // sold condo is exempt from both (its income was a one-time sale already banked).
     const tax = Math.ceil(ECON.rent.condo.default * ECON.condoMonthlyTaxRate);
-    expect(ctx.money).toBe(-tax);
+    expect(ctx.money).toBe(-(tax + ECON.overheadPerLeasableUnitMonthly));
   });
 });
