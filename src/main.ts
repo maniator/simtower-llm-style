@@ -448,7 +448,11 @@ class GameApp {
     if (rentConfig(u.kind)) {
       vol.rent = `$${rentOf(u).toLocaleString()}${isHotelKind(u.kind) ? "/night" : ""}`;
     }
-    if (u.kind === "cinema") vol.showing = this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
+    if (u.kind === "cinema") {
+      const operational = u.state !== "construction" && u.state !== "fire";
+      // A mid-build / burning cinema books no film — show "—", not a fake feature.
+      vol.showing = !operational ? "—" : this.sim.isShowingBlockbuster(u.id) ? "Blockbuster" : "Feature";
+    }
     return vol;
   }
 

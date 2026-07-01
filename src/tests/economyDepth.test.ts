@@ -35,6 +35,27 @@ describe("Economy depth — #4 operating overhead", () => {
     expect(before - sim.money).toBe(5 * ECON.overheadPerLeasableUnitMonthly);
   });
 
+  it("overhead consumes no RNG — the shared stream is untouched by it (F3)", () => {
+    // Two seed-identical sims with no cinema/commercial/events (star 1): nothing
+    // in the tick touches sim.rng. The only difference is that A holds overhead-
+    // bearing (empty, unserved) offices and B is bare. If overhead consumed RNG,
+    // A's stream would diverge; it must not.
+    const build = (withOverhead: boolean) => {
+      const sim = Simulation.newGame(123);
+      sim.simModel = "v1";
+      sim.money = 1e9;
+      sim.star = 1;
+      layFull(sim, "lobby", 1);
+      layFull(sim, "floor", 2);
+      if (withOverhead) for (let i = 0; i < 10; i++) sim.tower.place("office", 2, i * 9);
+      for (let m = 0; m < 3; m++) sim.tick(MONTH); // 3 monthly maintenance runs
+      return sim;
+    };
+    const a = build(true);
+    const b = build(false);
+    expect(a.rng.next()).toBe(b.rng.next()); // identical stream position → overhead is RNG-free
+  });
+
   it("a unit under construction pays no overhead", () => {
     const sim = Simulation.newGame(2);
     sim.simModel = "v1";
