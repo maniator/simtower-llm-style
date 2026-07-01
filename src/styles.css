@@ -1042,3 +1042,198 @@ dialog#modal {
     scroll-behavior: auto !important;
   }
 }
+
+/* ── First-run splash + onboarding (chrome only) ───────────────────────── */
+/* "Metropolis Dusk" title screen: full-bleed dusk sky, an art-deco skyline and
+   a setting sun, under the Verticopolis wordmark. */
+#splash {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 24px 18px;
+  font-family: var(--r-font);
+  background: linear-gradient(#161634 0%, #241f4c 34%, #5b3560 62%, #c65a63 86%, #ef8560 100%);
+}
+.splash-stars,
+.splash-sun,
+.splash-skyline {
+  /* Decorative only — let backdrop clicks (safe-dismiss) fall through to #splash. */
+  pointer-events: none;
+}
+.splash-stars {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-image:
+    radial-gradient(1.5px 1.5px at 18% 14%, rgba(255, 255, 255, 0.8) 40%, transparent),
+    radial-gradient(1.5px 1.5px at 70% 9%, rgba(255, 255, 255, 0.6) 40%, transparent),
+    radial-gradient(1.5px 1.5px at 86% 22%, rgba(255, 255, 255, 0.7) 40%, transparent),
+    radial-gradient(1.5px 1.5px at 40% 7%, rgba(255, 255, 255, 0.55) 40%, transparent);
+  animation: splash-twinkle 4s ease-in-out infinite alternate;
+}
+@keyframes splash-twinkle {
+  from { opacity: 0.55; }
+  to { opacity: 1; }
+}
+.splash-sun {
+  position: absolute;
+  z-index: 0;
+  /* Low behind the skyline — a setting sun, not a spotlight on the text. */
+  top: 74%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: min(50vmin, 250px);
+  height: min(50vmin, 250px);
+  border-radius: 50%;
+  background: radial-gradient(circle, #ffe6a0 0%, #ffc94a 52%, #f18f4b 100%);
+  box-shadow: 0 0 100px 34px rgba(255, 179, 87, 0.33);
+}
+.splash-skyline {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  width: 100%;
+  height: 42%;
+}
+.splash-brand,
+.splash-actions,
+.splash-premise,
+.splash-attrib {
+  position: relative;
+  z-index: 3;
+}
+.splash-word {
+  display: block;
+  width: min(86vw, 420px);
+  margin: 0 auto;
+}
+.splash-word text {
+  font-family: "Century Gothic", "Twentieth Century", "URW Gothic", "Futura", system-ui, sans-serif;
+  font-size: 56px;
+  letter-spacing: 2px;
+  paint-order: stroke;
+  stroke: rgba(0, 0, 0, 0.35);
+  stroke-width: 2px;
+}
+.splash-word .a { fill: #f7f1e4; }
+.splash-word .b { fill: #ffc94a; }
+.splash-tag {
+  display: block;
+  width: min(78vw, 340px);
+  margin: 10px auto 0;
+}
+.splash-tag text {
+  font-family: "Century Gothic", "Twentieth Century", "URW Gothic", system-ui, sans-serif;
+  font-size: 15px;
+  fill: #ffd9a8;
+}
+.splash-premise {
+  max-width: 46ch;
+  margin: 18px auto 0;
+  color: #e7ddf5;
+  line-height: 1.45;
+}
+.splash-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-top: 22px;
+}
+.splash-btn {
+  font-family: var(--r-font);
+  font-size: 15px;
+  padding: 9px 18px;
+  min-height: 42px;
+  color: #20204a;
+  background: #e6dcc0;
+  border: 2px solid #0d0d10;
+  box-shadow: inset 2px 2px 0 rgba(255, 255, 255, 0.75), inset -2px -2px 0 rgba(0, 0, 0, 0.2), 3px 3px 0 rgba(0, 0, 0, 0.4);
+  cursor: pointer;
+}
+.splash-btn:active { box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.3); }
+.splash-btn.primary { background: #ffc94a; font-weight: 700; }
+.splash-btn.ghost {
+  background: transparent;
+  box-shadow: none;
+  border-color: transparent;
+  color: #ffd9a8;
+  text-decoration: underline;
+}
+.splash-attrib {
+  max-width: 60ch;
+  margin: 22px auto 0;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.72);
+  line-height: 1.4;
+}
+.splash-version {
+  position: absolute;
+  right: 12px;
+  bottom: 8px;
+  z-index: 3;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.8);
+}
+#splash.splash--mobile .splash-actions { flex-direction: column; width: min(86vw, 320px); }
+#splash.splash--mobile .splash-btn { width: 100%; min-height: 48px; }
+
+#onboard {
+  position: fixed;
+  left: 10px;
+  bottom: 44px;
+  z-index: 25;
+  width: 260px;
+  background: var(--panel);
+  color: var(--ink);
+  box-shadow: var(--bevel-out);
+  border: 1px solid var(--line);
+  font-family: var(--r-font);
+  font-size: 13px;
+}
+#onboard.onboard--mobile { left: 8px; right: 8px; width: auto; top: 58px; bottom: auto; }
+.ob-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--r-title);
+  color: var(--r-title-fg);
+  font-weight: 700;
+  padding: 5px 8px;
+}
+.ob-skip {
+  font-family: var(--r-font);
+  font-size: 11px;
+  padding: 2px 8px;
+  background: var(--panel-light);
+  box-shadow: var(--bevel-out);
+  border: 1px solid var(--line);
+  cursor: pointer;
+}
+.ob-list { list-style: none; margin: 0; padding: 8px; display: grid; gap: 6px; }
+.ob-step { display: flex; gap: 7px; align-items: flex-start; line-height: 1.3; }
+.ob-mark { width: 14px; text-align: center; font-weight: 700; }
+.ob-done { color: var(--good); }
+.ob-done .ob-text { text-decoration: line-through; opacity: 0.7; }
+.ob-cur .ob-mark { color: var(--accent); }
+.ob-todo { opacity: 0.65; }
+.ob-sub { display: block; color: var(--muted); font-weight: 400; margin-top: 2px; }
+.ob-sendoff { margin: 0; padding: 8px 10px 10px; color: var(--muted); }
+
+/* Attention pulse on the control the current onboarding step points at. */
+@keyframes tt-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 0, 128, 0.0); }
+  50% { box-shadow: 0 0 0 3px rgba(0, 0, 128, 0.65); }
+}
+.tt-pulse { animation: tt-pulse 1.1s ease-in-out infinite; position: relative; z-index: 1; }
+@media (prefers-reduced-motion: reduce) {
+  .tt-pulse { animation: none; box-shadow: 0 0 0 3px rgba(0, 0, 128, 0.65); }
+}

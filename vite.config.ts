@@ -1,10 +1,16 @@
 import { defineConfig } from "vite";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { VitePWA } from "vite-plugin-pwa";
+
+const pkgVersion = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8")).version as string;
 
 export default defineConfig({
   root: "src",
   base: "./",
+  // Compile-time app version, shown on the splash. (package.json isn't importable
+  // in the browser bundle.)
+  define: { __APP_VERSION__: JSON.stringify(pkgVersion) },
   plugins: [
     // Installable PWA via Workbox (vite-plugin-pwa) — no hand-rolled service
     // worker. Registration is NOT auto-injected (`injectRegister: false`);
