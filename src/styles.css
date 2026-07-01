@@ -1066,24 +1066,33 @@ dialog#modal {
   font-family: var(--r-font);
 }
 .splash-sky {
-  height: 84px;
-  margin: -4px -6px 10px;
+  height: 96px;
+  margin: -4px -6px 12px;
   border: 1px solid var(--r-dark);
+  /* "Metropolis Dusk": gold windows over an art-deco skyline, a setting sun,
+     an indigo → plum → coral sky. */
   background:
-    /* lit windows */
-    repeating-linear-gradient(90deg, transparent 0 6px, rgba(255, 214, 92, 0.55) 6px 9px, transparent 9px 16px),
-    /* building silhouettes */
-    linear-gradient(to top, #1a2238 0 60%, transparent 60%),
-    repeating-linear-gradient(90deg, #26304e 0 34px, #1b2440 34px 62px, #2c3860 62px 96px),
-    /* night sky */
-    linear-gradient(to bottom, #0b1024, #2a3560);
-  background-blend-mode: screen, normal, normal, normal;
+    /* lit gold windows */
+    repeating-linear-gradient(90deg, transparent 0 6px, rgba(255, 201, 74, 0.72) 6px 9px, transparent 9px 16px),
+    /* building base */
+    linear-gradient(to top, #201643 0 58%, transparent 58%),
+    /* stepped building blocks */
+    repeating-linear-gradient(90deg, #2a1c50 0 34px, #201643 34px 62px, #34215a 62px 96px),
+    /* the setting sun, low behind the skyline */
+    radial-gradient(circle at 50% 86%, #ffe6a0 0 5%, #ffc94a 5% 11%, transparent 11%),
+    /* dusk sky */
+    linear-gradient(to bottom, #161634 0%, #3a2a5c 52%, #ef6b5e 100%);
+  background-blend-mode: screen, normal, normal, normal, normal;
 }
 .splash-title {
   margin: 4px 0 2px;
   color: var(--accent);
   font-size: 34px;
-  letter-spacing: 3px;
+  letter-spacing: 4px;
+  font-weight: 800;
+}
+.splash-title b {
+  color: #c9901f; /* window-gold POLIS (deepened for contrast on the beige card) */
   font-weight: 800;
 }
 .splash-tagline { margin: 0 0 10px; font-weight: 700; }

@@ -1,15 +1,18 @@
 /**
- * Generates the PWA manifest icons from an in-code SVG — no external art
- * assets, in keeping with the project's "every sprite drawn in code" ethos.
+ * Generates the app icons (favicon + PWA + apple-touch) from an in-code SVG —
+ * no external art assets, in keeping with the project's "every sprite drawn in
+ * code" ethos.
  *
- * A little retro high-rise on the SimTower teal desktop, navy body with lit
- * windows, matching the in-game palette (see src/styles.css tokens).
+ * The Verticopolis mark: a stepped art-deco tower with lit gold windows and a
+ * setting sun, on an indigo → plum → coral "Metropolis Dusk" sky — the same
+ * identity as the top-bar wordmark and the first-run splash.
  *
  * Rasterized with the same headless Chromium the screenshot harness uses, so
  * this needs no new image dependency. Outputs land in src/public/ (Vite's
  * publicDir) and are committed, so `npm run build` needs no browser.
  *
- *   node scripts/gen-pwa-icons.mjs
+ *   node scripts/gen-pwa-icons.mjs                 # host
+ *   PW_CHROME=... node scripts/gen-pwa-icons.mjs   # docker/CI
  */
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
@@ -20,58 +23,77 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const OUT_DIR = resolve(__dirname, "../src/public");
 const EXECUTABLE = process.env.PW_CHROME || "/opt/pw-browsers/chromium-1194/chrome-linux/chrome";
 
-const TEAL = "#008080"; // desktop
-const NAVY = "#000080"; // building / title bar
-const LIT = "#ffd23f"; // lit windows
-const DARK = "#000040"; // shaded windows / outline
+// "Metropolis Dusk" palette (matches the splash + wordmark).
+const INDIGO = "#1b1b40";
+const PLUM = "#37285a";
+const CORAL = "#ef6b5e";
+const GOLD = "#ffc94a"; // lit windows / sun
+const CROWN = "#ffe6a0"; // antenna beacon
+const TOWER = "#140f2e"; // tower silhouette
 
 /**
  * @param {number} size    output pixel size
  * @param {boolean} maskable  keep art inside the maskable safe zone (center ~80%)
  */
 function svg(size, maskable) {
-  // Maskable icons get cropped to arbitrary shapes, so the tower must stay
-  // within the safe zone and the teal must bleed to every edge.
-  const inset = maskable ? 0.19 : 0.08; // fraction of the canvas as margin
-  const m = 512 * inset;
-  const bx = m;
-  const bw = 512 - m * 2;
-  const bodyTop = 512 * (maskable ? 0.24 : 0.14);
-  const bodyBottom = 512 - m;
-  const bh = bodyBottom - bodyTop;
+  // The dusk sky bleeds to every edge; the tower stays inside the safe zone so
+  // maskable crops never clip it.
+  const pad = 512 * (maskable ? 0.17 : 0.06);
+  const cx = 256;
+  const ground = 512 - pad;
+  const top = pad + (maskable ? 44 : 22);
+  const H = ground - top;
+  const safeW = 512 - pad * 2;
 
-  // Window grid.
-  const cols = 4;
-  const rows = 6;
-  const gap = bw * 0.06;
-  const cw = (bw - gap * (cols + 1)) / cols;
-  const ch = (bh - gap * (rows + 1)) / rows;
+  // Stepped art-deco tiers, base (widest) → spire.
+  const tiers = [
+    { w: 0.42, h: 0.3, cols: 4, rows: 3 },
+    { w: 0.31, h: 0.24, cols: 3, rows: 3 },
+    { w: 0.2, h: 0.24, cols: 2, rows: 3 },
+    { w: 0.085, h: 0.22, cols: 0, rows: 0 }, // spire
+  ];
+
+  let y = ground;
+  let rects = "";
   let windows = "";
-  // Deterministic "lit" pattern so the icon is stable across regenerations.
-  const litMask = [0b1011, 0b0110, 0b1101, 0b1110, 0b0111, 0b1011];
-  for (let r = 0; r < rows; r++) {
-    for (let c = 0; c < cols; c++) {
-      const x = bx + gap + c * (cw + gap);
-      const y = bodyTop + gap + r * (ch + gap);
-      const lit = (litMask[r] >> c) & 1;
-      windows += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${cw.toFixed(1)}" height="${ch.toFixed(1)}" rx="2" fill="${lit ? LIT : DARK}"/>`;
+  for (const t of tiers) {
+    const w = safeW * t.w;
+    const h = H * t.h;
+    const x = cx - w / 2;
+    y -= h;
+    rects += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" fill="${TOWER}"/>`;
+    if (t.cols) {
+      const gx = w * 0.16;
+      const gy = h * 0.18;
+      const cw = (w - gx * (t.cols + 1)) / t.cols;
+      const chh = (h - gy * (t.rows + 1)) / t.rows;
+      for (let r = 0; r < t.rows; r++) {
+        for (let c = 0; c < t.cols; c++) {
+          const wx = x + gx + c * (cw + gx);
+          const wy = y + gy + r * (chh + gy);
+          windows += `<rect x="${wx.toFixed(1)}" y="${wy.toFixed(1)}" width="${cw.toFixed(1)}" height="${chh.toFixed(1)}" fill="${GOLD}"/>`;
+        }
+      }
     }
   }
-
-  // A little rooftop antenna + entrance for character.
-  const doorW = bw * 0.22;
-  const doorH = bh * 0.13;
-  const doorX = bx + bw / 2 - doorW / 2;
-  const doorY = bodyBottom - doorH;
-  const mastX = bx + bw / 2;
+  const spireTop = y;
+  const sunR = safeW * 0.26;
+  const sunY = ground - H * 0.4;
 
   return `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 512 512">
-    <rect width="512" height="512" fill="${TEAL}"/>
-    <line x1="${mastX}" y1="${(bodyTop - 44).toFixed(1)}" x2="${mastX}" y2="${bodyTop.toFixed(1)}" stroke="${DARK}" stroke-width="8"/>
-    <circle cx="${mastX}" cy="${(bodyTop - 48).toFixed(1)}" r="10" fill="${LIT}"/>
-    <rect x="${bx.toFixed(1)}" y="${bodyTop.toFixed(1)}" width="${bw.toFixed(1)}" height="${bh.toFixed(1)}" fill="${NAVY}" stroke="${DARK}" stroke-width="6"/>
+    <defs>
+      <linearGradient id="dusk" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="${INDIGO}"/>
+        <stop offset="0.52" stop-color="${PLUM}"/>
+        <stop offset="1" stop-color="${CORAL}"/>
+      </linearGradient>
+    </defs>
+    <rect width="512" height="512" fill="url(#dusk)"/>
+    <circle cx="256" cy="${sunY.toFixed(1)}" r="${sunR.toFixed(1)}" fill="${GOLD}" opacity="0.92"/>
+    <line x1="256" y1="${(spireTop - 34).toFixed(1)}" x2="256" y2="${spireTop.toFixed(1)}" stroke="${TOWER}" stroke-width="7"/>
+    <circle cx="256" cy="${(spireTop - 38).toFixed(1)}" r="9" fill="${CROWN}"/>
+    ${rects}
     ${windows}
-    <rect x="${doorX.toFixed(1)}" y="${doorY.toFixed(1)}" width="${doorW.toFixed(1)}" height="${doorH.toFixed(1)}" fill="${LIT}"/>
   </svg>`;
 }
 

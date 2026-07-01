@@ -158,8 +158,8 @@ export class OnboardingController {
     el.innerHTML =
       `<div class="splash-card">` +
       `<div class="splash-sky" aria-hidden="true"></div>` +
-      `<h1 class="splash-title">TOWER TYCOON</h1>` +
-      `<p class="splash-tagline">Build up. The elevators are the game.</p>` +
+      `<h1 class="splash-title">VERTICO<b>POLIS</b></h1>` +
+      `<p class="splash-tagline">The vertical metropolis — build up, the elevators are the game.</p>` +
       `<p class="splash-premise">${premise}</p>` +
       `<div class="splash-actions">` +
       continueBtn +
