@@ -23,11 +23,20 @@ function layFloor(sim: Simulation, kind: "floor" | "lobby", floor: number): void
 }
 
 /** A full-width ground lobby + floors 2..top, no transport. */
-function structuredTower(seed: number, top: number, money = 100_000_000): Simulation {
+function structuredTower(seed: number, top: number, money = 100_000_000, halfWidth?: number): Simulation {
   const sim = Simulation.newGame(seed);
   sim.money = money;
-  layFloor(sim, "lobby", 1);
-  for (let f = 2; f <= top; f++) layFloor(sim, "floor", f);
+  // Optionally build only a centred strip (much cheaper to tick over on the
+  // wide 340-tile lot) when a test doesn't need the full width.
+  const lay = (kind: "floor" | "lobby", f: number) => {
+    if (halfWidth === undefined) return layFloor(sim, kind, f);
+    const l = Math.max(0, C - halfWidth);
+    const r = Math.min(W, C + halfWidth + 1);
+    for (let x = C; x < r; x++) sim.tower.place(kind, f, x);
+    for (let x = C - 1; x >= l; x--) sim.tower.place(kind, f, x);
+  };
+  lay("lobby", 1);
+  for (let f = 2; f <= top; f++) lay("floor", f);
   return sim;
 }
 
@@ -120,7 +129,7 @@ describe("F18 — 1994 build caps & wedding-hall accounting", () => {
 
 describe("F31 — selling the Wedding Hall cancels a pending VIP inspection", () => {
   it("does not keep re-failing the inspection after the hall is gone", () => {
-    const sim = structuredTower(6, GRID.maxFloor, 1_000_000_000);
+    const sim = structuredTower(6, GRID.maxFloor, 1_000_000_000, 30);
     sim.star = 5;
     expect(sim.build("weddingHall", GRID.maxFloor, C).ok).toBe(true);
     sim.sellAt(GRID.maxFloor, C);
@@ -131,7 +140,7 @@ describe("F31 — selling the Wedding Hall cancels a pending VIP inspection", ()
   });
 
   it("cancels the inspection even when the hall is removed via tower.removeUnit (UI path)", () => {
-    const sim = structuredTower(10, GRID.maxFloor, 1_000_000_000);
+    const sim = structuredTower(10, GRID.maxFloor, 1_000_000_000, 30);
     sim.star = 5;
     expect(sim.build("weddingHall", GRID.maxFloor, C).ok).toBe(true);
     // Simulate the editor/bulldoze tool, which calls tower.removeUnit directly
