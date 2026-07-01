@@ -18,6 +18,24 @@ function isLobbyFloor(floor: number): boolean {
 }
 
 /**
+ * Rooms that need daylight and can't sit in a windowless basement. Commercial
+ * (shop/fast food/restaurant), entertainment, and service facilities may go
+ * underground; people don't live or work down there.
+ */
+const NO_BASEMENT_KINDS = new Set<FacilityKind>([
+  "office",
+  "condo",
+  "hotelSingle",
+  "hotelDouble",
+  "hotelSuite",
+]);
+
+/** True if a room footprint (floor..floor+hgt-1) covers the ground concourse. */
+function coversGroundFloor(floor: number, hgt: number): boolean {
+  return floor <= 1 && floor + hgt - 1 >= 1;
+}
+
+/**
  * The Tower owns the spatial model. Cells have two layers: a structural layer
  * (floor / lobby tiles) and a room layer (offices, shops, …). A room is built
  * on top of existing structure, sharing the same cell — exactly like the
@@ -220,6 +238,15 @@ export class Tower {
     if (f.basement && floor + hgt - 1 >= 1) {
       return { ok: false, reason: `${f.name} can only be built in the basement.` };
     }
+    // The ground floor (level 1) is the tower's entrance concourse — a lobby,
+    // never a room floor — exactly as in the original.
+    if (coversGroundFloor(floor, hgt)) {
+      return { ok: false, reason: "The ground floor is a lobby concourse — build rooms on floor 2 and up." };
+    }
+    // Offices, condos and hotels need daylight; only commercial/service go below.
+    if (floor < 1 && NO_BASEMENT_KINDS.has(kind)) {
+      return { ok: false, reason: `${f.name} can't be built in the basement.` };
+    }
     for (let fl = floor; fl < floor + hgt; fl++) {
       if (!this.roomSpanFree(fl, x, f.width)) {
         return { ok: false, reason: "Something is already here." };
@@ -253,6 +280,12 @@ export class Tower {
     const hgt = facilityFloors(kind);
     if (floor + hgt - 1 > GRID.maxFloor) return { ok: false, reason: "Not enough floors above for this facility." };
     if (f.basement && floor + hgt - 1 >= 1) return { ok: false, reason: `${f.name} can only be built in the basement.` };
+    if (coversGroundFloor(floor, hgt)) {
+      return { ok: false, reason: "The ground floor is a lobby concourse — build rooms on floor 2 and up." };
+    }
+    if (floor < 1 && NO_BASEMENT_KINDS.has(kind)) {
+      return { ok: false, reason: `${f.name} can't be built in the basement.` };
+    }
     for (let fl = floor; fl < floor + hgt; fl++) {
       if (!this.roomSpanFree(fl, x, f.width)) return { ok: false, reason: "Something is already here." };
       if (this.spanHasLobby(fl, x, f.width)) {

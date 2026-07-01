@@ -112,6 +112,31 @@ describe("Tower placement", () => {
     expect(tower.canPlace("metro", 0, 0).ok).toBe(false); // would cross above ground
     expect(tower.canPlace("metro", 1, 0).ok).toBe(false);
   });
+
+  it("keeps the ground floor (level 1) as a lobby-only concourse", () => {
+    // Even a plain (non-lobby) floor tile on level 1 rejects rooms — the whole
+    // ground floor is the entrance concourse, never a room floor.
+    for (let i = 0; i < 20; i++) tower.place("floor", 1, i);
+    expect(tower.canPlace("office", 1, 0).ok).toBe(false);
+    expect(tower.canPlace("shop", 1, 0).ok).toBe(false);
+    // A two-storey facility starting on the ground floor is rejected too.
+    for (let i = 0; i < 20; i++) tower.place("floor", 2, i);
+    expect(tower.canPlace("cinema", 1, 0).ok).toBe(false);
+    // Rooms are fine one floor up.
+    expect(tower.canPlace("office", 2, 0).ok).toBe(true);
+  });
+
+  it("allows only commercial/service facilities underground", () => {
+    for (let i = 0; i < 40; i++) tower.place("lobby", 1, i);
+    for (let f = 0; f >= -1; f--) for (let i = 0; i < 40; i++) tower.place("floor", f, i);
+    // Offices, condos and hotels need daylight — blocked in the basement…
+    expect(tower.canPlace("office", 0, 0).ok).toBe(false);
+    expect(tower.canPlace("condo", 0, 0).ok).toBe(false);
+    expect(tower.canPlace("hotelSingle", 0, 0).ok).toBe(false);
+    // …but shops and fast food are welcome down there.
+    expect(tower.canPlace("shop", 0, 0).ok).toBe(true);
+    expect(tower.canPlace("fastFood", 0, 0).ok).toBe(true);
+  });
 });
 
 describe("Tower transport", () => {
