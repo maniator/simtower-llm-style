@@ -534,8 +534,10 @@ gaps. Full rationale and the complete source-of-truth mapping live in
 - **No monetization** — no ads, IAP, or paywalls.
 - **No backend/server.** The game is fully client-side; saves live in the
   browser or in exported files.
-- **Not a 1:1 population-scale simulation.** Population is smaller-scale than the
-  original; the TOWER target is tuned to 8,000 (vs. 15,000) accordingly.
+- **Not a 1:1 population-scale simulation.** The TOWER target now matches the
+  canonical **15,000** (the lot was widened to 340 so it's reachable), but the
+  underlying density model is still a game-scale abstraction, not a tile-exact
+  recreation of the original's simulation.
 - **Not a full `.TWR` import tool.** Only a documented best-effort stub.
 
 ## 6. MVP Scope
@@ -566,8 +568,9 @@ as implemented and test-covered.)*
 - **Lossless `.TWR` import** — stub only (FR-65). `[NOTE FOR PM: faithful fans
   may want their old towers back; revisit if a robust decoder becomes feasible.]`
 - **Original assets / Cathedral naming** — permanent non-goal, not a deferral.
-- **Population at full original scale (15,000 TOWER)** — deferred pending a
-  larger-scale population model; 8,000 is the MVP target.
+- **Population at full original scale (15,000 TOWER)** — **DELIVERED 2026-06-30**
+  (no longer deferred): the lot was widened to 340 tiles so the canonical 15,000
+  is reachable, rather than building a new population model.
 - **Online features, accounts, leaderboards, mod support** — not planned.
 - **Additional disaster types beyond the original set** — none planned.
 
@@ -613,11 +616,12 @@ as implemented and test-covered.)*
 3. *(Resolved 2026-06-30)* Express auto-restriction is confirmed in
    `Tower.setExpressStops()`: express skips intermediate non-lobby floors but
    always keeps its shaft endpoints as stops. FR-25 updated accordingly.
-4. *(Resolved 2026-06-30)* The TOWER target was re-derived to **8,000** from the
-   lot's measured capacity under the v2 spatial model (a well-zoned 100×200 tower
-   tops out near ~8,900 occupants once shaft columns are reserved). The metric
-   stays a population census per the original; the number is a tolerance band the
-   owner can retune from playtest data. (FR-46 / FR-67)
+4. *(Resolved 2026-06-30)* The TOWER target is the canonical **15,000**. It was
+   briefly re-derived down to 8,000 because a 100×200 lot topped out near ~8,900
+   occupants under the v2 spatial model, but the owner chose to restore the
+   original number by **widening the lot to 340 tiles** — a well-zoned tower now
+   reaches ~15,066 occupants at healthy congestion, so both the metric (a
+   population census) and the number are canonical. (FR-46 / FR-67)
 5. What is the precise trigger/odds model for buried treasure, and is it strictly
    basement-excavation-tied? (FR-39)
 6. Accessibility targets (keyboard-only play, color-blind-safe red congestion
