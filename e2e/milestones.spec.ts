@@ -25,15 +25,13 @@ test("progression: a screenshot at each ★ milestone, 1★ → TOWER", async ({
   await page.goto("/");
   await page.waitForFunction(() => Boolean((window as unknown as { game?: unknown }).game));
 
-  // Dismiss the first-run splash overlay so the captures show the tower, not the
-  // title screen. We remove it directly and resume the engine rather than click
-  // "New Tower" — that would reset the sim, wiping the tower buildToStar grows.
-  await page.evaluate(() => {
-    const g = (window as unknown as { game: { engine: { paused: boolean }; speed: number } }).game;
-    document.getElementById("splash")?.remove();
-    g.engine.paused = false;
-    g.speed = 1;
-  });
+  // Dismiss the first-run splash overlay so captures show the tower, not the
+  // title screen. Just remove the overlay — don't click "New Tower" (resets the
+  // sim buildToStar grows) and don't resume the engine: the game stays paused
+  // (speed 0), so the clock and ambient motion can't drift between frames. The
+  // renderer still reconciles the tower each frame regardless of paused, so the
+  // built tower shows; only decorative motion is frozen (deterministic).
+  await page.evaluate(() => document.getElementById("splash")?.remove());
 
   for (const [star, name] of FRAMES) {
     const reached = await page.evaluate(buildToStar, star);
