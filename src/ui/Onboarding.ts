@@ -155,20 +155,42 @@ export class OnboardingController {
     const continueBtn = o.hasSave
       ? `<button class="splash-btn primary" data-splash="continue">▶ Continue</button>`
       : "";
+    // "Metropolis Dusk" title screen: an art-deco skyline + setting sun under an
+    // indigo→coral dusk sky, with the Verticopolis wordmark. The wordmark/tagline
+    // are SVG <text> with `textLength` so they always fit any screen (no clipping,
+    // no web-font download — offline-safe for the PWA).
     el.innerHTML =
-      `<div class="splash-card">` +
-      `<div class="splash-sky" aria-hidden="true"></div>` +
-      `<h1 class="splash-title">VERTICO<b>POLIS</b></h1>` +
-      `<p class="splash-tagline">The vertical metropolis — build up, the elevators are the game.</p>` +
+      `<div class="splash-stars" aria-hidden="true"></div>` +
+      `<div class="splash-sun" aria-hidden="true"></div>` +
+      `<svg class="splash-skyline" aria-hidden="true" viewBox="0 0 460 200" preserveAspectRatio="xMidYMax slice">` +
+      `<g fill="#201643" stroke="#0d0d10" stroke-width="1">` +
+      `<path d="M-5 200 V120 h34 V98 h16 V120 h40 V200 z"/>` +
+      `<path d="M95 200 V80 h26 V56 h12 V80 h26 V200 z"/>` +
+      `<path d="M200 200 V54 h20 V30 h9 V10 h9 V30 h9 V54 h20 V200 z"/>` +
+      `<path d="M310 200 V92 h30 V68 h15 V92 h30 V200 z"/>` +
+      `<path d="M410 200 V60 h20 V36 h11 V60 h34 V200 z"/>` +
+      `</g>` +
+      `<g fill="#ffdca0">` +
+      `<rect x="8" y="130" width="3" height="4"/><rect x="8" y="146" width="3" height="4"/>` +
+      `<rect x="104" y="92" width="3" height="4"/><rect x="104" y="112" width="3" height="4"/>` +
+      `<rect x="214" y="66" width="3" height="4"/><rect x="214" y="90" width="3" height="4"/>` +
+      `<rect x="320" y="100" width="3" height="4"/><rect x="424" y="72" width="3" height="4"/>` +
+      `</g></svg>` +
+      `<div class="splash-brand">` +
+      `<svg class="splash-word" viewBox="0 0 400 66" role="img" aria-label="Verticopolis">` +
+      `<text x="200" y="52" text-anchor="middle" textLength="392" lengthAdjust="spacingAndGlyphs">` +
+      `<tspan class="a">VERTICO</tspan><tspan class="b">POLIS</tspan></text></svg>` +
+      `<svg class="splash-tag" viewBox="0 0 360 20" role="img" aria-label="the vertical metropolis">` +
+      `<text x="180" y="15" text-anchor="middle" textLength="330" lengthAdjust="spacingAndGlyphs">THE VERTICAL METROPOLIS</text></svg>` +
       `<p class="splash-premise">${premise}</p>` +
+      `</div>` +
       `<div class="splash-actions">` +
       continueBtn +
       `<button class="splash-btn ${o.hasSave ? "" : "primary"}" data-splash="new">＋ New Tower</button>` +
       `<button class="splash-btn ghost" data-splash="help">？ How to Play</button>` +
       `</div>` +
       `<p class="splash-attrib">An unofficial, from-scratch homage to SimTower (1994). Original code and art — no ripped assets. Not affiliated with or endorsed by Maxis / OPeNBooK / Vivarium.</p>` +
-      `<p class="splash-version">v${APP_VERSION}</p>` +
-      `</div>`;
+      `<p class="splash-version">v${APP_VERSION}</p>`;
     document.body.appendChild(el);
     this.splashEl = el;
 
