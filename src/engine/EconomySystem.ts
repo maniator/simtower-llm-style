@@ -12,6 +12,14 @@ import { isElevatorKind, isHotelKind, isOpenAt, openHoursPerDay } from "./facili
 export class EconomySystem {
   constructor(private readonly sim: SimContext) {}
 
+  /** True if a finished, intact unit of `kind` exists (ignores under-construction
+   * / on-fire) — so income effects key off an OPERATIONAL metro/recycling. */
+  private hasOperational(kind: string): boolean {
+    return this.sim.tower.units.some(
+      (u) => u.kind === kind && u.state !== "construction" && u.state !== "fire",
+    );
+  }
+
   /** Quarterly office rent from occupied, reachable offices. */
   collectRent(): void {
     let total = 0;
@@ -42,10 +50,16 @@ export class EconomySystem {
         continue;
       }
       u.state = "occupied";
+      // Rain keeps shoppers away (canon) — it bites fast food hardest; a metro
+      // (underground visitors) softens the blow. Cosmetic-only on non-rainy days.
+      const rainMult =
+        this.sim.weather === "rain"
+          ? (this.hasOperational("metro") ? 0.7 : 0.5) * (u.kind === "fastFood" ? 0.6 : 1)
+          : 1;
       // Spread the headline DAILY take across the venue's actual open hours so a
       // full day earns ≈ `daily * appeal`, not a per-hour multiple of it. (Before,
       // dividing by a flat 8 while open 9–15 h/day inflated income 2–3x.)
-      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * (0.6 + this.sim.rng.next() * 0.4);
+      const hourly = (daily / openHoursPerDay(u.kind)) * appeal * rainMult * (0.6 + this.sim.rng.next() * 0.4);
       u.pendingIncome += hourly;
       if (u.pendingIncome >= 1) {
         const earned = Math.floor(u.pendingIncome);
@@ -65,8 +79,8 @@ export class EconomySystem {
    */
   private trafficAppeal(): number {
     const pop = this.sim.tower.totalPopulation();
-    const metro = this.sim.hasAny("metro") ? 0.25 : 0;
-    const recycling = this.sim.hasAny("recycling") ? 0.1 : 0; // F14: a real effect for the centre
+    const metro = this.hasOperational("metro") ? 0.25 : 0;
+    const recycling = this.hasOperational("recycling") ? 0.1 : 0; // F14: a real effect for the centre
     return Math.min(1, 0.35 + pop / 8000 + metro + recycling);
   }
 
@@ -88,6 +102,10 @@ export class EconomySystem {
       this.sim.emit(`Hotel guests checked out: $${revenue.toLocaleString()} earned overnight.`, "money");
     }
     this.runHousekeeping();
+    // Spread runs unconditionally — a tower with NO housekeeping is the WORST
+    // case for roaches, not immune to them (runHousekeeping early-returns when
+    // there are zero housekeeping units, so spread can't live inside it).
+    this.spreadCockroaches();
   }
 
   /**
@@ -113,6 +131,32 @@ export class EconomySystem {
     if (cleaned > 0) this.sim.emit(`Housekeeping cleaned ${cleaned} hotel room(s).`, "info");
   }
 
+  /** Rooms left dirty breed cockroaches that creep into the adjacent room along
+   * the hotel run (canon) — under-provision housekeeping and the infestation
+   * spreads, soiling clean/occupied neighbours until you scale up cleaning. */
+  private spreadCockroaches(): void {
+    const dirty = this.sim.tower.units.filter((u) => isHotelKind(u.kind) && u.state === "dirty");
+    if (dirty.length === 0) return;
+    let spread = 0;
+    for (const u of dirty) {
+      // Check BOTH neighbours; a non-hotel room on one side shouldn't block
+      // infestation of a hotel room on the other.
+      for (const neighbor of [
+        this.sim.tower.roomAt(u.floor, u.x + u.width),
+        this.sim.tower.roomAt(u.floor, u.x - 1),
+      ]) {
+        if (neighbor && isHotelKind(neighbor.kind) && (neighbor.state === "asleep" || neighbor.state === "empty")) {
+          neighbor.state = "dirty";
+          neighbor.occupants = 0;
+          spread++;
+        }
+      }
+    }
+    if (spread > 0) {
+      this.sim.emit(`🪳 Cockroaches spread from unserviced rooms into ${spread} more — add housekeeping!`, "bad");
+    }
+  }
+
   /** Monthly upkeep for elevator cars and staffed service facilities. */
   payMaintenance(): void {
     let cost = 0;
@@ -126,6 +170,11 @@ export class EconomySystem {
       // for a premium sale (scales with the asking price).
       if (u.kind === "condo" && !u.everOccupied && u.state !== "construction" && u.state !== "fire") {
         cost += Math.ceil(rentOf(u) * ECON.condoMonthlyTaxRate);
+      }
+      // A cinema must book films to show (canon: ~150k average / 300k blockbuster);
+      // modelled as a monthly booking cost, so a theatre isn't free money.
+      if (u.kind === "cinema" && u.state !== "construction" && u.state !== "fire") {
+        cost += ECON.cinemaBookingMonthly;
       }
     }
     if (cost > 0) {

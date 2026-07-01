@@ -1,7 +1,7 @@
 import type { Clock } from "./Clock";
 import type { RNG } from "./rng";
 import type { Tower } from "./Tower";
-import type { FacilityKind } from "./types";
+import type { FacilityKind, WeatherKind } from "./types";
 
 /** Severity tag for a log/headline entry. */
 export type LogKind = "info" | "good" | "bad" | "money";
@@ -22,6 +22,8 @@ export interface SimContext {
   /** Simulation model selector (Phase 2). Absent/`v1` = shipped behavior;
    * `v2` enables the spatial models (e.g. service coverage radius). */
   readonly simModel?: "v1" | "v2";
+  /** Current cosmetic sky weather; rain depresses commercial foot traffic. */
+  readonly weather?: WeatherKind;
   emit(text: string, kind?: LogKind): void;
   /** True if the tower contains at least one unit of this kind. */
   hasAny(kind: FacilityKind): boolean;

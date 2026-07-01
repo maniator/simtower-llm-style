@@ -40,6 +40,7 @@ export type FacilityKind =
   | "elevatorStandard"
   | "elevatorService"
   | "elevatorExpress"
+  | "parkingRamp"
   | "parking"
   | "security"
   | "medical"
@@ -147,9 +148,17 @@ export interface SerializedGame {
   /** Scheduled day of the pending VIP inspection (-1 if none). Optional for
    * backward compatibility with saves written before it was persisted. */
   vipVisitDay?: number;
+  /** Whether a VIP has given a favorable suite review (a 4★ gate). */
+  vipFavorable?: boolean;
   /** Seasonal-event state (Santa guard + dedicated RNG position). Optional for
    * backward compatibility with saves written before it was persisted. */
-  events?: { lastSantaYear: number; rngState: number };
+  events?: {
+    lastSantaYear: number;
+    rngState: number;
+    pending?: { kind: "fireRescue" | "bombThreat"; cost: number; message: string } | null;
+  };
+  /** Buried-treasure finds so far (capped), persisted so reload can't reset it. */
+  treasuresFound?: number;
   /** Basement tiles already excavated ("floor:x"), so buried treasure stays a
    * one-time find per tile across save/reload. Optional for older saves. */
   excavated?: string[];

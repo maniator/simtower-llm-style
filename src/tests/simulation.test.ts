@@ -480,9 +480,11 @@ describe("Simulation events", () => {
     const before = sim.congestion();
     // A whole-floor basement metro adds major throughput. Lay B1 (floor 0)
     // outward from a supported tile so the full span connects, then dig it in.
-    for (let x = x0; x < GRID.width; x++) sim.tower.place("floor", 0, x);
-    for (let x = x0 - 1; x >= 0; x--) sim.tower.place("floor", 0, x);
-    const metro = sim.tower.place("metro", 0, 0);
+    for (let fl = 0; fl >= -2; fl--) {
+      for (let x = x0; x < GRID.width; x++) sim.tower.place("floor", fl, x);
+      for (let x = x0 - 1; x >= 0; x--) sim.tower.place("floor", fl, x);
+    }
+    const metro = sim.tower.place("metro", -2, 0); // 3-floor metro (-2/-1/0)
     expect(metro.ok).toBe(true);
     const afterMetro = sim.congestion();
     expect(afterMetro).toBeLessThan(before);

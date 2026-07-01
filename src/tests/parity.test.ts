@@ -67,8 +67,8 @@ describe("Gameplay parity: rating progression & the TOWER win", () => {
     // Required services + a deep-basement metro.
     expect(sim.tower.place("security", topFloor, 0).ok).toBe(true);
     expect(sim.tower.place("medical", topFloor, 20).ok).toBe(true);
-    for (let x = 0; x < W; x++) sim.tower.place("floor", 0, x);
-    expect(sim.tower.place("metro", 0, 0).ok).toBe(true);
+    for (let fl = 0; fl >= -2; fl--) for (let x = 0; x < W; x++) sim.tower.place("floor", fl, x);
+    expect(sim.tower.place("metro", -2, 0).ok).toBe(true); // 3-floor metro (-2/-1/0)
 
     sim.star = 5;
     // The Wedding Hall crowns floor 100 and summons the VIP inspection.

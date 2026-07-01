@@ -206,17 +206,29 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     transport: true,
     description: "Stops only at lobbies and sky lobbies. Essential for very tall towers.",
   },
+  parkingRamp: {
+    kind: "parkingRamp",
+    category: "service",
+    name: "Parking Ramp",
+    width: 6,
+    cost: 50000,
+    minStar: 3,
+    population: 0,
+    color: "#6a6a6a",
+    basement: true,
+    description: "Basement car-ramp. Parking spaces must chain to a ramp to be usable.",
+  },
   parking: {
     kind: "parking",
     category: "service",
     name: "Parking Space",
     width: 6,
-    cost: 30000,
+    cost: 3000,
     minStar: 3,
     population: 0,
     color: "#888888",
     basement: true,
-    description: "Basement parking. Reduces tenant stress for those who drive.",
+    description: "Basement parking. Must connect to a Parking Ramp. Eases office-worker demand.",
   },
   security: {
     kind: "security",
@@ -270,9 +282,10 @@ export const FACILITIES: Record<FacilityKind, Facility> = {
     kind: "metro",
     category: "special",
     name: "Metro Station",
-    // Spans an entire basement floor (full lot width = GRID.width).
+    // Spans the full lot width and THREE deep-basement floors (B8–B10 in the
+    // original), so it must be placed at the bottom of the basement.
     width: 200,
-    floors: 1,
+    floors: 3,
     cost: 1000000,
     minStar: 4,
     population: 0,
@@ -306,19 +319,28 @@ export function isFacilityKind(value: unknown): value is FacilityKind {
   return typeof value === "string" && KIND_SET.has(value);
 }
 
-/** Star rating population thresholds, matching the original game. */
+/**
+ * Star-rating population thresholds. The low ranks match the original
+ * (300 / 1,000 / 5,000); 5★ is re-derived DOWN from the original's 10,000 to
+ * 7,000 so it is reachable within this lot. Above 3★ the rating counts only
+ * non-hotel occupants (offices/condos), and the lot tops out near ~8,900 of
+ * those — so the original 10,000 would put 5★ (and therefore the TOWER win,
+ * which needs 5★ + 8,000) permanently out of reach. 5★ (7,000) < TOWER (8,000)
+ * < the ~8,900 ceiling keeps the whole endgame winnable.
+ */
 export const STAR_THRESHOLDS: Record<number, number> = {
   1: 0,
   2: 300,
   3: 1000,
   4: 5000,
-  5: 10000,
+  5: 7000,
 };
 
 /**
  * Population needed for the final TOWER rating (above 5 stars). Same metric as
- * the 1994 original — a census of OCCUPANTS (office workers + condo residents +
- * hotel guests); commercial/visitor traffic never counts. The original asked for
+ * the 1994 original — a census of OCCUPANTS (office workers + condo residents;
+ * hotel guests count only while climbing to 3★, then drop out per canon);
+ * commercial/visitor traffic never counts. The original asked for
  * 15,000, but that assumed a denser lot: under the v2 spatial transport model a
  * fully, well-zoned 100×200 tower tops out near ~8,900 occupants once shaft
  * columns are reserved (measured), so the goal is re-derived to 8,000 — reachable

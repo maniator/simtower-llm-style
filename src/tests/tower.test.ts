@@ -101,14 +101,15 @@ describe("Tower placement", () => {
     for (let i = 0; i < 40; i++) tower.place("lobby", 1, i);
     // Basements use continuous numbering: floor 0 = B1, -1 = B2. Build them
     // from the ground down so each connects to the structure above.
-    for (let f = 0; f >= -1; f--) for (let i = 0; i < 40; i++) tower.place("floor", f, i);
+    for (let f = 0; f >= -2; f--) for (let i = 0; i < 40; i++) tower.place("floor", f, i);
     // Parking on the ground floor is rejected…
     expect(tower.canPlace("parking", 1, 0).ok).toBe(false);
     // …but allowed in the basement (B1 = floor 0).
     expect(tower.canPlace("parking", 0, 0).ok).toBe(true);
-    // The metro spans a whole basement floor (full lot width).
-    for (let i = 40; i < GRID.width; i++) tower.place("floor", 0, i);
-    expect(tower.canPlace("metro", 0, 0).ok).toBe(true);
+    // The metro spans THREE whole basement floors (full lot width).
+    for (let i = 40; i < GRID.width; i++) for (let f = 0; f >= -2; f--) tower.place("floor", f, i);
+    expect(tower.canPlace("metro", -2, 0).ok).toBe(true); // spans -2/-1/0
+    expect(tower.canPlace("metro", 0, 0).ok).toBe(false); // would cross above ground
     expect(tower.canPlace("metro", 1, 0).ok).toBe(false);
   });
 });

@@ -378,6 +378,15 @@ export class Tower {
     if ((kind === "stairs" || kind === "escalator") && span > 1) {
       return { ok: false, reason: `${f.name} spans exactly one floor.` };
     }
+    // Canon: escalators serve commercial spaces (shops/food/theatres), not office
+    // complexes — so they may not be placed on a floor that holds an office.
+    if (kind === "escalator") {
+      for (const fl of [bottom, top]) {
+        if (this.units.some((u) => u.kind === "office" && u.floor === fl)) {
+          return { ok: false, reason: "Escalators serve commercial floors only — not offices." };
+        }
+      }
+    }
     const maxSpan = maxSpanFor(kind);
     if (isElevatorKind(kind) && span > maxSpan) {
       return { ok: false, reason: `This elevator can span at most ${maxSpan} floors (${maxSpan + 1} stops).` };

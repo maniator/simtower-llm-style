@@ -143,6 +143,13 @@ export class Simulation implements SimContext {
   private moveInsToday = { offices: 0, condos: 0, rooms: 0 };
   /** Pending VIP inspection day (for the TOWER rating). */
   private vipVisitDay = -1;
+  /** Whether a VIP has given the tower a favorable suite review (a 4★ gate). */
+  vipFavorable = false;
+  /** Day of the last "VIP underwhelming" nag, so it can't spam the log daily. */
+  private lastVipNagDay = -100;
+  /** Buried-treasure finds so far. Capped so a basement dug full of cheap parking
+   * can't be farmed into tens of millions (the find stays a bounded windfall). */
+  private treasuresFound = 0;
 
   constructor(seed = 12345) {
     this.rng = new RNG(seed);
@@ -261,8 +268,11 @@ export class Simulation implements SimContext {
           }
         }
       }
-      if (freshGround && this.rng.chance(0.18)) {
-        const gold = 50_000 + this.rng.int(0, 150_000);
+      // Capped per tower so cheap basement parking can't be farmed for tens of
+      // millions — it stays a rare windfall, not an income engine.
+      if (freshGround && this.treasuresFound < 3 && this.rng.chance(0.18)) {
+        this.treasuresFound++;
+        const gold = 400_000 + this.rng.int(0, 200_000); // ~half a million, per the FAQ
         this.money += gold;
         this.emit(`💰 Excavation crews unearthed buried treasure worth $${gold.toLocaleString()}!`, "money");
       }
@@ -418,6 +428,7 @@ export class Simulation implements SimContext {
     }
 
     this.events.maybeRandomEvent();
+    this.maybeVipStay();
     this.checkVip();
     this.reportMoveIns();
   }
@@ -504,6 +515,20 @@ export class Simulation implements SimContext {
         const cfg = rentConfig("office")!;
         const over = (rentOf(u) - cfg.default) / cfg.default; // <0 cheap, >0 pricey
         u.satisfaction = Math.max(0, Math.min(1, u.satisfaction - over * 0.07));
+      }
+      // Office noise (canon "Office neighbor is too noisy"): offices are loud and
+      // busy, so a hotel room or condo with an office immediately beside it on the
+      // same floor loses satisfaction — keep residential/hotel zones away from
+      // offices, exactly as the original demands.
+      if ((isHotelKind(u.kind) || u.kind === "condo") && served) {
+        const left = this.tower.roomAt(u.floor, u.x - 1);
+        const right = this.tower.roomAt(u.floor, u.x + u.width);
+        if (left?.kind === "office" || right?.kind === "office") {
+          // Noise CAPS satisfaction (persistent unhappiness) rather than draining
+          // it to zero — adjacency annoys (less income / move-in) and nudges you
+          // to move them, but doesn't on its own guarantee eviction + churn.
+          u.satisfaction = Math.min(u.satisfaction, 0.6);
+        }
       }
       // NOTE: the individually-routed crowd's frustration is exposed read-only via
       // {@link crowdStress} for the HUD, but is deliberately NOT written back into
@@ -669,8 +694,34 @@ export class Simulation implements SimContext {
 
   // ---- Move-ins ----------------------------------------------------------
 
+  /** True when the tower is 3★+ and lacks enough parking for its office workforce
+   * (each parking space serves ~12 workers) — offices then demand parking. */
+  private officeParkingShort(): boolean {
+    if (this.star < 3) return false;
+    // A parking space only counts if it chains to a ramp (canon) — a ramp on the
+    // same or an adjacent basement floor.
+    const rampFloors = new Set<number>();
+    for (const u of this.tower.units) {
+      if (u.kind === "parkingRamp" && u.state !== "construction" && u.state !== "fire") rampFloors.add(u.floor);
+    }
+    let officePop = 0;
+    let spots = 0;
+    for (const u of this.tower.units) {
+      if (u.kind === "office" && u.state === "occupied") {
+        officePop += FACILITIES.office.population;
+      } else if (u.kind === "parking" && u.state !== "construction" && u.state !== "fire") {
+        if (rampFloors.has(u.floor) || rampFloors.has(u.floor + 1) || rampFloors.has(u.floor - 1)) spots++;
+      }
+    }
+    return spots * 12 < officePop;
+  }
+
   private attemptMoveIns(): void {
     const weekend = this.clock.isWeekend;
+    // From 3★, office workers demand parking (canon). When the tower is short on
+    // parking, fewer firms will move in — demand pressure, not eviction, so it
+    // never destabilizes a built-out tower.
+    const parkingPenalty = this.officeParkingShort() ? 0.5 : 1;
     for (const u of this.tower.units) {
       if (u.state !== "empty") continue;
       const f = FACILITIES[u.kind];
@@ -679,7 +730,7 @@ export class Simulation implements SimContext {
 
       const demand = this.demandFactor(u);
       if (u.kind === "office") {
-        if (!weekend && this.rng.chance(0.25 * demand)) this.moveIn(u);
+        if (!weekend && this.rng.chance(0.25 * demand * parkingPenalty)) this.moveIn(u);
       } else if (u.kind === "condo") {
         if (this.rng.chance(0.18 * demand)) this.moveIn(u);
       } else if (isHotelKind(u.kind)) {
@@ -748,7 +799,7 @@ export class Simulation implements SimContext {
 
   evaluateStar(): void {
     if (this.star >= 6) return;
-    const pop = this.tower.totalPopulation();
+    const pop = this.ratingPopulation();
     let target = this.star;
     for (let s = 5; s >= 1; s--) {
       if (pop >= STAR_THRESHOLDS[s]) {
@@ -756,16 +807,46 @@ export class Simulation implements SimContext {
         break;
       }
     }
-    // Extra gates beyond raw population, matching the original's spirit. A
+    // Extra gates beyond raw population, matching the original's ladder. A
     // facility only counts once it is actually operational (not still under
-    // construction, not currently on fire).
+    // construction, not on fire).
     if (target >= 3 && !this.hasOperational("security")) target = Math.min(target, 2);
-    if (target >= 4 && !this.hasOperational("medical")) target = Math.min(target, 3);
+    // 4★ wants the full amenity set: Medical, Recycling, more than one Hotel
+    // Suite, and a favorable VIP review (see {@link maybeVipStay}) — per canon.
+    if (
+      target >= 4 &&
+      !(
+        this.hasOperational("medical") &&
+        this.hasOperational("recycling") &&
+        this.countOperational("hotelSuite") >= 2 &&
+        this.vipFavorable
+      )
+    ) {
+      target = Math.min(target, 3);
+    }
+    // 5★ needs a Metro Station (canon) — it was previously only checked at the
+    // TOWER stage.
+    if (target >= 5 && !this.hasOperational("metro")) target = Math.min(target, 4);
 
     if (target > this.star) {
       this.star = target;
       this.emit(`Congratulations! Your tower reached ${this.star} stars.`, "good");
     }
+  }
+
+  /** Population that counts toward the star/TOWER thresholds. Per the original,
+   * hotel guests count only while climbing to 3★; once the tower is 3★ they no
+   * longer count toward 4★/5★/TOWER (the displayed {@link population} still
+   * includes them). */
+  ratingPopulation(): number {
+    if (this.star < 3) return this.tower.totalPopulation();
+    let pop = 0;
+    for (const u of this.tower.units) {
+      if ((u.state === "occupied" || u.state === "asleep" || u.state === "moving_in") && !isHotelKind(u.kind)) {
+        pop += FACILITIES[u.kind].population;
+      }
+    }
+    return pop;
   }
 
   hasAny(kind: FacilityKind): boolean {
@@ -775,9 +856,38 @@ export class Simulation implements SimContext {
   /** Like {@link hasAny} but only counts a facility that is finished and intact
    * (not under construction, not on fire). Used by the rating/TOWER gates. */
   hasOperational(kind: FacilityKind): boolean {
-    return this.tower.units.some(
-      (u) => u.kind === kind && u.state !== "construction" && u.state !== "fire",
+    return this.countOperational(kind) > 0;
+  }
+
+  /** Count of operational (finished, not-on-fire) units of a kind. */
+  countOperational(kind: FacilityKind): number {
+    let n = 0;
+    for (const u of this.tower.units) {
+      if (u.kind === kind && u.state !== "construction" && u.state !== "fire") n++;
+    }
+    return n;
+  }
+
+  /** A VIP periodically stays in a suite; a favorable review is a 4★ prerequisite
+   * (canon). The VIP only stays in an operational, reachable Hotel Suite and is
+   * pleased when that suite is genuinely well-run (served + high satisfaction). */
+  private maybeVipStay(): void {
+    if (this.vipFavorable || this.star < 3) return;
+    // The VIP must actually STAY: a suite with a guest in it tonight (asleep) on
+    // a served floor, and a happy one. A never-occupied/empty/dirty suite can't
+    // earn the review just by existing.
+    const suites = this.tower.units.filter(
+      (u) => u.kind === "hotelSuite" && u.state === "asleep" && this.tower.isFloorServed(u.floor),
     );
+    if (suites.length === 0) return;
+    if (suites.some((s) => s.satisfaction >= 0.7)) {
+      this.vipFavorable = true;
+      this.emit("A VIP enjoyed their suite — your tower earned a favorable review (4★ unlocked).", "good");
+    } else if (this.clock.day - this.lastVipNagDay >= 5) {
+      // Throttle the "underwhelming" line so it can't spam the log every day.
+      this.lastVipNagDay = this.clock.day;
+      this.emit("A VIP's suite stay was underwhelming. Improve suite access and try again.", "info");
+    }
   }
 
   // ---- VIP / TOWER rating ------------------------------------------------
@@ -793,12 +903,12 @@ export class Simulation implements SimContext {
     }
     if (this.clock.day < this.vipVisitDay) return;
     this.vipVisitDay = -1;
-    const pop = this.tower.totalPopulation();
+    const pop = this.ratingPopulation();
     const ok =
       this.hasOperational("weddingHall") &&
       this.star >= 5 &&
-      pop >= TOWER_POPULATION &&
-      this.hasOperational("metro");
+      this.hasOperational("metro") && // re-checked: selling the metro after 5★ must not allow the win
+      pop >= TOWER_POPULATION;
     if (ok) {
       this.star = 6;
       this.evaluatedTower = true;
@@ -829,6 +939,17 @@ export class Simulation implements SimContext {
   /** A bomb scare (exposed for the debug/event hooks and tests). */
   bombThreat(): void {
     this.events.bombThreat();
+  }
+
+  /** The player decision awaiting an answer (fire rescue / bomb ransom), or null.
+   * The UI renders this and calls {@link resolveChoice}. */
+  get pendingChoice(): { kind: "fireRescue" | "bombThreat"; cost: number; message: string } | null {
+    return this.events.pending;
+  }
+
+  /** Answer the pending event choice: `accept` pays, `decline` takes the default. */
+  resolveChoice(option: "accept" | "decline"): void {
+    this.events.resolveChoice(option);
   }
 
   /** Probability a fire on `floor` is contained per day — spatial in v2 (depends
@@ -920,6 +1041,8 @@ export class Simulation implements SimContext {
       builtWeddingHall: this.tower.builtWeddingHall,
       evaluatedTower: this.evaluatedTower,
       vipVisitDay: this.vipVisitDay,
+      vipFavorable: this.vipFavorable,
+      treasuresFound: this.treasuresFound,
       events: this.events.saveState(),
       excavated: [...this.excavated],
     };
@@ -936,6 +1059,13 @@ export class Simulation implements SimContext {
     // Restore the pending VIP inspection so saving during the post-Wedding-Hall
     // window doesn't permanently cancel the TOWER evaluation.
     sim.vipVisitDay = data.vipVisitDay ?? -1;
+    sim.vipFavorable = data.vipFavorable ?? false;
+    // Clamp ≥0 (untrusted save): a negative value would keep `treasuresFound < 3`
+    // true forever and re-open the treasure farm.
+    sim.treasuresFound = Math.max(
+      0,
+      typeof data.treasuresFound === "number" && Number.isFinite(data.treasuresFound) ? data.treasuresFound : 0,
+    );
     // Restore excavation history so buried treasure stays one-time per tile across
     // a save/reload (otherwise the build/bulldoze exploit reopens on load).
     if (Array.isArray(data.excavated)) {
