@@ -884,7 +884,10 @@ export class Simulation implements SimContext {
 
   // ---- VIP / TOWER rating ------------------------------------------------
 
-  private checkVip(): void {
+  /** Run the pending VIP/TOWER inspection if its day has arrived. Driven by
+   *  `onDay()` in play; public so an end-to-end test can trigger the inspection
+   *  directly on a deterministic population (without the crowd sim in the loop). */
+  checkVip(): void {
     if (this.evaluatedTower || this.vipVisitDay < 0) return;
     // If the Wedding Hall is gone before the inspection (sold via ANY path —
     // the editor and bulldoze tool call tower.removeUnit directly, not sellAt),
