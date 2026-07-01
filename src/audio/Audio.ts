@@ -309,6 +309,8 @@ export class AudioEngine {
   // Ambient beds.
   private ambNoise: Tone.Noise | null = null;
   private ambFilter: Tone.Filter | null = null;
+  /** Fixed roll-off on the ambient bed so it never turns into bright hiss. */
+  private ambTone: Tone.Filter | null = null;
   private ambGain: Tone.Gain | null = null;
   private rainNoise: Tone.Noise | null = null;
   private rainFilter: Tone.Filter | null = null;
@@ -374,7 +376,9 @@ export class AudioEngine {
       }).connect(this.musicGain);
 
       // Close-up accents (kept crisp — routed dry to master, not distance-filtered).
-      this.accentGain = new Tone.Gain(0.6).connect(this.master);
+      // Held well below the music so they read as distant background detail, not
+      // sharp foreground blips.
+      this.accentGain = new Tone.Gain(0.3).connect(this.master);
       this.accentSynth = new Tone.PolySynth(Tone.Synth, {
         oscillator: { type: "sine" },
         envelope: { attack: 0.005, decay: 0.2, sustain: 0, release: 0.4 },
@@ -384,24 +388,33 @@ export class AudioEngine {
         this.accentGain,
       );
       this.noiseAccent = new Tone.NoiseSynth({
-        noise: { type: "white" },
-        envelope: { attack: 0.003, decay: 0.08, sustain: 0 },
+        noise: { type: "pink" },
+        // A gentler decay so bursts fade instead of clicking off abruptly.
+        envelope: { attack: 0.004, decay: 0.14, sustain: 0 },
       }).connect(this.accentFilter);
+      this.noiseAccent.volume.value = -14;
 
-      // Ambient room-tone bed (filtered looping noise).
+      // Ambient room-tone bed (filtered looping noise). Pink noise + a strong
+      // roll-off keeps it a soft "room rush" rather than bright tape hiss, and
+      // the source sits far below unity so it never becomes static up close.
       this.ambGain = new Tone.Gain(0).connect(this.bedFilter);
-      this.ambFilter = new Tone.Filter({ type: "bandpass", frequency: 500, Q: 0.7 }).connect(
+      this.ambTone = new Tone.Filter({ type: "lowpass", frequency: 2200, Q: 0.5 }).connect(
         this.ambGain,
       );
-      this.ambNoise = new Tone.Noise("white").connect(this.ambFilter);
+      this.ambFilter = new Tone.Filter({ type: "bandpass", frequency: 500, Q: 0.7 }).connect(
+        this.ambTone,
+      );
+      this.ambNoise = new Tone.Noise("pink").connect(this.ambFilter);
+      this.ambNoise.volume.value = -18;
       this.ambNoise.start();
 
       // Outdoor rain layer (kept dry to master).
       this.rainGain = new Tone.Gain(0).connect(this.master);
-      this.rainFilter = new Tone.Filter({ type: "highpass", frequency: 900, Q: 0.5 }).connect(
+      this.rainFilter = new Tone.Filter({ type: "highpass", frequency: 600, Q: 0.5 }).connect(
         this.rainGain,
       );
-      this.rainNoise = new Tone.Noise({ type: "white", playbackRate: 1.3 }).connect(this.rainFilter);
+      this.rainNoise = new Tone.Noise({ type: "pink", playbackRate: 1.3 }).connect(this.rainFilter);
+      this.rainNoise.volume.value = -12;
       this.rainNoise.start();
 
       // One-shot action jingles.
@@ -501,14 +514,17 @@ export class AudioEngine {
   private applyDetail(detail: number, time: number): void {
     if (!this.started) return;
     this.detail = detail;
-    if (this.bedFilter) this.bedFilter.frequency.rampTo(lerp(650, 15000, detail), time);
+    // Cap the top end well below full-band so opening the filter on zoom-in
+    // brightens the mix without unmasking noise as high-frequency static.
+    if (this.bedFilter) this.bedFilter.frequency.rampTo(lerp(650, 7500, detail), time);
     this.updateAmbGain(time);
   }
 
   private updateAmbGain(time: number): void {
     if (!this.ambGain) return;
-    // Some room tone is always present; the rest fades in as you zoom in.
-    this.ambGain.gain.rampTo(this.ambBase * (0.3 + 0.7 * this.detail), time);
+    // Some room tone is always present; the rest fades in as you zoom in — but
+    // kept modest so the bed stays a background presence, never foreground hiss.
+    this.ambGain.gain.rampTo(this.ambBase * (0.2 + 0.4 * this.detail), time);
   }
 
   /** Transport tick (eighth notes): schedule a melody note + close-up accents. */
@@ -551,8 +567,10 @@ export class AudioEngine {
   /** Occasionally fire a scene-specific close-up accent. */
   private maybeAccent(def: SceneDef, time: number): void {
     if (def.accent === "none") return;
+    // Fire sparingly (and only well zoomed in) so accents feel like occasional
+    // life in the room, not a stream of random noises.
     const g = pseudo(this.tick * 2246822519 + 101);
-    if (g > 0.14 * this.detail) return;
+    if (g > 0.05 * this.detail) return;
     this.accentHit(def.accent, time);
   }
 
@@ -651,6 +669,7 @@ export class AudioEngine {
       this.accentGain,
       this.ambNoise,
       this.ambFilter,
+      this.ambTone,
       this.ambGain,
       this.rainNoise,
       this.rainFilter,
@@ -673,7 +692,7 @@ export class AudioEngine {
     this.lead = this.sfxSynth = this.accentSynth = null;
     this.membrane = null;
     this.noiseAccent = this.ambNoise = this.rainNoise = null;
-    this.accentFilter = this.ambFilter = this.rainFilter = this.bedFilter = null;
+    this.accentFilter = this.ambFilter = this.ambTone = this.rainFilter = this.bedFilter = null;
     this.accentGain = this.ambGain = this.rainGain = null;
     this.padGain = this.bassGain = this.musicGain = null;
     this.reverb = null;
