@@ -337,7 +337,9 @@ export class AudioEngine {
     if (!hasWebAudio) return; // no WebAudio (tests / unsupported)
     try {
       // Resume Tone's context — we're inside a user gesture, so this is allowed.
-      void Tone.start();
+      // Swallow rejections (autoplay/permission failures) so a blocked context
+      // can't surface an unhandled promise rejection.
+      Tone.start().catch(() => {});
 
       this.master = new Tone.Gain(this.muted ? 0 : 0.35).toDestination();
 
@@ -428,7 +430,9 @@ export class AudioEngine {
   setMuted(m: boolean): void {
     this.muted = m;
     if (this.master) this.master.gain.rampTo(m ? 0 : 0.35, 0.1);
-    if (!m) void Tone.getContext().resume();
+    // resume() is async and can reject (e.g. called outside a gesture); catch so
+    // unmuting never trips a global unhandled-rejection handler.
+    if (!m) Tone.getContext().resume().catch(() => {});
   }
 
   /** Called every frame with the renderer's focus; switches scenes smoothly. */
@@ -624,14 +628,16 @@ export class AudioEngine {
   }
 
   dispose(): void {
-    if (this.repeatId !== null) {
-      try {
-        Tone.getTransport().clear(this.repeatId);
-      } catch {
-        /* transport already gone */
-      }
-      this.repeatId = null;
+    // Clear our scheduled repeat and stop Tone's global Transport so no
+    // background timer keeps ticking after teardown.
+    try {
+      const transport = Tone.getTransport();
+      if (this.repeatId !== null) transport.clear(this.repeatId);
+      transport.stop();
+    } catch {
+      /* transport already gone */
     }
+    this.repeatId = null;
     const nodes = [
       this.pad,
       this.bass,
