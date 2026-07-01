@@ -561,7 +561,14 @@ export class UI {
       <div class="modal-actions"><button data-act="reduce-motion"></button><button class="primary" data-act="close">Got it</button></div>
     `);
     const rm = box.querySelector<HTMLButtonElement>('[data-act="reduce-motion"]')!;
-    const label = (on: boolean) => (rm.textContent = `Reduced motion: ${on ? "On" : "Off"}`);
+    // When the OS forces reduced motion on, the user pref can't override it — show
+    // it as on-by-system and disable the toggle (so it isn't a silent no-op).
+    const osForced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const label = (on: boolean) => {
+      rm.textContent = `Reduced motion: ${on ? "On" : "Off"}${osForced ? " (system)" : ""}`;
+      rm.setAttribute("aria-pressed", String(on));
+    };
+    rm.disabled = osForced;
     label(document.documentElement.classList.contains("reduce-motion"));
     rm.addEventListener("click", () => label(this.cb.onToggleReducedMotion()));
     box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());

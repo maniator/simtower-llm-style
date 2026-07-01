@@ -6,6 +6,7 @@ import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
 import { AudioEngine } from "./audio/Audio";
 import { SaveGame } from "./storage/SaveGame";
 import { loadPrefs, savePrefs, reducedMotionActive, type Prefs } from "./storage/Prefs";
+import { trafficTier, TRAFFIC_LABELS, trafficGlyph, type TrafficTier } from "./engine/traffic";
 import { parseTWR } from "./storage/twrImport";
 import { UI, type Tool } from "./ui/UI";
 import { registerPWA } from "./pwa";
@@ -62,6 +63,8 @@ class GameApp {
   /** Per-device accessibility preferences (localStorage, off the save). */
   private prefs: Prefs = loadPrefs();
   private reduceMq = window.matchMedia("(prefers-reduced-motion: reduce)");
+  /** Last shown traffic tier (for boundary hysteresis, so the chip doesn't flicker). */
+  private lastTrafficTier: TrafficTier = 0;
 
   constructor() {
     this.canvas = document.getElementById("view") as HTMLCanvasElement;
@@ -127,6 +130,28 @@ class GameApp {
 
     // Autosave periodically.
     window.setInterval(() => this.save(true), 30000);
+  }
+
+  /** Color-blind-safe traffic cue: word + shape-coded bar glyph (never colour
+   *  alone), driven by the same congestion value the engine reads, with boundary
+   *  hysteresis so it doesn't flicker. */
+  private updateTraffic(): void {
+    const cong = this.sim.congestion();
+    const B = [1.0, 1.25, 1.6]; // tier boundaries
+    const raw = trafficTier(cong);
+    if (raw > this.lastTrafficTier && cong >= B[this.lastTrafficTier] + 0.03) this.lastTrafficTier = raw;
+    else if (raw < this.lastTrafficTier && cong <= B[this.lastTrafficTier - 1] - 0.03) this.lastTrafficTier = raw;
+    const tier = this.lastTrafficTier;
+    const label = TRAFFIC_LABELS[tier];
+    const glyphEl = document.getElementById("traffic-glyph");
+    const labelEl = document.getElementById("traffic-label");
+    const wrapEl = document.getElementById("traffic");
+    if (glyphEl && glyphEl.textContent !== trafficGlyph(tier)) glyphEl.textContent = trafficGlyph(tier);
+    if (labelEl && labelEl.textContent !== label) {
+      labelEl.textContent = label;
+      wrapEl?.setAttribute("aria-label", `Traffic: ${label}`);
+      wrapEl?.classList.toggle("traffic-warn", tier >= 2); // red is a redundant cue, not the only one
+    }
   }
 
   /** Push the effective reduced-motion state (OS pref OR user pref) to the DOM
@@ -324,6 +349,7 @@ class GameApp {
       this.lastUiUpdate = now;
       this.audio.update(this.engine.focus());
       this.ui.update(this.sim);
+      this.updateTraffic();
       // Keep the open editor's live stats fresh. Refresh now patches only the
       // volatile cells in place (never the buttons or rename input), so this is
       // safe while renaming; the pointer guard still skips the rare full rebuild

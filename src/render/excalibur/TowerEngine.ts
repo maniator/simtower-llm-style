@@ -792,7 +792,24 @@ export class TowerEngine {
         new ex.Canvas({ width: 8, height: 14, cache: true, draw: (ctx) => person(ctx, 2.5, 13, 1.1, 7, false, color) }),
       );
     }
-    this.personGfxRed = new ex.Canvas({ width: 8, height: 14, cache: true, draw: (ctx) => person(ctx, 2.5, 13, 1.1, 7, false, "#C24A3A") });
+    // Fed-up figure carries BOTH the red tint AND a shape marker (a "!" with a
+    // white halo above the head), so "this tenant is fed up" reads without colour.
+    this.personGfxRed = new ex.Canvas({
+      width: 8,
+      height: 16,
+      cache: true,
+      draw: (ctx) => {
+        ctx.save();
+        ctx.translate(0, 2); // shift the figure down to make room for the marker
+        person(ctx, 2.5, 13, 1.1, 7, false, "#C24A3A");
+        ctx.restore();
+        ctx.fillStyle = "#ffffff"; // halo
+        ctx.fillRect(2, 0, 4, 5);
+        ctx.fillStyle = "#000000"; // "!"
+        ctx.fillRect(3, 0, 2, 2);
+        ctx.fillRect(3, 3, 2, 1);
+      },
+    });
   }
 
   // ---- Retained-scene reconciliation (no full rebuild) --------------------
@@ -907,14 +924,18 @@ export class TowerEngine {
         // hour or the dead-bit). deadParking is computed once per sync from the
         // caller's single functionalParkingSet() read — no per-unit recompute.
         if (deadParking) {
-          ctx.strokeStyle = "#C24A3A";
-          ctx.lineWidth = 2;
-          ctx.beginPath();
-          ctx.moveTo(2, 2);
-          ctx.lineTo(w - 2, h - 2);
-          ctx.moveTo(w - 2, 2);
-          ctx.lineTo(2, h - 2);
-          ctx.stroke();
+          // Dark under-stroke so the X reads as a SHAPE independent of hue
+          // (color-blind cue), then the red X on top.
+          for (const [style, wd] of [["#111", 4] as const, ["#C24A3A", 2] as const]) {
+            ctx.strokeStyle = style;
+            ctx.lineWidth = wd;
+            ctx.beginPath();
+            ctx.moveTo(2, 2);
+            ctx.lineTo(w - 2, h - 2);
+            ctx.moveTo(w - 2, 2);
+            ctx.lineTo(2, h - 2);
+            ctx.stroke();
+          }
         }
       },
     });

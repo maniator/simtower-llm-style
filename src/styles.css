@@ -1054,3 +1054,8 @@ html.reduce-motion *::after {
   transition-duration: 0.001ms !important;
   scroll-behavior: auto !important;
 }
+
+/* Color-blind-safe traffic cue: the bar glyph carries the level in shape, so it
+   reads in grayscale; the warn colour is a redundant extra, never the only cue. */
+#traffic-glyph { font-family: "Courier New", monospace; letter-spacing: -1px; }
+#status .traffic-warn { color: var(--bad); font-weight: 700; }
