@@ -617,7 +617,7 @@ export class Tower {
   private servedRev = -1;
   private servedSet = new Set<number>([1]);
 
-  /** The full set of floors reachable from the ground lobby, memoised per revision. */
+  /** The full set of floors reachable from the ground lobby, memoized per revision. */
   private servedFloors(): Set<number> {
     if (this.servedRev === this.revision) return this.servedSet;
     const reachable = new Set<number>([1]);
@@ -658,7 +658,7 @@ export class Tower {
     return this.servedFloors().has(floor);
   }
 
-  /** The full set of ground-connected floors (memoised per revision). Read-only
+  /** The full set of ground-connected floors (memoized per revision). Read-only
    * view for the spatial congestion model. */
   servedFloorSet(): ReadonlySet<number> {
     return this.servedFloors();
@@ -679,7 +679,7 @@ export class Tower {
   /**
    * The set of parking-SPACE unit ids that function — i.e. chain back to a ramp
    * (see {@link functionalParkingSpots}). A space whose id is absent is dead (no
-   * relief). NOT memoised: it depends on unit STATE (construction/fire), and
+   * relief). NOT memoized: it depends on unit STATE (construction/fire), and
    * those transitions don't bump {@link revision} (finishConstruction / the fire
    * handlers mutate `state` directly), so a revision cache would go stale. The
    * flood-fill is bounded by the parking region with O(1) `roomAt`, so it's cheap

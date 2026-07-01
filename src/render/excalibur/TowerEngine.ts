@@ -768,9 +768,10 @@ export class TowerEngine {
   private syncScene(): void {
     const tower = this.sim.tower;
     // Fresh flood-fill (not cached — it depends on unit state); read ONCE here
-    // per sync. A parking space absent from this set is "dead" and gets a static
-    // red X, encoded in the room signature so it re-bakes only when connectivity
-    // flips, not on the tick/lighting loop.
+    // per sync. A parking space absent from this set is "dead" and gets a red X.
+    // The dead-bit joins the room signature, so a connectivity flip triggers a
+    // re-bake alongside the existing state/lighting/hour bits — it adds no
+    // per-frame work of its own.
     const parkingOK = tower.functionalParkingSet();
     const seenS = new Set<number>();
     const seenR = new Set<number>();
@@ -869,9 +870,10 @@ export class TowerEngine {
         this.d.ctx = ctx;
         drawUnit(this.d, u, 0, 0, w, h);
         // Canon "red X" on a parking space that isn't chained to a ramp (dead —
-        // no relief). Static: baked into the sprite, re-baked only when the sig's
-        // dead-bit flips (deadParking is computed once per sync from the caller's
-        // single functionalParkingSet() read — no per-unit recompute).
+        // no relief). Baked into the sprite; the dead-bit participates in the room
+        // signature, so this re-bakes when the signature changes (state/lighting/
+        // hour or the dead-bit). deadParking is computed once per sync from the
+        // caller's single functionalParkingSet() read — no per-unit recompute.
         if (deadParking) {
           ctx.strokeStyle = "#C24A3A";
           ctx.lineWidth = 2;

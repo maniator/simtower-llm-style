@@ -22,7 +22,7 @@ implements: GDD recommendations #2 (≤2-ride) and #3 (silent hotel/parking rule
 ### 1a. `Tower.functionalParkingSet(): ReadonlySet<number>` — expose the SET, not just the count
 `Tower.functionalParkingSpots()` (`src/engine/Tower.ts:675`) already builds the `reached` set of ramp-chained parking-unit ids, then throws it away returning `reached.size`. Refactor:
 
-- Extract the flood-fill into `functionalParkingSet(): ReadonlySet<number>`. **CORRECTION (review):** do NOT memoise by `this.revision` — the set depends on `unit.state` (construction/fire), and those transitions (`finishConstruction`, the fire handlers) mutate `state` WITHOUT bumping `revision`, so a revision cache goes stale (dead-X on working parking; economy relief withheld). Recompute fresh each call — the flood-fill is O(region) with O(1) `roomAt`, cheap enough for every caller.
+- Extract the flood-fill into `functionalParkingSet(): ReadonlySet<number>`. **CORRECTION (review):** do NOT memoize by `this.revision` — the set depends on `unit.state` (construction/fire), and those transitions (`finishConstruction`, the fire handlers) mutate `state` WITHOUT bumping `revision`, so a revision cache goes stale (dead-X on working parking; economy relief withheld). Recompute fresh each call — the flood-fill is O(region) with O(1) `roomAt`, cheap enough for every caller.
 - Keep `functionalParkingSpots()` as a one-liner: `return this.functionalParkingSet().size;` — every existing caller (economy relief, tests) is unchanged.
 
 This one set feeds all three parking consumers: inspector membership (`set.has(u.id)`), the canvas red X, and the stats "working/total" row. It is recomputed fresh (no cache — see correction above); the render path reads it ONCE per sync and threads the result into `addRoom` so a rebake doesn't recompute per unit.
@@ -122,19 +122,19 @@ All rows reuse the existing `stats-grid` / `k`/`v` markup — no new components.
 ### 2c. Canvas red X — `TowerEngine.syncScene` (`src/render/excalibur/TowerEngine.ts:768`)
 The X must be **static** (change only on build/bulldoze) to keep settled-tower screenshots byte-stable. `syncScene` already re-bakes room actors via a per-unit signature (`TowerEngine.ts:785`) and runs on `structuralChanged` (`revision !== builtRev`, L360) plus lighting/hour flips. Hook there:
 
-1. Once per `syncScene` call, grab `const deadParking = this.sim.tower.functionalParkingSet();` (cached; O(1) after first call/revision).
+1. Once per `syncScene` call, grab `const deadParking = this.sim.tower.functionalParkingSet();` (a fresh flood-fill — NOT cached — read once here and threaded into `addRoom`, so it isn't recomputed per unit).
 2. Extend the room signature with a dead-parking bit so the sprite re-bakes exactly when connectivity flips:
    `const dead = u.kind === "parking" && !deadParking.has(u.id) ? "x" : "";` appended to the existing `sig`.
 3. In `addRoom` (`TowerEngine.ts:849`), after `drawUnit(...)`, if the unit is dead parking draw a flat red X (two strokes, `var(--bad)` `#C24A3A` to match the existing fed-up figure colour at `TowerEngine.ts:763`) in the per-unit `ex.Canvas` draw callback. No glow, no animation, `cache: true` stays true.
 
-Because deadness only changes with `revision`, the X never re-bakes on the tick/lighting loop and never churns a screenshot of a settled tower. This is the *only* new persistent world-space mark (canon).
+The dead-bit is part of the room signature, so the X is baked into the sprite and re-bakes when the signature changes (state/lighting/hour or a connectivity flip) — it adds no per-frame work and, for a settled tower, is screenshot-stable. It is the *only* new persistent world-space mark (canon).
 
 ### 2d. Throttled log nudge — `Simulation.onDay` (`Simulation.ts:417`)
 One-time, edge-triggered, log-only (never a toast — toasts are reserved for player actions). Add a private latch `private strandedNudged = false;` and, at the end of `onDay()`:
 ```ts
 const stranded = this.strandedFloors().length > 0;
 if (stranded && !this.strandedNudged) {
-  this.emit("A leased floor is 3+ elevator rides from the lobby — no visitors will come. Check it in the inspector.", "bad");
+  this.emit("A leased floor is 3+ elevator rides from the lobby — no visitors will come. Check it in the inspector.", "info"); // "info" = log-only (UI toasts good/bad)
 }
 this.strandedNudged = stranded;   // re-arms only after the condition clears
 ```
@@ -160,7 +160,7 @@ New/extended specs alongside the existing suite (`src/tests/`):
 1. Ramp + contiguous spaces → set contains all chained space ids; `functionalParkingSpots() === set.size` (delegation invariant).
 2. Space with no ramp chain → its id absent from the set (the "dead X" case).
 3. Two stacked spaces with no ramp between → not connected (vertical step only through a ramp).
-4. Fresh compute: contents are correct after construction-complete / fire transitions (which don't bump `revision`) — the reason it is deliberately NOT revision-memoised.
+4. Fresh compute: contents are correct after construction-complete / fire transitions (which don't bump `revision`) — the reason it is deliberately NOT revision-memoized.
 
 **`crowd.test.ts` / `simulation.test.ts` — reachability**
 5. `floorReachable(1) === true` always.
