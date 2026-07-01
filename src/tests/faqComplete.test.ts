@@ -337,6 +337,10 @@ describe("Fine FAQ mechanics", () => {
   it("blockbuster vs average film: two-tier booking cost exists and both occur", () => {
     expect(ECON.cinemaBookingBlockbuster).toBeGreaterThan(ECON.cinemaBookingMonthly);
     const sim = Simulation.newGame(3);
+    // This test only exercises the monthly booking economy (no crowd/spatial sim),
+    // so run the lighter v1 model — one step per tick instead of 24 hourly
+    // sub-steps — which keeps a year-long loop well under the CI timeout.
+    sim.simModel = "v1";
     sim.money = 1e12;
     sim.star = 3;
     lay(sim, "lobby", 1);
