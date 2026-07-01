@@ -86,6 +86,23 @@ CI (`.github/workflows/test.yml`) runs all of the above on every PR.
   needless complexity) — and fix what you find before opening or updating a PR.
   Treat it as running `/code-review` on yourself; don't outsource the first
   pass to the bots.
+- **Deep review before merging.** Green CI is necessary but not sufficient —
+  never merge on a passing pipeline alone. Before a PR is merged, run a full
+  adversarial review with the BMAD/BMGD review skill (`/gds-code-review` for
+  gameplay/engine work, `/bmad-code-review` otherwise), and bring in the other
+  agents relevant to the change rather than reviewing solo:
+  - **Cloud Dragonborn** (`gds-agent-game-architect`) / **Winston**
+    (`bmad-agent-architect`) for engine, data-model, or structural changes;
+  - **Samus Shepard** (`gds-agent-game-designer`) for mechanics, balance, and
+    player-feel (e.g. economy, ratings, events);
+  - **Sally** (`bmad-agent-ux-designer`) for UI/UX and audio-feel changes;
+  - `/security-review` for anything touching untrusted input, saves/`.TWR`
+    import, or persistence.
+
+  For larger or higher-risk changes, convene several of these as a party
+  (`bmad-party-mode`) so the perspectives challenge each other. Fold every
+  finding worth acting on back into the branch, re-run the quality gates, and
+  resolve the review threads before merging.
 - Codex re-reviews automatically on every push. **Copilot does not** — its
   review is a one-shot snapshot, so after pushing new commits to a PR you must
   **re-request a review from Copilot** to get it to look at the latest changes
