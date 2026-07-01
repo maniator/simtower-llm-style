@@ -724,7 +724,11 @@ export class TowerEngine {
     const top = this.screenToFloor(0) + 1;
     const bot = this.screenToFloor(this.viewHeight) - 1;
     for (let f = bot; f <= top; f++) {
-      const sy = this.worldToScreenY(f) - (FLOOR * this.cam.zoom) / 2;
+      // worldToScreenY(f) is floor f's TOP edge; center the label on the row
+      // (+half a floor). Using -half shifted every label up one floor, so the
+      // ground lobby (floor 1) showed the "B1" tag and the elevator's own floor
+      // numbers didn't line up with the ruler.
+      const sy = this.worldToScreenY(f) + (FLOOR * this.cam.zoom) / 2;
       if (sy < 12 || sy > this.viewHeight - 2) continue;
       const label = f >= 1 ? `${f}` : `B${1 - f}`;
       ctx.fillStyle = "rgba(0,0,0,0.45)";
