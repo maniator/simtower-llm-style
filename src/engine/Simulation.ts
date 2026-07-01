@@ -1035,6 +1035,7 @@ export class Simulation implements SimContext {
       treasuresFound: this.treasuresFound,
       events: this.events.saveState(),
       excavated: [...this.excavated],
+      blockbusters: this.economy.blockbusterIds,
     };
   }
 
@@ -1061,6 +1062,8 @@ export class Simulation implements SimContext {
     if (Array.isArray(data.excavated)) {
       for (const k of data.excavated) if (typeof k === "string") sim.excavated.add(k);
     }
+    // Restore this month's blockbuster bookings (already paid for pre-save).
+    if (Array.isArray(data.blockbusters)) sim.economy.restoreBlockbusters(data.blockbusters);
     // Reject any unit/transport with an unrecognized kind from untrusted saves,
     // and coerce the numeric fields that drive the loop to finite values so a
     // hand-edited or foreign save can't poison the math with NaN/undefined.

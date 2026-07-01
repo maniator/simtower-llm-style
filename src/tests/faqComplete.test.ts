@@ -367,3 +367,41 @@ describe("Fine FAQ mechanics", () => {
     expect(sim.tower.functionalParkingSpots()).toBe(2); // the two chained spaces, not the isolated one
   });
 });
+
+describe("Canon-numbers review regressions (must not come back)", () => {
+  it("m1: the whole-lot Metro spans the full lot width", () => {
+    expect(FACILITIES.metro.width).toBe(GRID.width); // must track any GRID.width change
+  });
+
+  it("M2: stacked parking with no ramp between floors does NOT connect", () => {
+    const sim = Simulation.newGame(4);
+    sim.money = 1e12;
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 0);
+    lay(sim, "floor", -1);
+    lay(sim, "floor", -2);
+    // Ramp + one chained space on B2; a space on B1 directly above the B2 space
+    // but with NO ramp on B1 — it must stay a dead X (cars need a ramp to climb).
+    sim.tower.place("parkingRamp", -2, C);
+    sim.tower.place("parking", -2, C + 6);
+    sim.tower.place("parking", -1, C + 6);
+    expect(sim.tower.functionalParkingSpots()).toBe(1); // only the ramp-chained B2 space
+  });
+
+  it("M3: blockbuster bookings survive save/reload", () => {
+    const sim = Simulation.newGame(3);
+    sim.money = 1e12;
+    sim.star = 1; // keep random events (fire) out of the way
+    lay(sim, "lobby", 1);
+    lay(sim, "floor", 2);
+    lay(sim, "floor", 3);
+    sim.tower.place("cinema", 2, 0); // spans 2–3
+    // Advance month-by-month until a blockbuster is booked.
+    let guard = 0;
+    while ((sim.serialize().blockbusters ?? []).length === 0 && guard++ < 48) sim.tick(60 * 24 * 31);
+    const before = sim.serialize().blockbusters ?? [];
+    expect(before.length).toBeGreaterThan(0);
+    const reloaded = Simulation.deserialize(sim.serialize());
+    expect(reloaded.serialize().blockbusters ?? []).toEqual(before); // boost preserved, not silently dropped
+  });
+});

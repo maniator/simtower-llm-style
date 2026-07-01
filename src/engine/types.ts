@@ -162,6 +162,9 @@ export interface SerializedGame {
   /** Basement tiles already excavated ("floor:x"), so buried treasure stays a
    * one-time find per tile across save/reload. Optional for older saves. */
   excavated?: string[];
+  /** Cinema unit ids showing a blockbuster this month (paid at booking), so a
+   * mid-month reload keeps the boost. Optional for older saves. */
+  blockbusters?: number[];
 }
 
 /** Result of attempting to place a facility. */
