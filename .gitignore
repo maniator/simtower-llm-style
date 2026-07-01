@@ -15,3 +15,4 @@ coverage/
 !vite.config.ts
 !vite-env.d.ts
 __pycache__/
+node_modules

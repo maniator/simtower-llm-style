@@ -572,7 +572,9 @@ export class Simulation implements SimContext {
     // ever touching the passenger elevators, easing the crunch — the very
     // reason you build them in the original.
     for (const u of this.tower.units) {
-      if (u.kind === "metro") capacity += 60;
+      // Operational only — a metro under construction / on fire moves nobody
+      // (matches the v2 spatial model).
+      if (u.kind === "metro" && u.state !== "construction" && u.state !== "fire") capacity += 60;
     }
     capacity += 4 * this.tower.functionalParkingSpots(); // only ramp-chained spaces help
     const pop = this.tower.totalPopulation();
