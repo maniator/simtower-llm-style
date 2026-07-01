@@ -94,9 +94,11 @@ export class EventSystem {
           message: `🚒 Fire rescue available for $${cost.toLocaleString()} — extinguish it now, or decline and fight it the slow way.`,
         };
         this.sim.emit(this.pending.message, "bad");
-        // Telegraph the free defense to a player who hasn't built one yet.
+        // Telegraph the free defense to a player who hasn't built one yet. Use
+        // "bad" so it surfaces as a toast during the emergency — the UI only
+        // pops toasts for good/bad log entries, and "info" would hide in the log.
         if (!this.sim.hasAny("security")) {
-          this.sim.emit("Tip: a Security office fights fires for free — build one to defend your tower.", "info");
+          this.sim.emit("Tip: a Security office fights fires for free — build one to defend your tower.", "bad");
         }
       }
       return;
@@ -225,7 +227,10 @@ export class EventSystem {
     const med = v2
       ? this.serviceWithin("medical", floor, EventSystem.MEDICAL_RADIUS)
       : this.sim.hasAny("medical");
-    return 0.35 + (sec ? 0.2 : 0) + (med ? 0.3 : 0);
+    // Base is deliberately > 1/3 so a player who can't yet afford Security or the
+    // rescue fee isn't trapped in a spreading, satisfaction-draining death spiral;
+    // Security/Medical still add a clear, meaningful bonus on top.
+    return 0.45 + (sec ? 0.2 : 0) + (med ? 0.3 : 0);
   }
 
   /** The room immediately left or right of a unit on the same floor. */

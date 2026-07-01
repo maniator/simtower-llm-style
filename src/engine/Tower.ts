@@ -198,6 +198,49 @@ export class Tower {
     return false;
   }
 
+  /**
+   * Shared room-placement validation for {@link canPlace} and
+   * {@link canPlaceRoomIgnoringFloor} — the single source of truth for the rules
+   * that govern where a room may sit. Returns a failure reason, or undefined if
+   * placement is allowed. `requireFloor` demands existing floor structure under
+   * every story (false when a room auto-lays its own floor on placement).
+   */
+  private roomPlacementReason(
+    kind: FacilityKind,
+    floor: number,
+    x: number,
+    requireFloor: boolean,
+  ): string | undefined {
+    const f = FACILITIES[kind];
+    if (floor < GRID.minFloor || floor > GRID.maxFloor) return "Outside the buildable range.";
+    if (x < 0 || x + f.width > GRID.width) return "Off the edge of the lot.";
+    if (kind === "weddingHall" && floor !== GRID.maxFloor) {
+      return "The wedding hall can only crown floor 100.";
+    }
+    const cap = this.capReason(kind);
+    if (cap) return cap;
+    // Multi-story facilities (e.g. the cinema) occupy several floors upward.
+    const hgt = facilityFloors(kind);
+    if (floor + hgt - 1 > GRID.maxFloor) return "Not enough floors above for this facility.";
+    // Basement-only facilities must sit entirely underground (floors below 1).
+    if (f.basement && floor + hgt - 1 >= 1) return `${f.name} can only be built in the basement.`;
+    // The ground floor (level 1) is the tower's entrance concourse — a lobby,
+    // never a room floor — exactly as in the original.
+    if (coversGroundFloor(floor, hgt)) {
+      return "The ground floor is a lobby concourse — build rooms on floor 2 and up.";
+    }
+    // Offices, condos and hotels need daylight; only commercial/service go below.
+    if (floor < 1 && NO_BASEMENT_KINDS.has(kind)) return `${f.name} can't be built in the basement.`;
+    for (let fl = floor; fl < floor + hgt; fl++) {
+      if (!this.roomSpanFree(fl, x, f.width)) return "Something is already here.";
+      if (requireFloor && !this.spanHasFloor(fl, x, f.width)) return "Build floors on every story first.";
+      // Lobbies are transit concourses — no rooms may sit on them, exactly as in
+      // the original, where the ground/sky lobby floors stay clear.
+      if (this.spanHasLobby(fl, x, f.width)) return "Lobbies are transit-only — build rooms on a standard floor.";
+    }
+    return undefined;
+  }
+
   canPlace(kind: FacilityKind, floor: number, x: number): PlaceResult {
     const f = FACILITIES[kind];
     if (floor < GRID.minFloor || floor > GRID.maxFloor) {
@@ -223,44 +266,8 @@ export class Tower {
       return { ok: true };
     }
 
-    if (kind === "weddingHall" && floor !== GRID.maxFloor) {
-      return { ok: false, reason: "The wedding hall can only crown floor 100." };
-    }
-    const cap = this.capReason(kind);
-    if (cap) return { ok: false, reason: cap };
-
-    // Multi-story facilities (e.g. the cinema) occupy several floors upward.
-    const hgt = facilityFloors(kind);
-    if (floor + hgt - 1 > GRID.maxFloor) {
-      return { ok: false, reason: "Not enough floors above for this facility." };
-    }
-    // Basement-only facilities must sit entirely underground (floors below 1).
-    if (f.basement && floor + hgt - 1 >= 1) {
-      return { ok: false, reason: `${f.name} can only be built in the basement.` };
-    }
-    // The ground floor (level 1) is the tower's entrance concourse — a lobby,
-    // never a room floor — exactly as in the original.
-    if (coversGroundFloor(floor, hgt)) {
-      return { ok: false, reason: "The ground floor is a lobby concourse — build rooms on floor 2 and up." };
-    }
-    // Offices, condos and hotels need daylight; only commercial/service go below.
-    if (floor < 1 && NO_BASEMENT_KINDS.has(kind)) {
-      return { ok: false, reason: `${f.name} can't be built in the basement.` };
-    }
-    for (let fl = floor; fl < floor + hgt; fl++) {
-      if (!this.roomSpanFree(fl, x, f.width)) {
-        return { ok: false, reason: "Something is already here." };
-      }
-      if (!this.spanHasFloor(fl, x, f.width)) {
-        return { ok: false, reason: "Build floors on every story first." };
-      }
-      // Lobbies are transit concourses — no rooms may sit on them, exactly as
-      // in the original, where the ground/sky lobby floors stay clear.
-      if (this.spanHasLobby(fl, x, f.width)) {
-        return { ok: false, reason: "Lobbies are transit-only — build rooms on a standard floor." };
-      }
-    }
-    return { ok: true };
+    const reason = this.roomPlacementReason(kind, floor, x, true);
+    return reason ? { ok: false, reason } : { ok: true };
   }
 
   /**
@@ -268,31 +275,9 @@ export class Tower {
    * exist — used when a room auto-lays its own floor on placement.
    */
   canPlaceRoomIgnoringFloor(kind: FacilityKind, floor: number, x: number): PlaceResult {
-    const f = FACILITIES[kind];
-    if (isStructural(kind) || f.transport) return { ok: false, reason: "Not a room." };
-    if (floor < GRID.minFloor || floor > GRID.maxFloor) return { ok: false, reason: "Outside the buildable range." };
-    if (x < 0 || x + f.width > GRID.width) return { ok: false, reason: "Off the edge of the lot." };
-    if (kind === "weddingHall" && floor !== GRID.maxFloor) {
-      return { ok: false, reason: "The wedding hall can only crown floor 100." };
-    }
-    const cap = this.capReason(kind);
-    if (cap) return { ok: false, reason: cap };
-    const hgt = facilityFloors(kind);
-    if (floor + hgt - 1 > GRID.maxFloor) return { ok: false, reason: "Not enough floors above for this facility." };
-    if (f.basement && floor + hgt - 1 >= 1) return { ok: false, reason: `${f.name} can only be built in the basement.` };
-    if (coversGroundFloor(floor, hgt)) {
-      return { ok: false, reason: "The ground floor is a lobby concourse — build rooms on floor 2 and up." };
-    }
-    if (floor < 1 && NO_BASEMENT_KINDS.has(kind)) {
-      return { ok: false, reason: `${f.name} can't be built in the basement.` };
-    }
-    for (let fl = floor; fl < floor + hgt; fl++) {
-      if (!this.roomSpanFree(fl, x, f.width)) return { ok: false, reason: "Something is already here." };
-      if (this.spanHasLobby(fl, x, f.width)) {
-        return { ok: false, reason: "Lobbies are transit-only — build rooms on a standard floor." };
-      }
-    }
-    return { ok: true };
+    if (isStructural(kind) || FACILITIES[kind].transport) return { ok: false, reason: "Not a room." };
+    const reason = this.roomPlacementReason(kind, floor, x, false);
+    return reason ? { ok: false, reason } : { ok: true };
   }
 
   /** How many floor tiles under a room's footprint don't yet exist. */

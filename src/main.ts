@@ -610,7 +610,7 @@ class GameApp {
       if (action === "sell") {
         if (u.state === "fire") {
           this.audio.sfx("error");
-          this.sim.emit("You can't sell a burning unit — call fire rescue or let it burn out.", "bad");
+          this.ui.toast("You can't sell a burning unit — call fire rescue or let it burn out.", "bad");
           return;
         }
         this.sim.tower.removeUnit(u.id);
@@ -853,7 +853,7 @@ class GameApp {
       if (!u) return;
       if (u.state === "fire") {
         this.audio.sfx("error");
-        this.sim.emit("You can't bulldoze a burning unit — call fire rescue or let it burn out.", "bad");
+        this.ui.toast("You can't bulldoze a burning unit — call fire rescue or let it burn out.", "bad");
         return;
       }
       this.sim.tower.removeUnit(u.id);
