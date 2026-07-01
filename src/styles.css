@@ -1072,3 +1072,19 @@ html.reduce-motion *::after {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* Help dialog: keyboard-play key hints. */
+.help-keys { line-height: 1.9; }
+.help-keys kbd {
+  display: inline-block;
+  min-width: 1.1em;
+  padding: 0 5px;
+  margin: 0 1px;
+  font: 600 0.85em "Courier New", monospace;
+  text-align: center;
+  color: var(--ink, #1a1a1a);
+  background: #f4f4f4;
+  border: 1px solid #b5b5b5;
+  border-bottom-width: 2px;
+  border-radius: 3px;
+}

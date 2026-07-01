@@ -557,7 +557,15 @@ export class UI {
         <li><b>Parking</b> spaces only work when they touch a <b>Parking Ramp</b> or a connected space — chain them off a ramp, or they sit empty.</li>
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
       </ul>
-      <p style="color:var(--muted)">Controls: drag to pan, scroll to zoom. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
+      <p style="color:var(--muted)">Mouse: drag to pan, scroll to zoom, click to build, Inspect tool to edit a room. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
+      <h3>Keyboard play</h3>
+      <p style="color:var(--muted)">Play entirely without a mouse — pick a tool in the palette (Tab to it, Enter to select), then:</p>
+      <ul class="help-keys">
+        <li><kbd>↑</kbd><kbd>↓</kbd><kbd>←</kbd><kbd>→</kbd> (or <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>) move the build cursor — hold <kbd>Shift</kbd> for ×10</li>
+        <li><kbd>Enter</kbd> / <kbd>Space</kbd> build (or inspect) at the cursor. For an elevator or stairway, press once to anchor and again at the far end to size the shaft</li>
+        <li><kbd>Delete</kbd> / <kbd>X</kbd> bulldoze at the cursor · <kbd>Esc</kbd> cancel</li>
+        <li><kbd>+</kbd> / <kbd>−</kbd> zoom · <kbd>C</kbd> re-center · <kbd>0</kbd>–<kbd>3</kbd> game speed</li>
+      </ul>
       <div class="modal-actions"><button data-act="reduce-motion"></button><button class="primary" data-act="close">Got it</button></div>
     `);
     const rm = box.querySelector<HTMLButtonElement>('[data-act="reduce-motion"]')!;
