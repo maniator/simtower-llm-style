@@ -62,6 +62,28 @@ CI (`.github/workflows/test.yml`) runs all of the above on every PR. When you pu
 new commits to a PR, **re-request a Copilot review** — Copilot reviews are one-shot
 snapshots and won't pick up later commits on their own.
 
+## Code review
+
+Reviews here are expected to be **deep, not a surface skim** — a green pipeline is
+never enough to merge. On every review, look across *all* of these dimensions, not
+just the obvious lines in the diff, and flag anything CI wouldn't catch:
+
+- **Correctness & edge cases** — wrong conditions, off-by-one, null/undefined,
+  floor/boundary ranges, missing guards, broken call sites, multi-floor/basement
+  edge placements.
+- **Engine purity & determinism** — `src/engine/` must stay DOM/render-free and
+  deterministic (no `Date.now`/`Math.random`/wall-clock in the sim); rendering
+  reads engine state and never mutates it.
+- **Gameplay balance & player-feel** — economy, ratings, and emergency tuning
+  (fires, bombs, events) should be fair across the star curve and match the
+  SimTower parity model; watch for dead spots and exploits.
+- **Security** — untrusted input (saves, `.TWR` import, persistence) must degrade
+  gracefully and never crash or trust foreign data.
+
+See [`AGENTS.md`](../AGENTS.md) → "Code review" for the full deep-review-before-merge
+policy (BMAD/BMGD review skill plus the relevant architect / designer / UX /
+security agents, convened as a party for larger changes).
+
 ## Conventions
 
 - **American English everywhere** — code, comments, identifiers, strings, commit

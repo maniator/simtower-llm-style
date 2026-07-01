@@ -314,6 +314,10 @@ export class Simulation implements SimContext {
     const u = this.tower.unitAt(floor, x);
     // Prefer removing a room over the transport/floor beneath it.
     if (u && u.kind !== "floor" && u.kind !== "lobby") {
+      // Can't sell a burning unit — the bulldozer is post-fire cleanup, not a
+      // way to end a blaze and skip the rescue fee. Mirrors the UI-side guards
+      // so every removal path upholds the anti-cheat.
+      if (u.state === "fire") return false;
       this.tower.removeUnit(u.id);
       this.money += Math.floor(FACILITIES[u.kind].cost * 0.5);
       // If the last Wedding Hall is gone before the VIP arrived, cancel the

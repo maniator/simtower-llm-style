@@ -366,13 +366,16 @@ export class AudioEngine {
         this.reverb,
       );
 
-      // Sustained chord pad (fat oscillators give a warm chorus).
+      // Sustained chord pad. A hair of detune warms it, but keep the spread
+      // small: heavy detuning of low notes beats into a throbbing hum that gets
+      // fatiguing over a long session. Held well back in the mix for the same
+      // reason — it's a bed under the melody, not a drone.
       this.padGain = new Tone.Gain(0).connect(this.bedFilter);
       this.pad = new Tone.PolySynth(Tone.Synth, {
-        oscillator: { type: "fatsine" },
-        envelope: { attack: 1.5, decay: 0.3, sustain: 1, release: 1.4 },
+        oscillator: { type: "fatsine", spread: 8, count: 2 },
+        envelope: { attack: 1.5, decay: 0.3, sustain: 0.7, release: 1.4 },
       }).connect(this.padGain);
-      this.pad.volume.value = -6;
+      this.pad.volume.value = -14;
 
       // Low bass voice.
       this.bassGain = new Tone.Gain(0).connect(this.bedFilter);
@@ -517,9 +520,11 @@ export class AudioEngine {
   private applyScene(s: Scene, time: number): void {
     if (!this.started || !this.padGain || !this.musicGain || !this.bassGain) return;
     const def = SCENES[s];
-    this.padGain.gain.rampTo(def.gain * 0.16, time);
+    // Pad and bass sit low in the mix so the sustained bed stays a gentle
+    // presence rather than a constant hum; the melody carries each scene.
+    this.padGain.gain.rampTo(def.gain * 0.09, time);
     this.musicGain.gain.rampTo(def.gain * 0.2, time);
-    this.bassGain.gain.rampTo(def.bass * 0.16, time);
+    this.bassGain.gain.rampTo(def.bass * 0.08, time);
     if (this.lead) this.lead.set({ oscillator: { type: def.wave } });
 
     // Move the pad to the new chord — but only actually re-voice it when the
