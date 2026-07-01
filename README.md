@@ -27,12 +27,7 @@ npm test             # run the Vitest suite
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
 npm run screenshots  # build + headless-capture screenshots into docs/screenshots
-npm run build:single # bundle the whole game into one self-contained dist-single/index.html
 ```
-
-`npm run build:single` produces a single HTML file with all JS/CSS inlined — it
-runs the full game with no server (open it straight from `file://`), handy for
-sharing a playable build.
 
 ## How to play
 
