@@ -783,7 +783,8 @@ class GameApp {
       const label = u.kind === "condo" ? "Sale price" : isHotelKind(u.kind) ? "Room rate" : "Quarterly rent";
       rows.push(`<span class="k">${label}</span><span class="v" data-field="rent">${vol.rent}</span>`);
     }
-    if (u.kind === "cinema") {
+    if (u.kind === "cinema" && isOperational(u)) {
+      // A gutted/burning/under-construction cinema books no film — omit the row.
       rows.push(`<span class="k">Now showing</span><span class="v" data-field="showing">${vol.showing}</span>`);
     }
     if (u.state === "gutted") {
@@ -1245,7 +1246,7 @@ class GameApp {
       // Silent rule: a parking space only works when it chains to a ramp. Skip
       // the verdict while it's still building (or on fire) — "Status" covers that.
       const parking =
-        u.kind === "parking" && u.state !== "construction" && u.state !== "fire"
+        u.kind === "parking" && isOperational(u)
           ? this.sim.tower.functionalParkingSet().has(u.id)
             ? `<div style="color:var(--good)">Ramp access: connected.</div>`
             : `<div style="color:var(--bad)">Ramp access: none — this space is dead (no relief). Chain it to a Parking Ramp.</div>`

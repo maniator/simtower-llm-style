@@ -276,8 +276,14 @@ export class EventSystem {
         const next = this.adjacentRoom(u);
         // Small-tower safety valve: never consume the LAST operational room of its
         // kind, so one blaze can't wipe a starter tower to zero of something.
-        const lastOfKind =
-          !!next && this.sim.tower.units.filter((x) => x.kind === next.kind && isOperational(x)).length <= 1;
+        // Count with an early exit (no per-spread array allocation).
+        let opsOfKind = 0;
+        if (next) {
+          for (const x of this.sim.tower.units) {
+            if (x.kind === next.kind && isOperational(x) && ++opsOfKind > 1) break;
+          }
+        }
+        const lastOfKind = !!next && opsOfKind <= 1;
         if (next && !lastOfKind && next.state !== "fire" && next.kind !== "floor" && next.kind !== "lobby" && isOperational(next)) {
           next.state = "fire";
           next.occupants = 0;

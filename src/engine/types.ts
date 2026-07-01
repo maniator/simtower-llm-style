@@ -63,7 +63,7 @@ export type UnitState =
 
 /** A unit that is live: not under construction, ablaze, or a burned-out shell.
  *  The single predicate every "is this room working?" check should route through
- *  so a new inert state (like `gutted`) is honoured everywhere at once. */
+ *  so a new inert state (like `gutted`) is honored everywhere at once. */
 export function isOperational(u: { state: UnitState }): boolean {
   return u.state !== "construction" && u.state !== "fire" && u.state !== "gutted";
 }
