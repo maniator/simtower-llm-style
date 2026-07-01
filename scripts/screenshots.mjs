@@ -205,6 +205,27 @@ async function main() {
   await page.screenshot({ path: `${OUT}/05-detail.png` });
   console.log("captured 05-detail");
 
+  // 5a) Batch-pricing dialog — select an office, then open "Set all offices…".
+  await page.evaluate(() => {
+    const g = window.game;
+    const office = g.sim.tower.units.find((u) => u.kind === "office");
+    g.selected = { type: "unit", id: office.id };
+    g.refreshEditor();
+  });
+  await page.waitForTimeout(150);
+  await page.click('#editor [data-edit="batchKind"]');
+  await page.waitForTimeout(200);
+  // Type a non-default price so the live preview shows a real "N of M" change.
+  await page.evaluate(() => {
+    const el = document.querySelector("#bp-price");
+    el.value = "12000";
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await page.waitForTimeout(200);
+  await page.screenshot({ path: `${OUT}/10-batch-pricing.png` });
+  await page.click('#modal [data-act="close"]');
+  console.log("captured 10-batch-pricing");
+
   // 5b) People moving — pause at the morning rush and zoom into the lobby so
   // the walking crowds (lobby + busy corridors) and elevator riders are shown.
   await page.evaluate(() => {

@@ -808,6 +808,8 @@ class GameApp {
     if (rcfg && !(u.kind === "condo" && u.everOccupied)) {
       const what = u.kind === "condo" ? "price" : "rent";
       actions += `<div class="ed-row"><button data-edit="rentDown">– ${what}</button><button data-edit="rentUp">+ ${what}</button></div>`;
+      // Batch-price every unit of this kind at once (no per-room grind).
+      actions += `<div class="ed-row"><button data-edit="batchKind">Set all ${FACILITIES[u.kind].name.toLowerCase()}s…</button></div>`;
     }
     if (u.kind === "cinema") {
       const pol = { auto: "Auto", feature: "Feature", blockbuster: "Blockbuster" }[u.filmPolicy ?? "auto"];
@@ -926,6 +928,33 @@ class GameApp {
     // silent so a drag doesn't spam toasts; the shaft simply stops growing.
   }
 
+  /** Open the batch-pricing dialog pre-scoped to `kind`, wired to the engine's
+   *  pure preview + mutating apply (what you preview is what commits). */
+  private openBatchPricing(kind: FacilityKind): void {
+    const band = rentConfig(kind);
+    if (!band) return;
+    this.ui.showBatchPricingDialog(
+      { kind, kindLabel: FACILITIES[kind].name, band },
+      {
+        preview: (target, opts) => this.sim.previewRentBatch(kind, target, opts)!,
+        apply: (target, opts) => {
+          // Capture BEFORE the mutation (the dialog applies asynchronously, so the
+          // synchronous captureUndo in handleEditAction is stale) → an undoable batch.
+          this.captureUndo("Set prices");
+          const r = this.sim.applyRentBatch(kind, target, opts)!;
+          this.commitUndo();
+          return r;
+        },
+        onApplied: (summary) => {
+          this.audio.sfx("build");
+          this.ui.toast(summary, "good");
+          this.announce(summary);
+          this.refreshEditor();
+        },
+      },
+    );
+  }
+
   private handleEditAction(action: string, root: HTMLElement): void {
     if (!this.selected) return;
     const UNDO_LABELS: Record<string, string> = {
@@ -975,6 +1004,8 @@ class GameApp {
         this.sim.setFilmPolicy(u.id, next);
         this.audio.sfx("click");
         this.refreshEditor();
+      } else if (action === "batchKind") {
+        this.openBatchPricing(u.kind);
       }
     } else {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);

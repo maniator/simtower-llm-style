@@ -1,5 +1,5 @@
 import { ALL_KINDS, FACILITIES } from "../engine/facilities";
-import type { Simulation, LogEntry } from "../engine/Simulation";
+import type { Simulation, LogEntry, BatchTarget, BatchRentOptions, BatchRentResult } from "../engine/Simulation";
 import type { SlotInfo } from "../storage/SaveGame";
 import type { FacilityCategory, FacilityKind } from "../engine/types";
 
@@ -451,6 +451,96 @@ export class UI {
     while (this.el.toast.children.length > 5) this.el.toast.firstElementChild?.remove();
   }
 
+  /** Batch-pricing dialog, pre-scoped to one priced kind. Live honest preview
+   *  (same engine core as apply); Apply is disabled at zero changes. */
+  showBatchPricingDialog(
+    ctx: { kind: FacilityKind; kindLabel: string; band: { default: number; min: number; max: number; step: number } },
+    cb: {
+      preview: (target: BatchTarget, opts: BatchRentOptions) => BatchRentResult;
+      apply: (target: BatchTarget, opts: BatchRentOptions) => BatchRentResult;
+      onApplied: (summary: string) => void;
+    },
+  ): void {
+    const { kind, band } = ctx;
+    const noun = ctx.kindLabel.toLowerCase() + "s";
+    const priceWord = kind === "condo" ? "price" : "rent";
+    const money = (n: number) => `$${n.toLocaleString()}`;
+    const box = this.openModal(`
+      <h2>Set all ${noun}</h2>
+      <div class="batch-modes">
+        <label><input type="radio" name="bp-mode" value="set" checked /> Set ${priceWord} to</label>
+        <span class="bp-amount"><button type="button" data-bp="dec" aria-label="decrease">–</button>
+          <input id="bp-price" type="number" inputmode="numeric" value="${band.default}" min="${band.min}" max="${band.max}" step="${band.step}" />
+          <button type="button" data-bp="inc" aria-label="increase">+</button></span>
+        <div class="bp-band">Range ${money(band.min)}–${money(band.max)}</div>
+        <label><input type="radio" name="bp-mode" value="default" /> Reset to default (${money(band.default)})</label>
+      </div>
+      <label class="bp-only"><input id="bp-only" type="checkbox" /> Only ${noun} still on the default price</label>
+      <p id="bp-preview" class="bp-preview" aria-live="polite"></p>
+      <div class="modal-actions">
+        <button class="primary" id="bp-apply" data-act="apply">Apply</button>
+        <button data-act="close">Cancel</button>
+      </div>`);
+    const priceEl = box.querySelector<HTMLInputElement>("#bp-price")!;
+    const onlyEl = box.querySelector<HTMLInputElement>("#bp-only")!;
+    const previewEl = box.querySelector<HTMLElement>("#bp-preview")!;
+    const applyBtn = box.querySelector<HTMLButtonElement>("#bp-apply")!;
+    const mode = () => box.querySelector<HTMLInputElement>('input[name="bp-mode"]:checked')!.value;
+    // Snap a typed price to the band's step grid, so batch matches the ± adjuster's
+    // granularity (a typed 12,345 becomes 12,000 for a $1,000-step office).
+    const snap = (v: number) => {
+      const stepped = Math.round((v - band.min) / band.step) * band.step + band.min;
+      return Math.max(band.min, Math.min(band.max, stepped));
+    };
+    const target = (): BatchTarget => (mode() === "default" ? "default" : snap(Number(priceEl.value) || 0));
+    const opts = (): BatchRentOptions => ({ onlyDefaultPriced: onlyEl.checked });
+    const priceText = (t: BatchTarget) => (t === "default" ? `the default (${money(band.default)})` : money(t as number));
+
+    let resetArmed = false; // bulk "Reset to default" needs a confirming second click
+    const refresh = () => {
+      priceEl.disabled = mode() === "default";
+      resetArmed = false;
+      applyBtn.textContent = "Apply";
+      const r = cb.preview(target(), opts());
+      let msg = `Set ${r.changed} of ${r.matched} ${noun} to ${priceText(target())}.`;
+      if (r.skippedCustom) msg += ` ${r.skippedCustom} custom-priced left as-is.`;
+      if (r.customOverwritten) msg += ` ${r.customOverwritten} custom price${r.customOverwritten === 1 ? "" : "s"} will be overwritten.`;
+      if (r.skippedSold) msg += ` ${r.skippedSold} sold skipped.`;
+      if (r.clampedHigh) msg += ` Clamped to the ${money(band.max)} max.`;
+      if (r.clampedLow) msg += ` Clamped to the ${money(band.min)} min.`;
+      previewEl.textContent = msg;
+      applyBtn.disabled = r.changed === 0;
+    };
+    const step = (dir: 1 | -1) => {
+      priceEl.value = String(Math.max(band.min, Math.min(band.max, (Number(priceEl.value) || 0) + dir * band.step)));
+      refresh();
+    };
+    box.querySelector('[data-bp="inc"]')!.addEventListener("click", () => step(1));
+    box.querySelector('[data-bp="dec"]')!.addEventListener("click", () => step(-1));
+    priceEl.addEventListener("input", refresh);
+    // On commit (blur/Enter), normalize the field to the snapped value it will
+    // actually apply, so the input never shows a number different from the result.
+    priceEl.addEventListener("change", () => {
+      if (mode() !== "default") priceEl.value = String(snap(Number(priceEl.value) || 0));
+      refresh();
+    });
+    onlyEl.addEventListener("change", refresh);
+    box.querySelectorAll('input[name="bp-mode"]').forEach((el) => el.addEventListener("change", refresh));
+    box.querySelector('[data-act="close"]')!.addEventListener("click", () => this.closeModal());
+    applyBtn.addEventListener("click", () => {
+      // A bulk reset clears everyone's custom price — require a confirming click.
+      if (mode() === "default" && !resetArmed) {
+        resetArmed = true;
+        applyBtn.textContent = "Confirm reset";
+        return;
+      }
+      const r = cb.apply(target(), opts());
+      cb.onApplied(`Set ${r.changed} ${noun} to ${priceText(target())}.`);
+      this.closeModal();
+    });
+    refresh();
+  }
+
   // ---- Modals ------------------------------------------------------------
 
   private openModal(html: string): HTMLElement {
@@ -566,6 +656,7 @@ export class UI {
         <li><b>Two rides, tops.</b> People take at most <b>two</b> elevator/stair rides to reach a floor — add <b>sky lobbies</b> (every ~15 floors) so distant floors are one transfer away, or nobody comes.</li>
         <li><b>Parking</b> spaces only work when they touch a <b>Parking Ramp</b> or a connected space — chain them off a ramp, or they sit empty.</li>
         <li><b>Book the films.</b> Cinemas book a film monthly — a <b>Blockbuster</b> costs twice as much but pulls a far bigger crowd (great in a busy tower, a money-loser in a quiet one). Leave it on <b>Auto</b> or set a policy on the cinema.</li>
+        <li><b>Price in bulk.</b> Inspect any office, condo or hotel room and use <b>“Set all …”</b> to re-price every unit of that kind at once (or reset them to the default) — no need to edit each room. A preview shows how many change before you apply.</li>
       </ul>
       <p style="color:var(--muted)">Mouse: drag to pan, scroll to zoom, click to build, Inspect tool to edit a room. Made a mistake? <b>Undo with Ctrl+Z</b> (or the ↩ button) — redo with Ctrl+Shift+Z. Music changes with whatever part of the tower you're viewing — try scrolling around!</p>
       <h3>Keyboard play</h3>
