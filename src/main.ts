@@ -39,6 +39,8 @@ class GameApp {
   private canvas: HTMLCanvasElement;
   private accMinutes = 0;
   private lastUiUpdate = 0;
+  /** Throttle for the per-frame error log, so a repeating throw can't spam. */
+  private lastTickErrorLog = 0;
   private shownWin = false;
   /** Whether the emergency-choice modal is currently open. */
   private shownChoice = false;
@@ -477,7 +479,23 @@ class GameApp {
     this.canvas.addEventListener("contextmenu", (e) => e.preventDefault());
 
     // Per-frame: advance the sim and (throttled) refresh DOM/audio.
-    this.engine.onUpdate = (ms) => this.update(ms);
+    this.engine.onUpdate = (ms) => {
+      // A thrown frame must NEVER escape to Excalibur: its game loop calls
+      // stop() on any uncaught exception, which freezes the whole game dead
+      // (seen at high speed, where far more sim work runs per frame). Contain it
+      // here so a transient error skips one frame instead of halting play.
+      try {
+        this.update(ms);
+      } catch (err) {
+        // Throttle the log so a per-frame throw can't spam the console at
+        // frame-rate (which would itself tank performance).
+        const now = globalThis.performance ? performance.now() : 0;
+        if (now - this.lastTickErrorLog > 2000) {
+          this.lastTickErrorLog = now;
+          console.error("[tick] frame error — continuing:", err);
+        }
+      }
+    };
   }
 
   private bindKeys(): void {
@@ -1132,7 +1150,7 @@ class GameApp {
     const mp = this.sim.milestoneProgress();
     const half = Math.ceil(mp.list.length / 2);
     const col = (items: typeof mp.list) =>
-      `<div class="col">${items
+      `<div class="col ms">${items
         .map(
           (m) =>
             `<span class="k" style="color:${m.done ? "var(--good)" : "var(--muted)"}">${m.done ? "✓" : "·"} ${escapeAttr(m.label)}</span>` +
