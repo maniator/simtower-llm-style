@@ -80,6 +80,11 @@ interface Walker {
   red: boolean;
   /** 0..1 position in the crowd; shown only when the tower is busy enough. */
   rank: number;
+  /** Floor this figure belongs to (for per-floor occupancy gating). */
+  floor: number;
+  /** True for corridor loiterers gated on their floor's live occupancy; false
+   *  for lobby/stair figures gated on the whole tower's busyness. */
+  perFloor: boolean;
 }
 
 /**
@@ -153,6 +158,12 @@ export class TowerEngine {
   }[] = [];
   private trainActors: { actor: ex.Actor; u: Unit; w: number }[] = [];
   private walkers: Walker[] = [];
+  /** Per-floor live occupancy in 0..1 (people on the floor, capped), so corridor
+   *  loiterers only appear where tenants actually are. Cached and recomputed on
+   *  the hour or when the layout changes — not scanned every frame. */
+  private floorLive = new Map<number, number>();
+  private floorLiveHour = -1;
+  private floorLiveRev = -1;
   private builtRev = -1;
   private litState = false;
   private lastSyncHour = -1;
@@ -381,6 +392,12 @@ export class TowerEngine {
     this.clearCrowd();
     this.sim = sim;
     this.builtRev = -1;
+    // Invalidate the per-floor occupancy cache so a swapped-in tower (new game /
+    // load) can't briefly gate walkers on the previous sim's occupancy even if
+    // its hour and revision happen to match the cached keys.
+    this.floorLiveHour = -1;
+    this.floorLiveRev = -1;
+    this.floorLive.clear();
     this.center();
   }
 
@@ -1115,10 +1132,26 @@ export class TowerEngine {
         const foot = this.worldYTop(floor) + FLOOR - 3;
         const x0w = this.worldX(run.x0) + 3;
         const x1w = this.worldX(run.x1 + 1) - 3;
+        const runW = x1w - x0w;
         for (let i = 0; i < count && budget > 0; i++, budget--) {
           const seed = (floor * 131 + run.x0 * 7 + i * 53) | 0;
-          // Rank within the run; only the first few show until the tower fills.
-          this.spawnWalker(x0w, x1w, foot, foot, seed, 7 + (Math.abs(seed) % 6), (i + 0.5) / count);
+          const rank = (i + 0.5) / count; // only the first few show until it fills
+          const speed = 7 + (Math.abs(seed) % 6);
+          if (run.kind === "lobby") {
+            // Concourse: figures stroll the whole width, gated on tower busyness.
+            this.spawnWalker(x0w, x1w, foot, foot, seed, speed, rank, floor, false);
+          } else {
+            // Corridor: loiter in a short stretch around a spread-out anchor, so a
+            // lone figure shuffles in place instead of sprinting the whole floor —
+            // and only appears when this floor actually has occupants.
+            const anchor = x0w + rank * runW;
+            const half = Math.min(14, runW / 2);
+            // Clamp the loiter span to the run so a figure never paces past the
+            // corridor ends — robust even if the count/density constants change.
+            const segX0 = Math.max(x0w, anchor - half);
+            const segX1 = Math.min(x1w, anchor + half);
+            this.spawnWalker(segX0, segX1, foot, foot, seed, speed, rank, floor, true);
+          }
         }
       }
     }
@@ -1133,12 +1166,22 @@ export class TowerEngine {
         const seed = (t.id * 17 + i * 29) | 0;
         // Low ranks so stairs/escalators show climbers even in a modest tower —
         // otherwise the routed crowd (elevators only) makes stairs look unused.
-        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7, 0.04 + i * 0.18);
+        this.spawnWalker(x0w, x1w, yb, yt, seed, t.kind === "escalator" ? 12 : 7, 0.04 + i * 0.18, t.bottom, false);
       }
     }
   }
 
-  private spawnWalker(x0w: number, x1w: number, y0w: number, y1w: number, seed: number, speed: number, rank: number): void {
+  private spawnWalker(
+    x0w: number,
+    x1w: number,
+    y0w: number,
+    y1w: number,
+    seed: number,
+    speed: number,
+    rank: number,
+    floor: number,
+    perFloor: boolean,
+  ): void {
     const gfx = this.personGfx[Math.abs(seed) % this.personGfx.length];
     const a = new ex.Actor({ pos: ex.vec(x0w, y0w), width: 8, height: 14, anchor: ex.vec(0.5, 1), z: 0.4 });
     a.graphics.use(gfx);
@@ -1156,7 +1199,29 @@ export class TowerEngine {
       impatient: (((seed >>> 8) & 0xff) / 255) < 0.5,
       red: false,
       rank,
+      floor,
+      perFloor,
     });
+  }
+
+  /** Refresh the per-floor occupancy map (0..1) when the hour or layout changes,
+   *  so corridor loiterers appear only where tenants actually are. */
+  private refreshFloorLiveliness(): void {
+    const hour = this.sim.clock.hour;
+    const rev = this.sim.tower.revision;
+    if (hour === this.floorLiveHour && rev === this.floorLiveRev) return;
+    this.floorLiveHour = hour;
+    this.floorLiveRev = rev;
+    const people = new Map<number, number>();
+    for (const u of this.sim.tower.units) {
+      if (u.occupants > 0) people.set(u.floor, (people.get(u.floor) ?? 0) + u.occupants);
+    }
+    this.floorLive.clear();
+    // Scale present occupants to 0..1: ~16 on a floor reads as fully lively (all
+    // its loiterers shown); a busier floor shows more, an empty or all-vacant
+    // floor shows none. (How many the fraction reveals scales with the floor's
+    // width, since a corridor's walker count comes from its tile span.)
+    for (const [f, n] of people) this.floorLive.set(f, Math.min(1, n / 16));
   }
 
   /** Repositions every moving actor each frame (the engine then draws them). */
@@ -1190,8 +1255,12 @@ export class TowerEngine {
     // tower has an empty lobby, and thins out overnight.
     const night = this.sim.clock.isNight();
     const crowd = Math.min(1, this.sim.population / 350) * (night ? 0.35 : 1);
+    this.refreshFloorLiveliness();
     for (const w of this.walkers) {
-      const visible = w.rank <= crowd;
+      // Corridor loiterers gate on their own floor's live occupancy (so an empty
+      // floor stays empty); lobby/stair figures gate on the whole tower's crowd.
+      const threshold = w.perFloor ? (this.floorLive.get(w.floor) ?? 0) : crowd;
+      const visible = w.rank <= threshold;
       if (w.actor.graphics.visible !== visible) w.actor.graphics.visible = visible;
       if (!visible) continue;
       let p = w.phase + (w.dir > 0 ? 0 : 0.5) + anim * w.speed * 0.03;
