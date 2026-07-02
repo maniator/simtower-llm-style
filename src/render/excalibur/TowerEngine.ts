@@ -1146,7 +1146,11 @@ export class TowerEngine {
             // and only appears when this floor actually has occupants.
             const anchor = x0w + rank * runW;
             const half = Math.min(14, runW / 2);
-            this.spawnWalker(anchor - half, anchor + half, foot, foot, seed, speed, rank, floor, true);
+            // Clamp the loiter span to the run so a figure never paces past the
+            // corridor ends — robust even if the count/density constants change.
+            const segX0 = Math.max(x0w, anchor - half);
+            const segX1 = Math.min(x1w, anchor + half);
+            this.spawnWalker(segX0, segX1, foot, foot, seed, speed, rank, floor, true);
           }
         }
       }
