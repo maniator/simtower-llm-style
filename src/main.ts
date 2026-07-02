@@ -39,6 +39,8 @@ class GameApp {
   private canvas: HTMLCanvasElement;
   private accMinutes = 0;
   private lastUiUpdate = 0;
+  /** Throttle for the per-frame error log, so a repeating throw can't spam. */
+  private lastTickErrorLog = 0;
   private shownWin = false;
   /** Whether the emergency-choice modal is currently open. */
   private shownChoice = false;
@@ -485,7 +487,13 @@ class GameApp {
       try {
         this.update(ms);
       } catch (err) {
-        console.error("[tick] frame error — continuing:", err);
+        // Throttle the log so a per-frame throw can't spam the console at
+        // frame-rate (which would itself tank performance).
+        const now = globalThis.performance ? performance.now() : 0;
+        if (now - this.lastTickErrorLog > 2000) {
+          this.lastTickErrorLog = now;
+          console.error("[tick] frame error — continuing:", err);
+        }
       }
     };
   }
