@@ -110,6 +110,13 @@ export class TowerEngine {
   /** Called every frame with elapsed milliseconds (sim ticking lives here). */
   onUpdate: ((ms: number) => void) | null = null;
 
+  /** The GPU dropped the WebGL context (mobile browsers reset it under memory
+   *  pressure or after backgrounding). Excalibur can't rebuild its textures and
+   *  shaders in place, so the controller must recover — its default handler
+   *  would otherwise paint a dead-end "please refresh the page" overlay. The
+   *  render clock is already stopped when this fires. */
+  onContextLost: (() => void) | null = null;
+
   // Controller-supplied input hooks (the controller owns tool semantics). The
   // `picked` argument is the entity Excalibur found under the pointer, or null.
   classifyDown: ((button: number, touch: boolean, space: boolean) => "pan" | "action") | null = null;
@@ -210,6 +217,11 @@ export class TowerEngine {
       suppressPlayButton: true,
       suppressConsoleBootMessage: true,
       backgroundColor: ex.Color.fromHex("#7fb0e0"),
+      handleContextLost: (e) => {
+        e.preventDefault(); // spec: signals the browser we own recovery
+        this.engine.clock.stop(); // every GL call is dead now — stop the loop
+        this.onContextLost?.();
+      },
     });
     this.d = { ctx: null as unknown as CanvasRenderingContext2D, lit: false, anim: 0, hour: 9, stress: 0 };
     this.engine.currentScene.onPostUpdate = (_e: ex.Engine, elapsed: number) => this.tick(elapsed);

@@ -496,6 +496,11 @@ class GameApp {
         }
       }
     };
+
+    // The GPU dropped the WebGL context (mobile browsers reset it under memory
+    // pressure / after backgrounding). Recover for the player instead of
+    // Excalibur's dead-end "please refresh the page" card.
+    this.engine.onContextLost = () => this.recoverFromContextLoss();
   }
 
   private bindKeys(): void {
@@ -1380,6 +1385,57 @@ class GameApp {
     this.save(true);
     this.ui.toast("New version ready — saved your tower, updating…", "info");
   }
+
+  /**
+   * The WebGL context is gone and Excalibur can't rebuild its GPU resources in
+   * place, so recovery is the same as a manual refresh: flush the tower to the
+   * autosave slot, then reload onto a fresh context — automatically, so the
+   * player never sees a dead screen. Two guards keep this safe:
+   * - a sessionStorage timestamp stops a GPU that dies on every boot from
+   *   reload-looping (second loss within 90s falls back to a manual card), and
+   * - a hidden tab defers the reload until it's visible again, so we don't
+   *   re-boot the renderer in the background just to have the GPU reap it anew.
+   */
+  private recoverFromContextLoss(): void {
+    // Same guard as the autosave timer: never persist the throwaway boot sim
+    // while the first-run splash is still up.
+    if (!document.getElementById("splash")) this.save(true);
+
+    const KEY = "vc-gl-lost-reload";
+    let lastReload = 0;
+    try {
+      lastReload = Number(sessionStorage.getItem(KEY)) || 0;
+    } catch {
+      /* storage may be unavailable; treat as first loss */
+    }
+    if (Date.now() - lastReload < 90_000) {
+      // Auto-reload didn't stick — hand control back to the player.
+      showBootMessage(
+        "The graphics driver crashed twice in a row.<br>Your tower is saved — close other tabs or apps and try again.",
+        true,
+      );
+      return;
+    }
+
+    const reload = () => {
+      try {
+        sessionStorage.setItem(KEY, String(Date.now()));
+      } catch {
+        /* best effort */
+      }
+      location.reload();
+    };
+    if (document.visibilityState === "hidden") {
+      document.addEventListener("visibilitychange", function onVis() {
+        if (document.visibilityState === "visible") {
+          document.removeEventListener("visibilitychange", onVis);
+          reload();
+        }
+      });
+    } else {
+      reload();
+    }
+  }
   private load(): void {
     const loaded = SaveGame.load();
     if (loaded) {
@@ -1439,10 +1495,16 @@ function hasWebGL(): boolean {
   }
 }
 
-function showBootMessage(msg: string): void {
+function showBootMessage(msg: string, withReload = false): void {
   const stage = document.getElementById("stage");
-  if (stage) {
-    stage.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#cdd3da;font:15px/1.5 system-ui,sans-serif">${msg}</div>`;
+  if (!stage) return;
+  stage.innerHTML = `<div style="display:flex;flex-direction:column;gap:16px;align-items:center;justify-content:center;height:100%;padding:24px;text-align:center;color:#cdd3da;font:15px/1.5 system-ui,sans-serif"><div>${msg}</div></div>`;
+  if (withReload) {
+    const btn = document.createElement("button");
+    btn.textContent = "Reload";
+    btn.style.cssText = "padding:8px 24px;font:inherit;cursor:pointer";
+    btn.addEventListener("click", () => location.reload());
+    stage.firstElementChild!.appendChild(btn);
   }
 }
 
