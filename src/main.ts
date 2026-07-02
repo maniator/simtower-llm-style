@@ -1036,6 +1036,9 @@ class GameApp {
         return this.clearSelection();
       }
       if (action === "addcar") {
+        // Cap check first: at max cars the button is disabled anyway, but a
+        // money toast here would blame the wrong constraint.
+        if (t.cars >= (MAX_CARS[t.kind] ?? 1)) return;
         if (this.sim.money < ECON.addCarCost) {
           this.audio.sfx("error");
           this.ui.toast("Not enough money.", "bad");
