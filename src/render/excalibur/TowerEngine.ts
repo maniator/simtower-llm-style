@@ -574,7 +574,7 @@ export class TowerEngine {
       const segCx = leftEdge + segW * (i + 0.5);
       const dirt = new ex.Actor({
         pos: ex.vec(segCx, 0),
-        width: segW + 1, // overlap neighbours by 1px to hide any seam
+        width: segW + 1, // overlap neighbors by 1px to hide any seam
         height: depth,
         anchor: ex.vec(0.5, 0),
         z: -50,
