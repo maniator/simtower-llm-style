@@ -10,6 +10,7 @@
   --accent: #000080;      /* navy — titles & highlights */
   --good: #15722e;
   --bad: #b01023;
+  --bad-ink: #9a0e1f;     /* danger text small enough to need AA 4.5:1 on gray chrome */
   --money: #0a6e26;
   --line: #7a7a7a;
   /* Win3.1 chrome tokens + the signature two-pixel bevels. */
@@ -427,7 +428,7 @@ body {
   background: #d8d8d8;
 }
 .slot-actions button.danger {
-  color: var(--bad);
+  color: var(--bad-ink);
   font-weight: 700;
   padding: 5px 8px;
 }
