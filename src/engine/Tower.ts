@@ -61,6 +61,10 @@ export class Tower {
    *  tile lookups are O(1) rather than a linear scan (hot in the flood-fills and
    *  the per-frame congestion read). */
   private byId = new Map<number, Unit>();
+  /** floor → number of lobby structural tiles on it, so "is this a lobby floor?"
+   *  is O(1). Used to keep express-elevator stops synced with sky lobbies as they
+   *  are built or removed, regardless of the order relative to the elevator. */
+  private lobbyTiles = new Map<number, number>();
 
   private key(floor: number, x: number): string {
     return `${floor}:${x}`;
@@ -140,6 +144,9 @@ export class Tower {
         if (structural) this.structKind.set(k, unit.kind as "floor" | "lobby");
       }
     }
+    if (unit.kind === "lobby") {
+      this.lobbyTiles.set(unit.floor, (this.lobbyTiles.get(unit.floor) ?? 0) + unit.width);
+    }
   }
 
   private unregister(unit: Unit): void {
@@ -154,6 +161,11 @@ export class Tower {
         if (structural) this.structKind.delete(k);
       }
     }
+    if (unit.kind === "lobby") {
+      const left = (this.lobbyTiles.get(unit.floor) ?? 0) - unit.width;
+      if (left > 0) this.lobbyTiles.set(unit.floor, left);
+      else this.lobbyTiles.delete(unit.floor);
+    }
   }
 
   reindex(): void {
@@ -161,7 +173,14 @@ export class Tower {
     this.structKind.clear();
     this.rooms.clear();
     this.byId.clear();
+    this.lobbyTiles.clear();
     for (const u of this.units) this.register(u);
+    // Note: reindex intentionally does NOT re-run syncExpressStopsForFloor.
+    // Every real edit (place / removeUnit) already keeps expresses in sync at
+    // the time of the flip, so a save written after this fix is self-consistent.
+    // A blanket resync on load would silently overwrite a player who deliberately
+    // set `setStop(id, lobbyFloor, false)` to skip a sky lobby — so we deliberately
+    // leave loaded skipFloors alone.
     this.revision++;
   }
 
@@ -386,6 +405,11 @@ export class Tower {
     this.units.push(unit);
     this.register(unit);
     if (kind === "weddingHall") this.builtWeddingHall = true;
+    // First lobby tile on this floor → it just became a (sky) lobby, so bring any
+    // express spanning it into line (it now stops here).
+    if (kind === "lobby" && this.lobbyTiles.get(floor) === unit.width) {
+      this.syncExpressStopsForFloor(floor);
+    }
     this.revision++;
     return { ok: true, unitId: unit.id };
   }
@@ -496,6 +520,11 @@ export class Tower {
     if (u.kind === "weddingHall") {
       this.builtWeddingHall = this.units.some((x) => x.kind === "weddingHall");
     }
+    // Last lobby tile gone → the floor is no longer a lobby, so express elevators
+    // spanning it stop stopping there.
+    if (u.kind === "lobby" && !this.floorHasLobby(u.floor)) {
+      this.syncExpressStopsForFloor(u.floor);
+    }
     this.revision++;
     return u;
   }
@@ -537,11 +566,30 @@ export class Tower {
       }
     }
     const before = t.top - t.bottom + 1;
+    const prevBottom = t.bottom;
+    const prevTop = t.top;
     t.bottom = newBottom;
     t.top = newTop;
     // Keep cars within the new range.
     for (let i = 0; i < t.carPositions.length; i++) {
       t.carPositions[i] = Math.max(newBottom, Math.min(newTop, t.carPositions[i]));
+    }
+    // Keep express skipFloors coherent after a resize (a common build-order path):
+    //   - Drop the new endpoints from skip, so shrinking onto a formerly-skipped
+    //     floor doesn't disconnect the new endpoint.
+    //   - Add newly-in-span non-lobby floors to skip, so growing past new territory
+    //     doesn't turn the express into a local elevator.
+    //   - Floors that were already in-span are LEFT ALONE, so a manual stop the
+    //     player set inside the old range survives the resize.
+    if (t.kind === "elevatorExpress") {
+      const skip = new Set(t.skipFloors ?? []);
+      skip.delete(newBottom);
+      skip.delete(newTop);
+      for (let fl = newBottom + 1; fl < newTop; fl++) {
+        if (fl >= prevBottom && fl <= prevTop) continue; // preserve pre-existing choice
+        if (!this.floorHasLobby(fl)) skip.add(fl); // newly-in-span non-lobby → skip
+      }
+      t.skipFloors = [...skip].sort((a, b) => a - b);
     }
     this.revision++;
     return { ok: true, added: newTop - newBottom + 1 - before };
@@ -567,11 +615,12 @@ export class Tower {
     return true;
   }
 
-  /** Floors that have at least one lobby tile (express stops). */
+  /** Floors that have at least one lobby tile (express stops). Derived from the
+   *  per-floor lobbyTiles counter kept live by register/unregister, so this is
+   *  O(k) in the number of lobby floors — hot-path callers (ElevatorDispatch)
+   *  invoke it every tick. */
   lobbyFloors(): number[] {
-    const set = new Set<number>();
-    for (const u of this.units) if (u.kind === "lobby") set.add(u.floor);
-    return [...set].sort((a, b) => a - b);
+    return [...this.lobbyTiles.keys()].sort((a, b) => a - b);
   }
 
   /** Toggle whether a transport stops at a floor (express configuration). */
@@ -584,6 +633,28 @@ export class Tower {
     t.skipFloors = [...skip].sort((a, b) => a - b);
     this.revision++;
     return true;
+  }
+
+  /** Does this floor carry at least one lobby tile (a ground/sky lobby)? O(1). */
+  floorHasLobby(floor: number): boolean {
+    return (this.lobbyTiles.get(floor) ?? 0) > 0;
+  }
+
+  /**
+   * Keep express elevators serving a floor's *current* lobby status: an express
+   * spanning `floor` stops there iff it's a (sky) lobby. Called whenever a floor
+   * gains or loses its lobby, so an express built before a sky lobby (or one
+   * built after) both end up stopping at it — "express stops at sky lobbies" holds
+   * no matter the build order. Only the changed floor is touched, so a player's
+   * manual stop choices on *other* floors are preserved. Endpoints always stop.
+   */
+  private syncExpressStopsForFloor(floor: number): void {
+    const stop = this.floorHasLobby(floor);
+    for (const t of this.transports) {
+      if (t.kind !== "elevatorExpress") continue;
+      if (floor <= t.bottom || floor >= t.top) continue; // endpoints always stop
+      this.setStop(t.id, floor, stop);
+    }
   }
 
   /** Configure an elevator to stop only at lobby floors (true express). */

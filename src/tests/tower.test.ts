@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { Tower } from "../engine/Tower";
 import { GRID } from "../engine/facilities";
+import type { Transport } from "../engine/types";
 
 describe("Tower placement", () => {
   let tower: Tower;
@@ -185,5 +186,176 @@ describe("Tower transport", () => {
     expect(tower.isFloorServed(25)).toBe(true);
     // A disconnected floor stays unserved.
     expect(tower.isFloorServed(50)).toBe(false);
+  });
+});
+
+describe("Express elevator sky-lobby stops", () => {
+  const W = 20;
+
+  /** A shaft-ready tower: ground lobby, floors 2..top, with `lobbyFloors` laid as
+   *  (sky) lobbies instead of plain floors. */
+  function tower(top: number, lobbyFloors: number[] = []): Tower {
+    const t = new Tower();
+    for (let x = 0; x < W; x++) t.place("lobby", 1, x);
+    for (let f = 2; f <= top; f++) {
+      const kind = lobbyFloors.includes(f) ? "lobby" : "floor";
+      for (let x = 0; x < W; x++) t.place(kind, f, x);
+    }
+    return t;
+  }
+  /** Turn an existing plain-floor storey into a sky lobby (clear it, lay lobby). */
+  function makeSkyLobby(t: Tower, floor: number): void {
+    for (let x = 0; x < W; x++) {
+      const u = t.unitAt(floor, x);
+      if (u) t.removeUnit(u.id);
+    }
+    for (let x = 0; x < W; x++) t.place("lobby", floor, x);
+  }
+  function express(t: Tower, bottom: number, top: number): Transport {
+    const r = t.placeTransport("elevatorExpress", 2, bottom, top);
+    return t.transports.find((x) => x.id === r.transportId)!;
+  }
+
+  it("a freshly placed express stops at its endpoints and existing sky lobbies only", () => {
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 30);
+    expect(t.stopsAt(ex, 1)).toBe(true); // bottom endpoint
+    expect(t.stopsAt(ex, 30)).toBe(true); // top endpoint
+    expect(t.stopsAt(ex, 15)).toBe(true); // sky lobby
+    expect(t.stopsAt(ex, 10)).toBe(false); // ordinary floor is skipped
+    expect(t.stopsAt(ex, 20)).toBe(false);
+  });
+
+  it("serves a sky lobby built AFTER the express (build order doesn't matter)", () => {
+    const t = tower(30); // floor 15 is a plain floor for now
+    const ex = express(t, 1, 30);
+    expect(t.stopsAt(ex, 15)).toBe(false); // not a lobby yet → skipped
+    makeSkyLobby(t, 15);
+    expect(t.stopsAt(ex, 15)).toBe(true); // the express now serves the new sky lobby
+  });
+
+  it("stops serving a sky lobby once it is bulldozed", () => {
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 30);
+    expect(t.stopsAt(ex, 15)).toBe(true);
+    for (let x = 0; x < W; x++) {
+      const u = t.unitAt(15, x);
+      if (u) t.removeUnit(u.id);
+    }
+    expect(t.floorHasLobby(15)).toBe(false);
+    expect(t.stopsAt(ex, 15)).toBe(false); // no longer a lobby → skipped again
+  });
+
+  it("only re-syncs the changed floor, preserving manual stops elsewhere", () => {
+    const t = tower(30); // all plain floors between endpoints
+    const ex = express(t, 1, 30);
+    t.setStop(ex.id, 10, true); // player forces a stop at a non-lobby floor
+    expect(t.stopsAt(ex, 10)).toBe(true);
+    makeSkyLobby(t, 15); // build a sky lobby elsewhere
+    expect(t.stopsAt(ex, 15)).toBe(true); // new lobby served
+    expect(t.stopsAt(ex, 10)).toBe(true); // manual stop untouched
+  });
+
+  it("leaves non-express elevators alone", () => {
+    const t = tower(30);
+    const r = t.placeTransport("elevatorStandard", 2, 1, 30);
+    const std = t.transports.find((x) => x.id === r.transportId)!;
+    makeSkyLobby(t, 15);
+    // A standard elevator stops everywhere; the sync must not add skips to it.
+    expect(std.skipFloors ?? []).toEqual([]);
+    expect(t.stopsAt(std, 10)).toBe(true);
+  });
+
+  it("only touches expresses that actually span the changed floor", () => {
+    const t = tower(30);
+    const low = express(t, 1, 12); // does NOT span floor 15
+    makeSkyLobby(t, 15);
+    expect((low.skipFloors ?? []).includes(15)).toBe(false); // untouched (out of range)
+  });
+
+  it("preserves manual stops on other floors when a sky lobby is REMOVED", () => {
+    // Mirror of the "manual stops preserved" test — this time the trigger is a
+    // lobby *removal*. Only the floor whose lobby-ness flipped is touched.
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 30);
+    t.setStop(ex.id, 20, true); // player forces a stop at a non-lobby floor
+    // Bulldoze the sky lobby at 15.
+    for (let x = 0; x < W; x++) {
+      const u = t.unitAt(15, x);
+      if (u) t.removeUnit(u.id);
+    }
+    expect(t.stopsAt(ex, 15)).toBe(false); // 15 no longer served
+    expect(t.stopsAt(ex, 20)).toBe(true); // manual stop still honoured
+  });
+
+  it("never adds an endpoint to skipFloors on a lobby flip AT the endpoint", () => {
+    // A sky lobby laid at (and later removed from) an express's top endpoint
+    // must never be added to skipFloors — endpoints are always stops.
+    const t = tower(30);
+    const ex = express(t, 5, 15); // top endpoint is exactly at 15
+    makeSkyLobby(t, 15);
+    expect((ex.skipFloors ?? []).includes(15)).toBe(false);
+    expect(t.stopsAt(ex, 15)).toBe(true);
+    // Remove the lobby at the endpoint. It must remain a stop, not become a skip.
+    for (let x = 0; x < W; x++) {
+      const u = t.unitAt(15, x);
+      if (u) t.removeUnit(u.id);
+    }
+    expect((ex.skipFloors ?? []).includes(15)).toBe(false);
+    expect(t.stopsAt(ex, 15)).toBe(true);
+  });
+
+  it("resize: shrinking a bottom endpoint onto a skipped floor drops the skip", () => {
+    // A common build-order gap the sync must close: resize shrinks bottom from
+    // 1 to 3; 3 was previously in skipFloors (non-lobby), so without a sync the
+    // new endpoint would refuse to stop and disconnect the shaft.
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 30); // seeds skipFloors 2..14, 16..29
+    expect((ex.skipFloors ?? []).includes(3)).toBe(true);
+    const r = t.resizeTransport(ex.id, 3, 30);
+    expect(r.ok).toBe(true);
+    expect((ex.skipFloors ?? []).includes(3)).toBe(false);
+    expect(t.stopsAt(ex, 3)).toBe(true); // new endpoint now stops
+  });
+
+  it("resize: growing an express doesn't turn it into a local elevator", () => {
+    // Place an express spanning only 1..12 (skipFloors = [2..11]), build a sky
+    // lobby at 15, then drag the top up to 30. Non-lobby floors above 12 must
+    // become new skips — not free stops.
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 12);
+    const r = t.resizeTransport(ex.id, 1, 30);
+    expect(r.ok).toBe(true);
+    // Sky lobby served, ordinary floors above the old span are skipped.
+    expect(t.stopsAt(ex, 15)).toBe(true);
+    expect(t.stopsAt(ex, 20)).toBe(false);
+    expect(t.stopsAt(ex, 25)).toBe(false);
+    // Old top endpoint (12), no longer an endpoint, is now a plain in-span
+    // non-lobby floor — its previous stop status is preserved (it was NOT in
+    // skipFloors, so it stays as a stop). That's fine: the invariant only asks
+    // that newly-in-span non-lobby floors get skipped.
+  });
+
+  it("resize preserves manual stops the player set inside the old span", () => {
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 12); // skipFloors seeded 2..11
+    t.setStop(ex.id, 8, true); // player wants a stop at 8
+    expect((ex.skipFloors ?? []).includes(8)).toBe(false);
+    // Grow the express upward.
+    t.resizeTransport(ex.id, 1, 30);
+    // Player's stop at 8 (in the OLD span) is untouched.
+    expect((ex.skipFloors ?? []).includes(8)).toBe(false);
+    expect(t.stopsAt(ex, 8)).toBe(true);
+  });
+
+  it("reindex preserves a player's explicit skip of a sky lobby", () => {
+    // A player who deliberately set setStop(id, 15, false) on a sky-lobby floor
+    // expects that skip to survive save/load — reindex must not blanket-resync.
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 30);
+    t.setStop(ex.id, 15, false); // player says "skip this sky lobby"
+    expect(t.stopsAt(ex, 15)).toBe(false);
+    t.reindex();
+    expect(t.stopsAt(ex, 15)).toBe(false); // still skipped after load
   });
 });
