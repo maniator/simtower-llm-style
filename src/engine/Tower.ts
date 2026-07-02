@@ -266,8 +266,8 @@ export class Tower {
           ok: false,
           reason:
             floor >= 2
-              ? "Floors must sit on the story below — no floating overhangs."
-              : "Floors must connect to the existing tower.",
+              ? "Floors and lobbies must sit on the story below — no floating overhangs."
+              : "Floors and lobbies must connect to the existing tower.",
         };
       }
       return { ok: true };
