@@ -582,9 +582,15 @@ export class Tower {
     //   - Floors that were already in-span are LEFT ALONE, so a manual stop the
     //     player set inside the old range survives the resize.
     if (t.kind === "elevatorExpress") {
-      const skip = new Set(t.skipFloors ?? []);
-      skip.delete(newBottom);
-      skip.delete(newTop);
+      // Rebuild the skip set by (a) preserving only in-span choices — pruning
+      // anything now outside [newBottom, newTop] so the model can't carry ghost
+      // floors after a shrink, (b) dropping the new endpoints (they always
+      // stop), and (c) adding newly-in-span non-lobby floors so a grow doesn't
+      // turn the express into a local elevator.
+      const skip = new Set<number>();
+      for (const f of t.skipFloors ?? []) {
+        if (f > newBottom && f < newTop) skip.add(f); // in-span (endpoints excluded)
+      }
       for (let fl = newBottom + 1; fl < newTop; fl++) {
         if (fl >= prevBottom && fl <= prevTop) continue; // preserve pre-existing choice
         if (!this.floorHasLobby(fl)) skip.add(fl); // newly-in-span non-lobby → skip

@@ -336,6 +336,23 @@ describe("Express elevator sky-lobby stops", () => {
     // that newly-in-span non-lobby floors get skipped.
   });
 
+  it("resize: shrinking prunes skipFloors that fall outside the new span", () => {
+    // Otherwise the model carries ghost skips: skipsCount inflates, and
+    // render signatures churn on floors the shaft no longer touches.
+    const t = tower(30, [15]);
+    const ex = express(t, 1, 30); // seeds skipFloors 2..14, 16..29
+    expect((ex.skipFloors ?? []).some((f) => f >= 20)).toBe(true);
+    const r = t.resizeTransport(ex.id, 1, 16);
+    expect(r.ok).toBe(true);
+    // Every remaining skip is strictly inside (newBottom, newTop) = (1, 16).
+    for (const f of ex.skipFloors ?? []) {
+      expect(f).toBeGreaterThan(1);
+      expect(f).toBeLessThan(16);
+    }
+    // And the newly-shrunk endpoint is not skipped.
+    expect(t.stopsAt(ex, 16)).toBe(true);
+  });
+
   it("resize preserves manual stops the player set inside the old span", () => {
     const t = tower(30, [15]);
     const ex = express(t, 1, 12); // skipFloors seeded 2..11
