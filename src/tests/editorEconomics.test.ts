@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resaleRefund, extendBill, ECON } from "../engine/econConfig";
+import { resaleRefund, carResaleRefund, extendBill, ECON } from "../engine/econConfig";
 import { FACILITIES } from "../engine/facilities";
 import type { FacilityKind } from "../engine/types";
 
@@ -16,6 +16,13 @@ describe("resaleRefund", () => {
 describe("ECON constants", () => {
   it("names the add-car cost", () => {
     expect(ECON.addCarCost).toBe(40_000);
+  });
+});
+
+describe("carResaleRefund", () => {
+  it("pays back half the add-car cost, like the facility resale rule", () => {
+    expect(carResaleRefund()).toBe(20_000);
+    expect(carResaleRefund()).toBe(Math.floor(ECON.addCarCost * 0.5));
   });
 });
 

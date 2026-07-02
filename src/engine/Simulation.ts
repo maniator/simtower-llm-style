@@ -13,7 +13,6 @@ export { ECON } from "./econConfig";
 import {
   FACILITIES,
   GRID,
-  MAX_CARS,
   STAR_THRESHOLDS,
   TOWER_POPULATION,
   buildMinutes,
@@ -21,6 +20,7 @@ import {
   isElevatorKind,
   isFacilityKind,
   isHotelKind,
+  maxCarsFor,
   transportCarCapacity,
 } from "./facilities";
 import type { FacilityKind, SerializedGame, Unit, WeatherKind } from "./types";
@@ -1315,7 +1315,7 @@ export class Simulation implements SimContext {
         // Coerce car counts/positions from an untrusted save: a NaN/negative/huge
         // `cars` would otherwise reach `new Array(cars)` in the dispatcher and
         // throw a RangeError (or OOM) on the very next tick.
-        const maxCars = isElevatorKind(t.kind) ? (MAX_CARS[t.kind] ?? 8) : 0;
+        const maxCars = isElevatorKind(t.kind) ? maxCarsFor(t.kind) : 0;
         const cars = Math.max(0, Math.min(maxCars, Math.floor(num(t.cars, 0))));
         const bottom = Math.round(num(t.bottom, 1));
         // A transport must have height (validateTransport requires top > bottom);

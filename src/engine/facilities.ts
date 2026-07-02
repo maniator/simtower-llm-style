@@ -453,6 +453,12 @@ export const MAX_CARS: Record<string, number> = {
   elevatorExpress: 8,
 };
 
+/** Max cars for a shaft kind. The single home for the missing-kind fallback,
+ *  so the editor's guards and the engine's clamp can't drift apart. */
+export function maxCarsFor(kind: string): number {
+  return MAX_CARS[kind] ?? 8;
+}
+
 /**
  * Hard per-tower build limits, mirroring the 1994 original's caps. A kind absent
  * here is uncapped. Elevator shafts (all three kinds) share a single 24-shaft
