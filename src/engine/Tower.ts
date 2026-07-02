@@ -281,7 +281,13 @@ export class Tower {
         return { ok: false, reason: "Structure already here." };
       }
       if (!this.isSupported(floor, x, f.width)) {
-        return { ok: false, reason: "Floors must connect to the existing tower." };
+        return {
+          ok: false,
+          reason:
+            floor >= 2
+              ? "Floors and lobbies must sit on the story below — no floating overhangs."
+              : "Floors and lobbies must connect to the existing tower.",
+        };
       }
       return { ok: true };
     }
@@ -366,10 +372,22 @@ export class Tower {
     return { ok: true, count: placed.length };
   }
 
-  /** Floors connect if adjacent to existing structure, above/below it, or first. */
+  /**
+   * Whether a new floor span is structurally supported. Above ground every
+   * tile must rest on structure directly below — extending sideways past the
+   * story underneath would leave the floor hanging in midair. The ground
+   * floor rests on the earth and basements are embedded in it, so those
+   * connect by simply touching the existing tower (side, above, or below).
+   */
   private isSupported(floor: number, x: number, width: number): boolean {
     if (this.units.length === 0) {
       return floor === 1; // the founding strip must be the ground floor
+    }
+    if (floor >= 2) {
+      for (let i = 0; i < width; i++) {
+        if (!this.structure.has(this.key(floor - 1, x + i))) return false;
+      }
+      return true;
     }
     for (let i = -1; i <= width; i++) {
       if (this.structure.has(this.key(floor, x + i))) return true;
