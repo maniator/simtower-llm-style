@@ -623,16 +623,23 @@ export class Tower {
 
   /** Floors that have at least one lobby tile (express stops). Derived from the
    *  per-floor lobbyTiles counter kept live by register/unregister, so this is
-   *  O(k) in the number of lobby floors — hot-path callers (ElevatorDispatch)
-   *  invoke it every tick. */
+   *  O(k log k) in the number of lobby floors (a handful in practice) instead
+   *  of O(n) over every unit — hot-path callers (ElevatorDispatch) invoke it
+   *  every tick. */
   lobbyFloors(): number[] {
     return [...this.lobbyTiles.keys()].sort((a, b) => a - b);
   }
 
-  /** Toggle whether a transport stops at a floor (express configuration). */
+  /**
+   * Toggle whether a transport stops at a floor (express configuration).
+   * Endpoints are always stops — a shaft's bottom and top can't be skipped, or
+   * it would be disconnected from itself — so a request to skip an endpoint is
+   * silently ignored regardless of `stop`.
+   */
   setStop(id: number, floor: number, stop: boolean): boolean {
     const t = this.transports.find((x) => x.id === id);
     if (!t || floor < t.bottom || floor > t.top) return false;
+    if (floor === t.bottom || floor === t.top) return stop; // endpoint stays a stop
     const skip = new Set(t.skipFloors ?? []);
     if (stop) skip.delete(floor);
     else skip.add(floor);

@@ -84,9 +84,9 @@ describe("Tower placement", () => {
     expect(tower.canPlace("office", 1, GRID.width - 2).ok).toBe(false);
   });
 
-  it("requires every storey of a multi-floor facility", () => {
+  it("requires every story of a multi-floor facility", () => {
     for (let i = 0; i < 30; i++) tower.place("lobby", 1, i);
-    // Cinema is two storeys: floors 2 AND 3 must exist as structure.
+    // Cinema is two stories: floors 2 AND 3 must exist as structure.
     for (let i = 0; i < 30; i++) tower.place("floor", 2, i);
     expect(tower.canPlace("cinema", 2, 0).ok).toBe(false); // floor 3 missing
     for (let i = 0; i < 30; i++) tower.place("floor", 3, i);
@@ -203,7 +203,7 @@ describe("Express elevator sky-lobby stops", () => {
     }
     return t;
   }
-  /** Turn an existing plain-floor storey into a sky lobby (clear it, lay lobby). */
+  /** Turn an existing plain-floor story into a sky lobby (clear it, lay lobby). */
   function makeSkyLobby(t: Tower, floor: number): void {
     for (let x = 0; x < W; x++) {
       const u = t.unitAt(floor, x);
@@ -363,6 +363,20 @@ describe("Express elevator sky-lobby stops", () => {
     // Player's stop at 8 (in the OLD span) is untouched.
     expect((ex.skipFloors ?? []).includes(8)).toBe(false);
     expect(t.stopsAt(ex, 8)).toBe(true);
+  });
+
+  it("setStop refuses to skip an endpoint (they must always stop)", () => {
+    // Guard against the shaft disconnecting from itself — a player toggling the
+    // bottom or top off must be a no-op, matching the UI copy ("top and bottom
+    // stay connected") and the assumption the express-sync logic makes.
+    const t = tower(30);
+    const ex = express(t, 1, 30);
+    t.setStop(ex.id, 1, false);
+    t.setStop(ex.id, 30, false);
+    expect(t.stopsAt(ex, 1)).toBe(true);
+    expect(t.stopsAt(ex, 30)).toBe(true);
+    expect((ex.skipFloors ?? []).includes(1)).toBe(false);
+    expect((ex.skipFloors ?? []).includes(30)).toBe(false);
   });
 
   it("reindex preserves a player's explicit skip of a sky lobby", () => {
