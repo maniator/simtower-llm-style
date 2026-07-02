@@ -1,6 +1,6 @@
 import { Simulation } from "./engine/Simulation";
 import { UndoHistory, towerStateSig } from "./engine/UndoHistory";
-import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
+import { FACILITIES, GRID, facilityFloors, isElevatorKind, isHotelKind, maxCarsFor } from "./engine/facilities";
 import { ECON, rentConfig, rentOf, resaleRefund, carResaleRefund, extendBill } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
 import { isOperational } from "./engine/types";
@@ -761,7 +761,7 @@ class GameApp {
       const t = this.sim.tower.transports.find((x) => x.id === this.selected!.id);
       if (!t) return this.clearSelection();
       this.engine.selectedId = t.id; // outlines the shaft + shows extend arrows
-      const maxCars = MAX_CARS[t.kind] ?? 1;
+      const maxCars = maxCarsFor(t.kind);
       const shape = `${t.cars <= 1 ? "-" : ""}${t.cars >= maxCars ? "+" : ""}`;
       this.ui.renderEditor(`transport:${t.id}:${shape}`, () => this.transportEditorHtml(t), this.transportEditorVolatile(t));
     }
@@ -844,7 +844,7 @@ class GameApp {
 
   private transportEditorVolatile(t: import("./engine/types").Transport): Record<string, string> {
     const isEl = isElevatorKind(t.kind);
-    const maxCars = MAX_CARS[t.kind] ?? 1;
+    const maxCars = maxCarsFor(t.kind);
     const skipped = t.skipFloors?.length ?? 0;
     const vol: Record<string, string> = {
       serves: `${floorTag(t.bottom)} – ${floorTag(t.top)}`,
@@ -861,7 +861,7 @@ class GameApp {
   private transportEditorHtml(t: import("./engine/types").Transport): string {
     const f = FACILITIES[t.kind];
     const isEl = isElevatorKind(t.kind);
-    const maxCars = MAX_CARS[t.kind] ?? 1;
+    const maxCars = maxCarsFor(t.kind);
     const vol = this.transportEditorVolatile(t);
     const rows: string[] = [
       `<span class="k">Serves floors</span><span class="v" data-field="serves">${vol.serves}</span>`,
@@ -1038,7 +1038,7 @@ class GameApp {
       if (action === "addcar") {
         // Cap check first: at max cars the button is disabled anyway, but a
         // money toast here would blame the wrong constraint.
-        if (t.cars >= (MAX_CARS[t.kind] ?? 1)) return;
+        if (t.cars >= maxCarsFor(t.kind)) return;
         if (this.sim.money < ECON.addCarCost) {
           this.audio.sfx("error");
           this.ui.toast("Not enough money.", "bad");
@@ -1067,6 +1067,7 @@ class GameApp {
         const nt = action === "extendUp" ? t.top + 1 : t.top;
         const cost = ECON.transportFloorCost;
         if (this.sim.money < cost) {
+          this.audio.sfx("error");
           this.ui.toast("Not enough money.", "bad");
           return;
         }

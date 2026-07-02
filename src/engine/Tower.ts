@@ -1,4 +1,4 @@
-import { BUILD_CAPS, FACILITIES, GRID, MAX_CARS, POOLED_CAPS, facilityFloors, isElevatorKind, maxSpanFor } from "./facilities";
+import { BUILD_CAPS, FACILITIES, GRID, POOLED_CAPS, facilityFloors, isElevatorKind, maxCarsFor, maxSpanFor } from "./facilities";
 import { isOperational } from "./types";
 import type {
   Facility,
@@ -551,7 +551,7 @@ export class Tower {
   setCars(id: number, cars: number): boolean {
     const t = this.transports.find((x) => x.id === id);
     if (!t || !isElevatorKind(t.kind)) return false;
-    cars = Math.max(1, Math.min(MAX_CARS[t.kind] ?? 8, cars));
+    cars = Math.max(1, Math.min(maxCarsFor(t.kind), cars));
     if (cars === t.cars) return false;
     if (cars > t.cars) {
       for (let i = t.cars; i < cars; i++) {
