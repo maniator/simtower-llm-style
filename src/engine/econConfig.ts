@@ -70,6 +70,12 @@ export function resaleRefund(kind: FacilityKind): number {
   return Math.floor(FACILITIES[kind].cost * 0.5);
 }
 
+/** Refund when an elevator car is removed — half the add-car cost, the same
+ *  half-back rule as {@link resaleRefund}. */
+export function carResaleRefund(): number {
+  return Math.floor(ECON.addCarCost * 0.5);
+}
+
 /** One step of budget-clamped billing for an elevator extend drag. Given the
  *  shaft's current ends, the gesture's high-water mark, which end is being dragged
  *  and to where, the spendable money and the per-floor cost, returns the new ends

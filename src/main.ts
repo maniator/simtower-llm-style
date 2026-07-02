@@ -1,7 +1,7 @@
 import { Simulation } from "./engine/Simulation";
 import { UndoHistory, towerStateSig } from "./engine/UndoHistory";
 import { FACILITIES, GRID, MAX_CARS, facilityFloors, isElevatorKind, isHotelKind } from "./engine/facilities";
-import { ECON, rentConfig, rentOf, resaleRefund, extendBill } from "./engine/econConfig";
+import { ECON, rentConfig, rentOf, resaleRefund, carResaleRefund, extendBill } from "./engine/econConfig";
 import type { FacilityKind } from "./engine/types";
 import { isOperational } from "./engine/types";
 import { TowerEngine, type Picked } from "./render/excalibur/TowerEngine";
@@ -1036,11 +1036,17 @@ class GameApp {
         return this.clearSelection();
       }
       if (action === "addcar") {
+        if (this.sim.money < ECON.addCarCost) {
+          this.audio.sfx("error");
+          this.ui.toast("Not enough money.", "bad");
+          return;
+        }
         if (this.sim.tower.setCars(t.id, t.cars + 1)) this.sim.money -= ECON.addCarCost;
         this.audio.sfx("build");
         this.refreshEditor();
       } else if (action === "removecar") {
-        this.sim.tower.setCars(t.id, t.cars - 1);
+        // A removed car is a sale, so it pays out like one (half back).
+        if (this.sim.tower.setCars(t.id, t.cars - 1)) this.sim.money += carResaleRefund();
         this.audio.sfx("click");
         this.refreshEditor();
       } else if (action === "stops") {
