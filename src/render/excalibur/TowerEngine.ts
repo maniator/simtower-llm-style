@@ -199,7 +199,6 @@ export class TowerEngine {
   private overlayCanvas!: ex.Canvas;
   private sky!: ex.ScreenElement;
   private skyCanvas!: ex.Canvas;
-  private ground!: ex.Actor;
 
   constructor(canvas: HTMLCanvasElement, sim: Simulation) {
     this.sim = sim;
@@ -577,27 +576,41 @@ export class TowerEngine {
   // ---- Static scene elements ----------------------------------------------
 
   private makeGround(): void {
-    const wide = GRID.width * TILE * 3;
-    const cx = (GRID.width / 2) * TILE;
+    const total = GRID.width * TILE * 3;
+    const centerX = (GRID.width / 2) * TILE;
     const depth = (2 - GRID.minFloor + 14) * FLOOR;
-    this.ground = new ex.Actor({
-      pos: ex.vec(cx, 0),
-      width: wide,
-      height: depth,
-      anchor: ex.vec(0.5, 0),
-      z: -50,
-      color: ex.Color.fromHex("#3a3326"),
-    });
-    this.engine.add(this.ground);
-    const sidewalk = new ex.Actor({
-      pos: ex.vec(cx, 0),
-      width: wide,
-      height: 6,
-      anchor: ex.vec(0.5, 0.5),
-      z: -49,
-      color: ex.Color.fromHex("#6f6a60"),
-    });
-    this.engine.add(sidewalk);
+    const leftEdge = centerX - total / 2;
+    // One rectangle this wide (~11k px) would rasterize to a bitmap past the GPU
+    // texture limit (4096 on mobile) and render as a black band. It needs the
+    // full width to cover the dirt when zoomed out at the camera's edge, so tile
+    // it into texture-safe segments instead (seamless — same solid color).
+    // Keep each segment under 2048px — the lowest MAX_TEXTURE_SIZE on older
+    // mobile GPUs (the transport-shaft cap stays under this too).
+    const MAX_SEG = 2000;
+    const segments = Math.ceil(total / MAX_SEG);
+    const segW = total / segments;
+    for (let i = 0; i < segments; i++) {
+      const segCx = leftEdge + segW * (i + 0.5);
+      const dirt = new ex.Actor({
+        pos: ex.vec(segCx, 0),
+        width: segW + 1, // overlap neighbors by 1px to hide any seam
+        height: depth,
+        anchor: ex.vec(0.5, 0),
+        z: -50,
+        color: ex.Color.fromHex("#3a3326"),
+      });
+      this.engine.add(dirt);
+      this.engine.add(
+        new ex.Actor({
+          pos: ex.vec(segCx, 0),
+          width: segW + 1,
+          height: 6,
+          anchor: ex.vec(0.5, 0.5),
+          z: -49,
+          color: ex.Color.fromHex("#6f6a60"),
+        }),
+      );
+    }
   }
 
   /**
