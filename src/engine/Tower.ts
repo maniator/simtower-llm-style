@@ -639,7 +639,10 @@ export class Tower {
   setStop(id: number, floor: number, stop: boolean): boolean {
     const t = this.transports.find((x) => x.id === id);
     if (!t || floor < t.bottom || floor > t.top) return false;
-    if (floor === t.bottom || floor === t.top) return stop; // endpoint stays a stop
+    // Endpoints are always stops (a shaft can't disconnect from itself). Report
+    // success — the request was valid and the endpoint is already stopping —
+    // regardless of the requested `stop` value.
+    if (floor === t.bottom || floor === t.top) return true;
     const skip = new Set(t.skipFloors ?? []);
     if (stop) skip.delete(floor);
     else skip.add(floor);

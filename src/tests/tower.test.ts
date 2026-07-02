@@ -368,11 +368,13 @@ describe("Express elevator sky-lobby stops", () => {
   it("setStop refuses to skip an endpoint (they must always stop)", () => {
     // Guard against the shaft disconnecting from itself — a player toggling the
     // bottom or top off must be a no-op, matching the UI copy ("top and bottom
-    // stay connected") and the assumption the express-sync logic makes.
+    // stay connected") and the assumption the express-sync logic makes. The
+    // return value stays `true` (the request was valid), consistent with the
+    // rest of setStop.
     const t = tower(30);
     const ex = express(t, 1, 30);
-    t.setStop(ex.id, 1, false);
-    t.setStop(ex.id, 30, false);
+    expect(t.setStop(ex.id, 1, false)).toBe(true);
+    expect(t.setStop(ex.id, 30, false)).toBe(true);
     expect(t.stopsAt(ex, 1)).toBe(true);
     expect(t.stopsAt(ex, 30)).toBe(true);
     expect((ex.skipFloors ?? []).includes(1)).toBe(false);
