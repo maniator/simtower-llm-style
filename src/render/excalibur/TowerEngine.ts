@@ -567,7 +567,9 @@ export class TowerEngine {
     // texture limit (4096 on mobile) and render as a black band. It needs the
     // full width to cover the dirt when zoomed out at the camera's edge, so tile
     // it into texture-safe segments instead (seamless — same solid color).
-    const MAX_SEG = 3000;
+    // Keep each segment under 2048px — the lowest MAX_TEXTURE_SIZE on older
+    // mobile GPUs (the transport-shaft cap stays under this too).
+    const MAX_SEG = 2000;
     const segments = Math.ceil(total / MAX_SEG);
     const segW = total / segments;
     for (let i = 0; i < segments; i++) {
