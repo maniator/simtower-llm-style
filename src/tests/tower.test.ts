@@ -76,6 +76,22 @@ describe("Tower placement", () => {
     expect(tower.canPlace("floor", 2, 0).ok).toBe(true);
   });
 
+  it("rejects hanging floors above ground — every tile must sit on the story below", () => {
+    for (let i = 0; i < 20; i++) tower.place("lobby", 1, i);
+    for (let i = 0; i < 20; i++) tower.place("floor", 2, i);
+    // Extending floor 2 sideways past the end of the ground floor would hang
+    // in midair, even though it touches existing floor-2 structure.
+    expect(tower.canPlace("floor", 2, 20).ok).toBe(false);
+    // Floor 3 directly above floor 2 is fine…
+    expect(tower.place("floor", 3, 19).ok).toBe(true);
+    // …but chaining sideways off it past floor 2's edge is not.
+    expect(tower.canPlace("floor", 3, 20).ok).toBe(false);
+    // A floor can't hang beneath existing structure with nothing below either:
+    // widen the ground first, then floor 2 above it becomes buildable.
+    expect(tower.place("floor", 1, 20).ok).toBe(true);
+    expect(tower.canPlace("floor", 2, 20).ok).toBe(true);
+  });
+
   it("enforces the buildable bounds", () => {
     tower.place("lobby", 1, 0);
     expect(tower.canPlace("floor", GRID.maxFloor + 1, 0).ok).toBe(false);
